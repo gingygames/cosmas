@@ -110,6 +110,9 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # The video surface is a native window. Without this Qt makes its siblings (player header,
+        # controls) native too, and those stayed on screen after the player was closed.
+        QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
         from .ui.player import PlayerWidget  # imports mpv (needs locale set)
         self.setWindowTitle("Kronikář")
         self.setWindowFlag(Qt.FramelessWindowHint, True)

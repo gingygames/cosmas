@@ -23,7 +23,7 @@ document.head.appendChild(h('style', `
 .feat .ttl { font-size: 22px; font-weight: 700; line-height: 1.2; }
 .feat .meta { color: var(--text-2); font-size: 13px; }
 .feat .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: auto; }
-.feat .thumbs > div { aspect-ratio: 16/9; border-radius: 4px; background: #000 center / cover; cursor: pointer; opacity: .8; }
+.feat .thumbs > div { position: relative; overflow: hidden; aspect-ratio: 16/9; border-radius: 4px; background: #000 center / cover; cursor: pointer; opacity: .8; }
 .feat .thumbs > div:hover { opacity: 1; }
 .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .cap { border-radius: 6px; overflow: hidden; background: var(--surface); cursor: pointer; transition: background .12s; }
@@ -55,8 +55,8 @@ async function render() {
     const sameDay = media.filter(m => m.id !== latest.id && m.start && latest.start && Math.abs(m.start - latest.start) < 6 * 3600).slice(0, 4);
     box.appendChild(h('h3', 'Naposledy nahráno'));
     box.appendChild(h('.feat',
-      h('.img', { style: latest.thumb ? { backgroundImage: `url("${latest.thumb}")` } : {}, onclick: () => API.call('media.play', { id: latest.id }) },
-        h('.pl', h('span', icon('play')))),
+      h('.img', { 'data-rmid': latest.id, style: latest.thumb ? { backgroundImage: `url("${latest.thumb}")` } : {}, onclick: () => API.call('media.play', { id: latest.id }) },
+        resumeBar(latest), h('.pl', h('span', icon('play')))),
       h('.info',
         h('.kicker', latest.game),
         h('.ttl', latest.name),
@@ -67,8 +67,8 @@ async function render() {
           h('button.btn', { onclick: () => App.go('library', { select: [latest.id] }) }, 'Detail'),
           !latest.linked ? h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), 'Navrhnout událost') : null),
         sameDay.length ? h('.small.faint', { style: { marginTop: '14px' } }, 'Ze stejného večera') : null,
-        sameDay.length ? h('.thumbs', sameDay.map(m => h('div', { title: m.name, style: m.thumb ? { backgroundImage: `url("${m.thumb}")` } : {},
-          onclick: () => API.call('media.play', { id: m.id }) }))) : null)));
+        sameDay.length ? h('.thumbs', sameDay.map(m => h('div', { 'data-rmid': m.id, title: m.name, style: m.thumb ? { backgroundImage: `url("${m.thumb}")` } : {},
+          onclick: () => API.call('media.play', { id: m.id }) }, resumeBar(m)))) : null)));
   }
 
   const cont = App.media.filter(m => m.resume).sort((a, b) => (b.watched_at || 0) - (a.watched_at || 0)).slice(0, 6);

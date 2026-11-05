@@ -26,6 +26,7 @@ const css = `
 .bm-strip .p:hover, .bm-strip .r:hover { filter: brightness(1.3); opacity: 1; }
 .bm-group { background: var(--surface); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
 .bm-group .hd { display: flex; gap: 12px; align-items: center; }
+.bm-group .hd .bm-th { position: relative; width: 96px; flex: none; border-radius: 8px; overflow: hidden; }
 .bm-group .hd img, .bm-group .hd .noimg { width: 96px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: var(--surface-3); flex: none; display: grid; place-items: center; color: var(--text-3); }
 .bm-ed .kv2 { display: grid; grid-template-columns: 90px 1fr; gap: 10px 12px; align-items: center; }
 .bm-ed .k { color: var(--text-3); font-size: 12.5px; }
@@ -231,7 +232,7 @@ async function render() {
     const full = App.mediaById.get(m.id);
     body.appendChild(h('.bm-group',
       h('.hd',
-        m.thumb ? h('img', { src: m.thumb, loading: 'lazy' }) : h('.noimg', icon('film')),
+        h('.bm-th', { 'data-rmid': m.id }, m.thumb ? h('img', { src: m.thumb, loading: 'lazy' }) : h('.noimg', icon('film')), resumeBar(full || m)),
         h('.grow', { style: { minWidth: 0 } },
           h('.ellipsis', { style: { fontWeight: 600 } }, m.name),
           h('.small.muted', `${m.game} · ${fmt.dt(m.start)} · ${fmt.dur(m.duration)} · ${bms.length} ${fmt.plural(bms.length, 'záložka', 'záložky', 'záložek')}`)),

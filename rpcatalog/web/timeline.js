@@ -762,8 +762,9 @@ function tlEventCard(e, visible) {
   const mediaIds = [...new Set(links.map(l => l.media_id))].filter(id => App.mediaById.has(id));
   const thumbs = mediaIds.slice(0, 4).map((id, i) => {
     const m = App.mediaById.get(id);
-    return h('.t', { title: m.name, onclick: ev => { ev.stopPropagation(); API.call('media.play', { id }); } },
+    return h('.t', { 'data-rmid': id, title: m.name, onclick: ev => { ev.stopPropagation(); API.call('media.play', { id }); } },
       m.thumb ? h('img', { src: m.thumb, loading: 'lazy' }) : null,
+      resumeBar(m),
       i === 3 && mediaIds.length > 4 ? h('.more', '+' + (mediaIds.length - 3)) : null);
   });
   const kids = TL.f.rootsOnly ? [] : (TL.data.events.filter(c => c.parent_id === e.id && visible.has(c.id))

@@ -60,8 +60,8 @@ const CSS = `
 .mcard .th .pl i { font-size: 20px; margin-left: 2px; }
 .mcard:hover .th .pl { opacity: 1; }
 .mcard:hover .th .pl span { transform: scale(1); }
-.mcard .th .resume, .mtile .resume { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.25); z-index: 1; }
-.mcard .th .resume i, .mtile .resume i { display: block; height: 100%; background: var(--danger); }
+[data-rmid] > .resume { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.25); z-index: 1; pointer-events: none; }
+[data-rmid] > .resume i { display: block; height: 100%; background: var(--danger); }
 .mcard .th .bm { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
 .mcard .th .bm b { position: absolute; bottom: 0; width: 3px; height: 3px; background: var(--accent); border-radius: 2px; }
 .mcard .meta { padding: 10px 12px 11px; }
@@ -286,7 +286,7 @@ function card(m) {
       e.dataTransfer.effectAllowed = 'copyLink';
     },
   },
-  h('.th', m.thumb ? h('img', { src: m.thumb, loading: 'lazy', draggable: 'false' }) : h('.empty', { style: { padding: '30px' } }, icon('film')),
+  h('.th', { 'data-rmid': m.id }, m.thumb ? h('img', { src: m.thumb, loading: 'lazy', draggable: 'false' }) : h('.empty', { style: { padding: '30px' } }, icon('film')),
     h('span.badge.' + m.type, KIND[m.type]?.label),
     h('.flags', m.favorite ? h('span', { title: 'Oblíbené' }, icon('star')) : null,
       m.linked ? h('span', { title: 'Je v události' }, icon('link')) : null,
@@ -493,7 +493,7 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
     h('button' + ((m.kind_override || '') === k ? '.on' : ''), { onclick: () => save({ kind_override: k || null }) }, label)));
 
   box.append(
-    hero ? h('.hero', { onclick: () => play(m) }, m.thumb ? h('img', { src: m.thumb }) : null, h('.pl', h('span', icon('play')))) : null,
+    hero ? h('.hero', { 'data-rmid': m.id, onclick: () => play(m) }, m.thumb ? h('img', { src: m.thumb }) : null, resumeBar(m), h('.pl', h('span', icon('play')))) : null,
     h('.pad.col', { style: { gap: '12px' } },
       h('.row', title, h('button.btn.ghost.icon' + (m.favorite ? '.active' : ''), { title: 'Oblíbené', onclick: () => save({ favorite: !m.favorite }) }, icon('star'))),
       h('.row.small.muted.wrap', h('span.badge.' + m.type, KIND[m.type]?.label), h('span', fmt.range(m.start, m.end)), h('span.faint', '· ' + fmt.dur(m.duration))),

@@ -482,17 +482,17 @@ function applyResume(d) {
   const had = !!m.resume;
   m.resume = d.pos || null;
   if (d.pos) m.watched_at = d.at;
-  document.querySelectorAll(`.mcard[data-id="${d.media_id}"] .th, .mtile[data-mid="${d.media_id}"]`).forEach(host => {
+  document.querySelectorAll(`[data-rmid="${d.media_id}"]`).forEach(host => {
     const old = host.querySelector(':scope > .resume');
     const bar = resumeBar(m);
     if (old) old.replaceWith(...(bar ? [bar] : []));
-    else if (bar) host.insertBefore(bar, host.querySelector(':scope > .pl, :scope > .play'));
+    else if (bar) host.insertBefore(bar, host.querySelector(':scope > .pl, :scope > .play, :scope > .more'));
   });
   if (had !== !!m.resume || d.final) App.emit('resume');
 }
 function mediaTile(m, { onClick, showBadge = true } = {}) {
   const t = h('.mtile' + (m.thumb ? '' : '.noimg'), {
-    'data-mid': m.id,
+    'data-mid': m.id, 'data-rmid': m.id,
     title: `${m.name}\n${m.game} · ${fmt.dt(m.start)} · ${fmt.dur(m.duration)}`,
     onclick: onClick || (() => API.call('media.play', { id: m.id })),
   },
