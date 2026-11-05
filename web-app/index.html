@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kronikář (web)</title>
+  <!-- The UI is shared with the desktop app: run the server from the repository root
+       (python -m http.server 8000) and open http://localhost:8000/web-app/ -->
+  <link rel="stylesheet" href="../rpcatalog/web/vendor/lucide.css">
+  <link rel="stylesheet" href="../rpcatalog/web/app.css">
+  <link rel="stylesheet" href="web.css">
+</head>
+<body>
+  <div id="app"></div>
+  <div id="overlays"></div>
+  <!-- browser backend (instead of Python + QWebChannel) -->
+  <script src="vendor/sql-wasm.js"></script>
+  <script src="js/idb.js"></script>
+  <script src="js/medal.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/suggest.js"></script>
+  <script src="js/scan.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/backend.js"></script>
+  <!-- shared UI -->
+  <script src="../rpcatalog/web/core.js"></script>
+  <script src="../rpcatalog/web/themes.js"></script>
+  <script src="../rpcatalog/web/shell.js"></script>
+  <script src="../rpcatalog/web/editor.js"></script>
+  <script src="../rpcatalog/web/bookmarks.js"></script>
+  <script src="../rpcatalog/web/snap.js"></script>
+  <script src="../rpcatalog/web/library.js"></script>
+  <script src="../rpcatalog/web/events.js"></script>
+  <script src="../rpcatalog/web/characters.js"></script>
+  <script src="../rpcatalog/web/groups.js"></script>
+  <script src="../rpcatalog/web/letters.js"></script>
+  <script src="../rpcatalog/web/timeline.js"></script>
+  <script src="../rpcatalog/web/gallery.js"></script>
+  <script src="../rpcatalog/web/settings.js"></script>
+  <script src="../rpcatalog/web/home.js"></script>
+  <script src="../rpcatalog/web/main.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@
 'use strict';
 
 (() => {
+const WEB = !!window.KronikarWeb;   // running in a browser (web-app/), not in the desktop app
 const ROLES = [['all', 'Vše (mix)'], ['game', 'Hra'], ['mic', 'Mikrofon'], ['discord', 'Discord'], ['system', 'Systém']];
 
 function discordCard(s) {
@@ -89,9 +90,11 @@ Views.register('settings', {
       h('.page-head', h('h1', 'Nastavení'), h('.grow'), h('button.btn.primary', { onclick: save }, icon('save'), 'Uložit')),
       h('div', { style: { padding: '0 24px 40px', maxWidth: '820px' } },
         card('Vzhled', 'Mění se hned, bez ukládání.', appearanceSection()),
-        card('Discord', 'Jména a avatary hráčů se tahají přes tvého bota na serveru. Token zůstává jen v tomto počítači (data/settings.json).',
+        WEB ? null : card('Discord', 'Jména a avatary hráčů se tahají přes tvého bota na serveru. Token zůstává jen v tomto počítači (data/settings.json).',
           discordCard(s)),
-        card('Složky se záznamy', 'Složky Medalu (obsahují Clips/, Databases/, Thumbnails/…). Databázi Medalu jen čtu, nikdy do ní nezapisuji.', rootsBox),
+        card('Složky se záznamy', WEB
+          ? 'Složky Medalu (obsahují Clips/, Databases/, Thumbnails/…). Prohlížeč je jen čte – videa se nikam nenahrávají.'
+          : 'Složky Medalu (obsahují Clips/, Databases/, Thumbnails/…). Databázi Medalu jen čtu, nikdy do ní nezapisuji.', rootsBox),
         card('Rozdělení záznamů', null,
           h('.row', { style: { gap: '30px' } },
             h('label.field', 'Klip je nejvýš (s)', clipMax),
@@ -100,8 +103,10 @@ Views.register('settings', {
         card('Zvukové stopy', 'Které stopy se zapnou při otevření videa (když se nepamatuje poslední volba).', mixRow,
           h('label.check', { style: { marginTop: '12px' } }, remember, 'Pamatovat si poslední zvolené stopy (podle typu – hra, mikrofon…)')),
         card('Přejmenování a sloučení her', 'Jeden řádek = původní název = nový název.', aliases),
-        card('Data katalogu', 'Úpravy, deníky, postavy a přílohy jsou ve složce data/ vedle aplikace. Zálohuj ji.',
-          h('.row', h('button.btn', { onclick: () => API.call('open_data_dir') }, icon('folder-open'), 'Otevřít složku s daty'),
+        card('Data katalogu', WEB
+          ? 'Úpravy, deníky, postavy a přílohy jsou uložené jen v tomto prohlížeči. Stahuj si zálohu (JSON).'
+          : 'Úpravy, deníky, postavy a přílohy jsou ve složce data/ vedle aplikace. Zálohuj ji.',
+          h('.row', h('button.btn', { onclick: () => API.call('open_data_dir') }, icon(WEB ? 'database' : 'folder-open'), WEB ? 'Záloha a obnova dat' : 'Otevřít složku s daty'),
             h('button.btn', { onclick: () => { API.call('rescan'); toast('Hledám nové záznamy…'); } }, icon('refresh-cw'), 'Načíst knihovnu znovu'))),
         card('Klávesové zkratky', null, h('.small.muted', { html: `
           <b>Přehrávač:</b> <span class="kbd">Mezerník</span> pauza · <span class="kbd">←</span>/<span class="kbd">→</span> 5 s ·
