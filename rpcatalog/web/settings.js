@@ -8,16 +8,16 @@ const ROLES = [['all', 'Vše (mix)'], ['game', 'Hra'], ['mic', 'Mikrofon'], ['di
 
 function discordCard(s) {
   const inp = (key, ph, type = 'text') => h('input.input', { type, value: s[key] || '', placeholder: ph, onkeydown: e => e.stopPropagation(),
-    onchange: e => { s[key] = e.target.value.trim(); API.call('settings.set', { values: { [key]: s[key], _rescan: false } }); } });
+    onchange: e => { s[key] = e.target.value.trim(); App.settings[key] = s[key]; API.call('settings.set', { values: { [key]: s[key], _rescan: false } }); } });
   const out = h('.small.muted');
   return h('.col', { style: { gap: '10px' } },
     h('.row.wrap', { style: { gap: '14px' } },
       h('label.field', { style: { flex: '1 1 300px' } }, 'Token bota', inp('discord_token', 'z Discord Developer Portalu → Bot → Token', 'password')),
-      h('label.field', 'ID serveru', inp('discord_guild', 'pravý klik na server → Kopírovat ID')),
+      h('label.field', 'ID serveru (nepovinné)', inp('discord_guild', 'pravý klik na server → Kopírovat ID')),
       h('label.field', 'ID kanálu s dopisy', inp('discord_channel', 'nepovinné')),
       h('label.field', 'Slovo pro dopisy', inp('holub_marker', 'holub'))),
     h('.row',
-      h('button.btn', { onclick: async () => {
+      h('button.btn', { disabled: !s.discord_guild, title: s.discord_guild ? '' : 'Vyplň ID serveru', onclick: async () => {
         out.textContent = 'Načítám členy serveru…';
         const ms = await API.call('discord.members').catch(() => null);
         if (!ms) { out.textContent = ''; return; }
@@ -26,6 +26,7 @@ function discordCard(s) {
       } }, icon('users'), 'Načíst členy a vytvořit hráče'),
       h('button.btn', { onclick: async () => { const n = await API.call('discord.sync').catch(() => null); if (n != null) toast(`Aktualizováno ${n} hráčů`); } }, icon('refresh-cw'), 'Aktualizovat jména a avatary')),
     out,
+    h('.faint.small', 'Bez serveru: bot nemusí být nikde pozvaný – u hráče stačí „Propojit podle ID“ (Discord ID zjistíš po zapnutí Nastavení → Pokročilé → Režim vývojáře, pravý klik na uživatele → Kopírovat ID). ID serveru je potřeba jen pro načtení všech členů najednou a pro přezdívky na serveru.'),
     h('.faint.small', 'Jak na bota: discord.com/developers → New Application → Bot → zkopíruj token a zapni „Server Members Intent“ (a „Message Content Intent“ pro dopisy) → OAuth2 → URL Generator → scope „bot“ → pozvi bota na svůj server.'));
 }
 

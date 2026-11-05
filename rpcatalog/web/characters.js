@@ -105,7 +105,7 @@
   let root = null, state = null, unsubs = [];
 
   const kindOrder = ['mine', 'player', 'npc'];
-  const kindGroup = { mine: 'Moje postavy', player: 'Hráči', npc: 'NPC' };
+  const kindGroup = { mine: 'Moje postavy', player: 'Postavy', npc: 'NPC' };
 
   function mount(r, params = {}) {
     root = r;
@@ -148,7 +148,7 @@
     search.addEventListener('keydown', e => e.stopPropagation());
     const factions = [...new Set(App.chars.flatMap(c => (c.factions || []).length ? c.factions.map(f => f.name) : (c.faction ? [c.faction] : [])))].sort((a, b) => a.localeCompare(b, 'cs'));
     const kindSeg = h('.seg',
-      [['all', 'Vše'], ['mine', 'Moje'], ['player', 'Hráči'], ['npc', 'NPC']].map(([k, l]) =>
+      [['all', 'Vše'], ['mine', 'Moje'], ['player', 'Postavy'], ['npc', 'NPC']].map(([k, l]) =>
         h('button' + (state.kind === k ? '.on' : ''), { onclick: () => { state.kind = k; renderList(); } }, l)));
     const layoutSeg = h('.seg',
       h('button' + (state.layout === 'list' ? '.on' : ''), { title: 'Seznam', onclick: () => setLayout('list') }, icon('list')),
@@ -253,7 +253,9 @@
         h('button.btn.sm', { onclick: e => menu(e, [...(App.players || []).map(p => ({ label: p.name, onClick: () => upd({ player_id: p.id }) })),
           { sep: true }, { label: 'Nový hráč…', icon: 'plus', onClick: async () => { const n = await promptDialog('Nový hráč', 'Přezdívka', ''); if (!n) return; const pid = await API.call('player.create', { name: n }); App.players = await API.call('players.list'); upd({ player_id: pid }); } },
           { label: 'Bez hráče', onClick: () => upd({ player_id: null }) }]) }, 'Hráč'),
-        h('button.btn.sm', { onclick: e => menu(e, PALETTE.map(col => ({ label: col, onClick: () => upd({ color: col }) }))) }, 'Barva'),
+        h('button.btn.sm', { onclick: e => menu(e, PALETTE.map(col => ({ label: col, onClick: () => upd({ color: col, own_style: 1 }) }))) }, 'Barva'),
+        h('button.btn.sm', { onclick: e => menu(e, bulkItems(ids).find(x => x && x.label === 'Server').submenu) }, 'Server'),
+        h('button.btn.sm', { title: 'Všechny hromadné úpravy (i pravým tlačítkem na vybraných postavách)', onclick: e => menu(e, bulkItems(ids)) }, icon('ellipsis')),
         h('button.btn.sm', { onclick: async () => {
           const r = await pickEvent({ title: `Přidat ${ids.length} postav do události`, withNote: false });
           if (!r) return;
@@ -269,8 +271,45 @@
         } }, icon('trash-2'))));
   }
 
+  function bulkItems(ids) {
+    const upd = async fields => { for (const id of ids) await API.call('char.update', { id, ...fields }); await App.loadChars(); renderList(); renderBulkBar(); toast(`Upraveno ${ids.length} postav`); };
+    const svList = App.servers.filter(s => !App.scope.game || s.game === App.scope.game);
+    return [
+      { head: `${ids.length} vybraných postav` },
+      { label: 'Typ', icon: 'shapes', submenu: Object.entries(CHAR_KIND).map(([k, v]) => ({ label: v.label, icon: v.icon, onClick: () => upd({ kind: k }) })) },
+      { label: 'Stav', icon: 'heart-pulse', submenu: Object.entries(CHAR_STATUS).map(([k, v]) => ({ label: v.label, onClick: () => upd({ status: k }) })) },
+      { label: 'Rod', icon: 'users-round', submenu: [['m', 'muž'], ['f', 'žena'], ['', 'neuvedeno']].map(([g, l]) => ({ label: l, onClick: () => upd({ gender: g }) })) },
+      { label: 'Server', icon: 'server', submenu: [...svList.map(s => ({ label: App.scope.game ? s.name : `${s.name} · ${s.game}`, onClick: async () => {
+        await API.call('server.assign', { type: 'char', ids, server_id: s.id }); await App.loadChars(); renderList(); toast(`Přesunuto na ${s.name}`);
+      } })), { label: 'Nový server…', icon: 'plus', onClick: () => serverDialog({ game: App.scope.game }, { switchScope: false, onSaved: async id => {
+        await API.call('server.assign', { type: 'char', ids, server_id: id }); await App.loadChars(); renderList(); } }) },
+      { label: 'Bez serveru', onClick: async () => { await API.call('server.assign', { type: 'char', ids, server_id: null }); await App.loadChars(); renderList(); } }] },
+      { label: 'Frakce', icon: 'shield', submenu: [...(App.factions || []).map(f => ({ label: f.name, onClick: async () => {
+        await API.call('faction.members_add', { id: f.id, character_ids: ids, role: '' }); await App.loadChars(); renderList(); toast(`Přidáno do ${f.name}`);
+      } })), { label: 'Nová frakce / rod…', icon: 'plus', onClick: async () => {
+        const n = await promptDialog('Nová frakce / rod', 'Název', ''); if (!n) return;
+        const fid = await API.call('faction.create', { name: n }); await API.call('faction.members_add', { id: fid, character_ids: ids, role: '' });
+        await App.loadChars(); renderList();
+      } }] },
+      { label: 'Hráč', icon: 'gamepad-2', submenu: [...(App.players || []).map(p => ({ label: p.name, onClick: () => upd({ player_id: p.id }) })), { label: 'Bez hráče', onClick: () => upd({ player_id: null }) }] },
+      { label: 'Barva', icon: 'palette', submenu: [{ label: 'Podle frakce', onClick: () => upd({ own_style: 0 }) }, ...PALETTE.map(col => ({ label: col, onClick: () => upd({ color: col, own_style: 1 }) }))] },
+      { label: 'Do události…', icon: 'calendar-plus', onClick: async () => {
+        const r = await pickEvent({ title: `Přidat ${ids.length} postav do události`, withNote: false }); if (!r) return;
+        for (const id of ids) await API.call('char.link', { character_id: id, target_type: 'event', target_id: r.id, role: '' });
+        await App.refresh('events', 'chars'); toast('Přidáno do události');
+      } },
+      { sep: true },
+      { label: 'Zrušit výběr', icon: 'x', onClick: () => { sel.clear(); renderList(); renderBulkBar(); } },
+      { label: `Smazat ${ids.length} postav…`, icon: 'trash-2', danger: true, onClick: async () => {
+        if (!await confirmDialog('Smazat postavy', `Opravdu smazat ${ids.length} postav?`, { danger: true, okLabel: 'Smazat' })) return;
+        for (const id of ids) await API.call('char.delete', { id });
+        sel.clear(); state.id = null; await App.refresh('chars', 'events'); renderList(); renderBulkBar(); toast('Postavy smazány');
+      } },
+    ];
+  }
+
   function listMenu(e, c) {
-    if (sel.size > 1 && sel.has(c.id)) { renderBulkBar(); return menu(e, [{ head: `${sel.size} vybraných postav – úpravy dole v seznamu` }]); }
+    if (sel.size > 1 && sel.has(c.id)) { renderBulkBar(); return menu(e, bulkItems([...sel])); }
     menu(e, [
       { label: 'Otevřít', icon: 'user', onClick: () => select(c.id) },
       { label: 'Přidat do události…', icon: 'calendar-plus', onClick: () => addToEvent(c.id) },
@@ -282,7 +321,7 @@
   async function newCharacter() {
     const name = await promptDialog('Nová postava', 'Jméno postavy', '', { placeholder: 'např. Jindřich ze Skalice' });
     if (!name) return;
-    const kind = state.kind !== 'all' ? state.kind : 'npc';
+    const kind = state.kind !== 'all' ? state.kind : 'player';
     const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
     const id = await API.call('char.create', { name, kind, color });
     await App.loadChars();

@@ -83,7 +83,7 @@ async function render() {
   if (games.length) {
     box.appendChild(h('h3', 'Hry', h('span.more', { onclick: () => App.go('library') }, 'Celá knihovna')));
     box.appendChild(h('.shelf', games.map(g => h('.cap', { onclick: () => { Shell.setGuild(g.game); App.go('library', { game: g.game }); } },
-      h('.im', { style: g.thumb ? { backgroundImage: `url("${g.thumb}")` } : { background: gameHue(g.game) } }, g.thumb ? null : g.game.slice(0, 2)),
+      h('.im', { style: (g.banner || g.thumb) ? { backgroundImage: `url("${g.banner || g.thumb}")` } : { background: gameHue(g.game) } }, (g.banner || g.thumb) ? null : g.game.slice(0, 2)),
       h('.nm.ellipsis', g.game),
       h('.sb', `${fmt.durHuman(g.dur)} nahráno · ${g.last ? fmt.rel(g.last) : ''}`)))));
   }

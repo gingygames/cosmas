@@ -218,6 +218,13 @@ CREATE TABLE IF NOT EXISTS servers (
     created_at REAL,
     updated_at REAL
 );
+CREATE TABLE IF NOT EXISTS game_art (
+    game TEXT PRIMARY KEY,
+    icon_path TEXT,
+    banner_path TEXT,
+    steam_appid TEXT,
+    updated_at REAL
+);
 CREATE TABLE IF NOT EXISTS letters (
     id INTEGER PRIMARY KEY,
     sent_at REAL,
@@ -362,6 +369,8 @@ class Store:
             pid = row[0] if row else self.db.execute(
                 "INSERT INTO players (name, created_at, updated_at) VALUES (?,?,?)", (name, now, now)).lastrowid
             self.db.execute("UPDATE characters SET player_id=? WHERE TRIM(player)=? AND player_id IS NULL", (pid, name))
+        if "is_default" not in {r[1] for r in self.db.execute("PRAGMA table_info(servers)")}:
+            self.db.execute("ALTER TABLE servers ADD COLUMN is_default INTEGER DEFAULT 0")
         for table in ("media", "events", "characters", "factions", "places"):
             if "server_id" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN server_id INTEGER")
@@ -712,8 +721,8 @@ class Store:
 
     def create_character(self, name, **fields):
         now = time.time()
-        cur = self.db.execute("INSERT INTO characters (name, created_at, updated_at) VALUES (?,?,?)",
-                              (name, now, now))
+        cur = self.db.execute("INSERT INTO characters (name, kind, created_at, updated_at) VALUES (?,?,?,?)",
+                              (name, fields.pop("kind", None) or "player", now, now))
         self.db.commit()
         if fields:
             self.update_character(cur.lastrowid, **fields)
@@ -1025,7 +1034,21 @@ class Store:
         self.db.commit()
 
     # ---------- servers (sub-level of a game) ----------
-    SERVER_FIELDS = {"game", "name", "color", "active_from", "active_to", "notes", "position"}
+    SERVER_FIELDS = {"game", "name", "color", "active_from", "active_to", "notes", "position", "is_default"}
+
+    def set_default_server(self, sid):
+        game = self.db.execute("SELECT game FROM servers WHERE id=?", (sid,)).fetchone()
+        if not game:
+            return
+        self.db.execute("UPDATE servers SET is_default=(id=?) WHERE game=?", (sid, game[0]))
+        self.db.commit()
+        self.auto_assign_servers()
+
+    def default_server(self, game):
+        """Default server of a game: the one marked default, or the only one."""
+        rows = [s for s in self.servers() if s["game"] == game]
+        marked = [s for s in rows if s.get("is_default")]
+        return marked[0]["id"] if marked else rows[0]["id"] if len(rows) == 1 else None
 
     def servers(self):
         return self._rows("SELECT s.*, (SELECT COUNT(*) FROM media m WHERE m.server_id=s.id) AS n_media "
@@ -1064,11 +1087,27 @@ class Store:
                         pick = sv["id"]
                         break
             if pick is None:
+                marked = [sv for sv in cands if sv.get("is_default")]
                 plain = [sv for sv in cands if not sv["active_from"] and not sv["active_to"]]
-                if len(plain) == 1:
-                    pick = plain[0]["id"]
+                if marked:
+                    pick = marked[0]["id"]
+                elif len(cands) == 1 or len(plain) == 1:
+                    pick = (cands if len(cands) == 1 else plain)[0]["id"]
             if pick:
                 self.db.execute("UPDATE media SET server_id=? WHERE id=?", (pick, mid))
                 n += 1
         self.db.commit()
         return n
+
+    # ---------- game artwork ----------
+    def game_art(self):
+        return {r["game"]: dict(r) for r in self.db.execute("SELECT * FROM game_art")}
+
+    def set_game_art(self, game, **fields):
+        fields = {k: v for k, v in fields.items() if k in {"icon_path", "banner_path", "steam_appid"}}
+        self.db.execute("INSERT OR IGNORE INTO game_art (game) VALUES (?)", (game,))
+        if fields:
+            sets = ", ".join(f"{k}=?" for k in fields)
+            self.db.execute(f"UPDATE game_art SET {sets}, updated_at=? WHERE game=?",
+                            list(fields.values()) + [time.time(), game])
+        self.db.commit()

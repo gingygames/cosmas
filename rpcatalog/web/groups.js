@@ -294,12 +294,23 @@ function makeView(kind) {
     return [
       h('.section-title', 'Discord'),
       h('.small.muted', g.discord_id ? `Propojeno: ${g.discord_name || g.discord_id}` : 'Nepropojeno.'),
-      h('.row', { style: { marginTop: '8px' } },
-        h('button.btn.sm', { onclick: async () => {
+      h('.row.wrap', { style: { marginTop: '8px', gap: '6px' } },
+        h('button.btn.sm', { title: 'Vlož Discord ID hráče – bot nemusí být na žádném serveru', onclick: async () => {
+          const uid = await promptDialog('Propojit podle Discord ID', 'Discord ID uživatele', g.discord_id || '',
+            { placeholder: 'Režim vývojáře → pravý klik na uživatele → Kopírovat ID uživatele' });
+          if (!uid) return;
+          const m = await API.call('discord.link_by_id', { player_id: g.id, user_id: uid.trim() }).catch(() => null);
+          if (m) { toast(`Propojeno: ${m.display}`); refresh(); }
+        } }, icon('fingerprint'), g.discord_id ? 'Změnit ID' : 'Propojit podle ID'),
+        App.settings.discord_guild ? h('button.btn.sm', { onclick: async () => {
           const ms = await API.call('discord.members').catch(() => null); if (!ms) return;
           const picked = await pickDiscordMember(ms, g.name);
           if (picked) { await API.call('discord.link_player', { player_id: g.id, member: picked }); toast('Propojeno s Discordem'); refresh(); }
-        } }, icon('link'), g.discord_id ? 'Změnit propojení' : 'Propojit s Discordem'),
+        } }, icon('users'), 'Vybrat ze serveru') : null,
+        g.discord_id ? h('button.btn.sm', { title: 'Znovu stáhnout jméno a avatar', onclick: async () => {
+          const m = await API.call('discord.link_by_id', { player_id: g.id, user_id: g.discord_id }).catch(() => null);
+          if (m) { toast('Aktualizováno'); refresh(); }
+        } }, icon('refresh-cw')) : null,
         g.discord_id ? h('button.btn.sm.ghost', { onclick: async () => { await API.call('player.update', { id: g.id, discord_id: '', discord_name: '' }); refresh(); } }, 'Zrušit') : null),
     ];
   }

@@ -97,7 +97,9 @@ Python 3.12 + PySide6 (Qt WebEngine pro rozhraní v `rpcatalog/web/`, offline), 
 Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
 
 ## Discord
-- **Hráči:** Nastavení → Discord: token bota + ID serveru → „Načíst členy a vytvořit hráče“ (jméno a avatar),
+- **Hráči bez serveru:** stačí token bota (bot nemusí být nikde pozvaný) a u hráče „Propojit podle ID“ – stáhne jméno
+  a avatar z veřejného profilu. Discord ID: Nastavení → Pokročilé → Režim vývojáře, pravý klik → Kopírovat ID uživatele.
+- **Hráči ze serveru:** Nastavení → Discord: token bota + ID serveru → „Načíst členy a vytvořit hráče“ (jméno a avatar),
   u hráče „Propojit s Discordem“, „Aktualizovat jména a avatary“. Bot potřebuje zapnutý *Server Members Intent*.
 - **Holubí pošta ze schránky (PM):** v Discordu označ zprávy tažením myši, Ctrl+C, v Holubí poště Ctrl+V
   (nebo Přidat → Vložit ze schránky). Rozpozná autora, čas a text, předvybere zprávy se slovem „holub“,
@@ -116,3 +118,13 @@ Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
 - **Klipování:** `I` začátek, `O` konec (okraje jdou táhnout na ose) → Přehrát výběr / Uložit klip /
   Export MP4 (všechny zvukové stopy, do `data/clips`). `T` = aktuální snímek jako náhled videa.
   Označení postavy v momentu je teď `C`.
+
+## Obrázky her
+Ikony v levém pruhu a bannery knihovny se při prvním spuštění samy doplní ze Steamu v tomto PC.
+Jinak pravý klik na ikonu hry → „Ikona a banner hry…“: Steam v PC (obal, logo, hero), obchod Steam (hledání),
+ikony z Medalu, soubor, URL, schránka nebo snímek z videa – vše s ořezem.
+
+## Výchozí hodnoty
+- Server: když má hra jediný server, je výchozí; jinak pravý klik na server → „Nastavit jako výchozí“. Videa bez
+  serveru i nové postavy, události, frakce a místa (když je vybraná hra) dostanou výchozí server.
+- Nová postava má typ „Postava“ (dřív NPC). Hromadné úpravy postav: Ctrl/Shift + klik a pravé tlačítko.

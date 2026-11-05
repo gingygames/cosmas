@@ -7,6 +7,7 @@ import base64
 import json
 import mimetypes
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import QFileDialog
 
 from . import config, suggest
 from . import discord_link
+from . import gameart
 
 ATT_DIR = config.DATA_DIR / "attachments"
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
@@ -46,7 +48,8 @@ class Api(QObject):
                  "att.open", "att.reveal", "att.play_source", "gallery", "chars.list", "char.get", "timeline.data",
                  "settings.get", "pick_folder", "open_data_dir", "rescan", "bm.list", "bm.get", "snap.grab",
                  "layout.set", "window.bg", "window.zoom", "pane.toggle", "places.list", "place.get",
-                 "letters.list", "discord.members", "factions.list", "faction.get", "players.list", "player.get"}
+                 "letters.list", "discord.members", "game.art_sources", "game.art_search", "game.image_data",
+                 "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -173,7 +176,7 @@ class Api(QObject):
         return {
             "settings": {k: self.settings.get(k) for k in
                          ("clip_max_seconds", "short_session_seconds", "hide_short_sessions",
-                          "event_gap_minutes", "roots", "ui", "player_layout")},
+                          "event_gap_minutes", "roots", "ui", "player_layout", "discord_guild", "holub_marker")},
             "albums": self.store.albums(),
             "tags": self.store.all_tags(),
             "games": self.store.games(),
@@ -181,6 +184,7 @@ class Api(QObject):
             "factions": self.m_factions_list(),
             "places": self.m_places_list(),
             "servers": self.store.servers(),
+            "game_art": self.m_games_art(),
             "players": self.m_players_list(),
         }
 
@@ -792,6 +796,129 @@ class Api(QObject):
     def m_chars_list(self):
         return self._chars()
 
+    # ------------------------------------------------------------ game artwork
+
+    def _gdir(self):
+        d = config.DATA_DIR / "games"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def m_games_art(self):
+        out = {}
+        for g, a in self.store.game_art().items():
+            out[g] = {"icon": file_url(a["icon_path"]) if a.get("icon_path") and os.path.exists(a["icon_path"]) else None,
+                      "banner": file_url(a["banner_path"]) if a.get("banner_path") and os.path.exists(a["banner_path"]) else None,
+                      "appid": a.get("steam_appid")}
+        return out
+
+    @staticmethod
+    def _data_url(raw, path_or_url=""):
+        ext = os.path.splitext(urllib_path(path_or_url))[1].lower()
+        mime = "image/png" if ext == ".png" else "image/webp" if ext == ".webp" else "image/jpeg"
+        return f"data:{mime};base64," + base64.b64encode(raw).decode()
+
+    def m_game_art_sources(self, game):
+        installed = []
+        for g in gameart.match_installed(game)[:4]:
+            imgs = gameart.local_images(g["appid"])
+            installed.append({"appid": g["appid"], "name": g["name"],
+                              "images": [{"src": file_url(i["path"]), "path": i["path"], "kind": i["kind"]} for i in imgs]})
+        medal = [{"src": file_url(i["path"]), "path": i["path"], "kind": i["kind"], "name": i["name"]} for i in gameart.medal_icons()]
+        return {"installed": installed, "medal": medal,
+                "all_installed": sorted((g["name"] for g in gameart.installed_games()), key=str.lower)}
+
+    def m_game_art_installed(self, name):
+        hits = [g for g in gameart.installed_games() if g["name"] == name]
+        if not hits:
+            return None
+        g = hits[0]
+        return {"appid": g["appid"], "name": g["name"], "images": [{"src": file_url(i["path"]), "path": i["path"], "kind": i["kind"]}
+                                                                for i in gameart.local_images(g["appid"])]}
+
+    def m_game_art_search(self, term):
+        try:
+            return gameart.store_search(term)
+        except Exception as e:
+            raise ValueError(f"Obchod Steamu teď nejde načíst: {e}")
+
+    def m_game_image_data(self, path=None, url=None):
+        """Image as a data URL (lets the UI crop it on a canvas)."""
+        if url:
+            return self._data_url(gameart.fetch(url), url)
+        if path and os.path.exists(path) and os.path.splitext(path)[1].lower() in IMAGE_EXT | {".ico"}:
+            return self._data_url(Path(path).read_bytes(), path)
+        return None
+
+    def m_game_art_pick_file(self):
+        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, "Obrázek hry", "", "Obrázky (*.png *.jpg *.jpeg *.webp *.bmp)")
+        return self.m_game_image_data(path=path) if path else None
+
+    def _save_art(self, game, kind, raw, ext=".jpg", appid=None):
+        key = re.sub(r"[^a-z0-9]+", "-", game.lower()).strip("-") or "hra"
+        dst = self._gdir() / f"{key}-{kind}-{uuid.uuid4().hex[:6]}{ext}"
+        dst.write_bytes(raw)
+        old = self.store.game_art().get(game, {}).get(f"{kind}_path")
+        self.store.set_game_art(game, **{f"{kind}_path": str(dst)}, **({"steam_appid": appid} if appid else {}))
+        if old and os.path.exists(old) and str(self._gdir()) in old:
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+
+    def m_game_art_set(self, game, kind, data_b64, appid=None):
+        if kind not in ("icon", "banner"):
+            raise ValueError("kind")
+        head, _, b64 = data_b64.partition(",")
+        self._save_art(game, kind, base64.b64decode(b64 or head), ".png" if "png" in head else ".jpg", appid)
+        return self.m_games_art()
+
+    def m_game_art_reset(self, game, kind):
+        a = self.store.game_art().get(game, {})
+        p = a.get(f"{kind}_path")
+        self.store.set_game_art(game, **{f"{kind}_path": None})
+        if p and os.path.exists(p) and str(self._gdir()) in p:
+            os.remove(p)
+        return self.m_games_art()
+
+    def m_game_art_auto(self, games, overwrite=False):
+        """Icons/banners for games that have an obvious match among installed Steam games."""
+        from PySide6.QtGui import QImage
+        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+
+        def encode(img, fmt="JPG"):
+            ba = QByteArray()
+            buf = QBuffer(ba)
+            buf.open(QIODevice.WriteOnly)
+            img.save(buf, fmt, 90)
+            return bytes(ba)
+        have = self.store.game_art()
+        done = []
+        for game in games:
+            cur = have.get(game, {})
+            if not overwrite and cur.get("icon_path") and cur.get("banner_path"):
+                continue
+            m = [g for g in gameart.match_installed(game) if g["score"] >= 2]
+            if not m:
+                continue
+            imgs = gameart.local_images(m[0]["appid"])
+            by = {}
+            for i in sorted(imgs, key=lambda i: -i["size"]):
+                by.setdefault(i["kind"], i["path"])
+            src = by.get("cover") or by.get("header") or by.get("jiný")
+            if src and (overwrite or not cur.get("icon_path")):
+                img = QImage(src)
+                if not img.isNull():
+                    side = min(img.width(), img.height())
+                    x = (img.width() - side) // 2
+                    y = 0 if img.height() > img.width() else (img.height() - side) // 2
+                    sq = img.copy(x, y, side, side).scaled(256, 256)
+                    self._save_art(game, "icon", encode(sq), ".jpg", m[0]["appid"])
+            hero = by.get("hero") or by.get("header")
+            if hero and (overwrite or not cur.get("banner_path")):
+                self._save_art(game, "banner", Path(hero).read_bytes(), os.path.splitext(hero)[1].lower(), m[0]["appid"])
+            done.append(game)
+        return {"done": done, "art": self.m_games_art()}
+
     # ------------------------------------------------------------ servers
     def m_servers_list(self):
         return self.store.servers()
@@ -801,6 +928,10 @@ class Api(QObject):
 
     def m_server_update(self, id, **fields):
         self.store.update_server(id, **fields)
+        return True
+
+    def m_server_default(self, id):
+        self.store.set_default_server(id)
         return True
 
     def m_server_delete(self, id):
@@ -957,6 +1088,20 @@ class Api(QObject):
                 self._remove_file(oa["path"])
                 self.store.delete_attachment(old)
 
+    def _token(self):
+        tok = self.settings.get("discord_token")
+        if not tok:
+            raise ValueError("V Nastavení → Discord vyplň token bota (bot nemusí být na žádném serveru).")
+        return tok
+
+    def m_discord_user(self, user_id):
+        return discord_link.user(self._token(), user_id)
+
+    def m_discord_link_by_id(self, player_id, user_id):
+        m = discord_link.user(self._token(), user_id)
+        self.m_discord_link_player(player_id, m)
+        return m
+
     def m_discord_link_player(self, player_id, member):
         self.store.update_player(player_id, discord_id=member["id"], discord_name=member["display"],
                                  contact=member.get("username") or "")
@@ -979,11 +1124,25 @@ class Api(QObject):
         return n
 
     def m_discord_sync(self):
-        """Refresh names + avatars of all linked players."""
-        by_id = {m["id"]: m for m in self.m_discord_members()}
+        """Refresh names + avatars of all linked players: from the server member list when a server is set
+        (gives server nicknames), otherwise / for the rest from the public profile by ID."""
+        tok = self._token()
+        by_id = {}
+        if self.settings.get("discord_guild"):
+            try:
+                by_id = {m["id"]: m for m in discord_link.members(tok, self.settings["discord_guild"])}
+            except discord_link.DiscordError:
+                by_id = {}
         n = 0
         for pl in self.store.players():
+            if not pl.get("discord_id"):
+                continue
             m = by_id.get(pl.get("discord_id"))
+            if not m:
+                try:
+                    m = discord_link.user(tok, pl["discord_id"])
+                except discord_link.DiscordError:
+                    m = None
             if m:
                 self.store.update_player(pl["id"], discord_name=m["display"], contact=m.get("username") or pl["contact"])
                 if m.get("avatar"):
@@ -1159,6 +1318,10 @@ class Api(QObject):
     def m_open_data_dir(self):
         os.startfile(str(config.DATA_DIR))
         return True
+
+
+def urllib_path(p):
+    return (p or "").split("?", 1)[0]
 
 
 def _split_tags(text):

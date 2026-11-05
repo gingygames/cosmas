@@ -86,6 +86,15 @@ async function bootDetailPane() {
   applyAppearance();
   App.on('synced', () => {});
   Views.buildRail();
+  (async () => {
+    const missing = Shell.games().map(g => g.game).filter(g => !(App.gameArt[g] || {}).icon);
+    const tried = new Set(App.ui.artTried || []);
+    const todo = missing.filter(g => !tried.has(g));
+    if (!todo.length) return;
+    const r = await API.call('game.art_auto', { games: todo }).catch(() => null);
+    App.ui.artTried = [...tried, ...todo]; App.saveUi();
+    if (r && r.done.length) { App.gameArt = r.art; Shell.renderGuilds(); App.emit('gameart'); }
+  })();
   const start = App.ui.view && Views.defs[App.ui.view] && App.ui.view !== 'settings' ? App.ui.view : 'home';
   App.go(start);
 

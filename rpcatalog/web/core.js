@@ -30,7 +30,10 @@ const API = {
   call(method, args = {}) {
     return this._ready.then(() => new Promise((resolve, reject) => {
       // new things created while a server is selected belong to that server
-      if (/^(event|char|faction|place)\.create$/.test(method) && App.scope && App.scope.server && args.server_id === undefined) args = { ...args, server_id: App.scope.server };
+      if (/^(event|char|faction|place)\.create$/.test(method) && App.scope && args.server_id === undefined) {
+        const sid = App.scope.server || (App.scope.game && App.defaultServer(App.scope.game));
+        if (sid) args = { ...args, server_id: sid };
+      }
       this._bridge.call(method, JSON.stringify(Object.assign({}, args, { _src: this.src })), res => {
         let r;
         try { r = JSON.parse(res); } catch (e) { reject(String(e)); return; }
@@ -146,7 +149,7 @@ const KIND = {
 };
 const CHAR_KIND = {
   mine: { label: 'Moje postava', plural: 'Moje postavy', icon: 'crown' },
-  player: { label: 'Hráč', plural: 'Hráči', icon: 'user' },
+  player: { label: 'Postava', plural: 'Postavy', icon: 'user' },
   npc: { label: 'NPC', plural: 'NPC', icon: 'bot' },
 };
 const CHAR_STATUS = {
@@ -209,6 +212,7 @@ const App = {
     this.setChars(b.characters);
     this.factions = b.factions || []; this.players = b.players || []; this.places = b.places || [];
     this.setServers(b.servers || []);
+    this.gameArt = b.game_art || {};
     this.scope = Object.assign({ game: null, server: null }, this.ui.scope || {});
     await Promise.all([this.loadMedia(false), this.loadEvents(false)]);
   },
@@ -224,6 +228,12 @@ const App = {
   },
   servers: [], serversById: new Map(), scope: { game: null, server: null },
   setServers(list) { this.servers = list; this.serversById = new Map(list.map(s => [s.id, s])); },
+  /** default server of a game: marked as default, or the only one */
+  defaultServer(game) {
+    const list = this.servers.filter(s => s.game === game);
+    const marked = list.find(s => s.is_default);
+    return marked ? marked.id : list.length === 1 ? list[0].id : null;
+  },
   async loadServers() { this.setServers(await API.call('servers.list')); },
   setScope(patch) {
     Object.assign(this.scope, patch);
@@ -291,12 +301,15 @@ function inScope(x, kind = 'other') {
 function serverPicker(current, onPick, game = null) {
   const sv = current && App.serversById.get(current);
   const list = App.servers.filter(s => !game || s.game === game);
+  const goTo = () => { Shell.setGuild(sv.game); App.setScope({ server: sv.id }); Shell.renderChannels(); App.go('library'); };
   return h('.row', { style: { gap: '6px' } },
-    h('span.chip' + (sv ? '.on' : ''), sv ? h('span.dot', { style: { background: sv.color } }) : null, sv ? sv.name : 'bez serveru'),
+    h('span.chip' + (sv ? '.on' : ''), sv ? { title: `Přejít na server ${sv.name} (${sv.game})`, onclick: goTo } : null,
+      sv ? h('span.dot', { style: { background: sv.color } }) : null, sv ? sv.name : 'bez serveru', sv ? h('span.faint', ' · ' + sv.game) : null),
     h('button.btn.sm', { onclick: e => menu(e, [
-      ...(list.length ? [] : [{ head: 'Zatím žádné servery – přidáš je vlevo pod hrou' }]),
-      ...list.map(s => ({ label: `${s.name}${game ? '' : ' · ' + s.game}`, onClick: () => onPick(s.id) })),
-      { sep: true }, { label: 'Bez serveru', onClick: () => onPick(null) },
+      ...list.map(s => ({ label: `${s.name}${game ? '' : ' · ' + s.game}${App.defaultServer(s.game) === s.id ? '  (výchozí)' : ''}`, onClick: () => onPick(s.id) })),
+      list.length ? { sep: true } : null,
+      { label: 'Nový server…', icon: 'plus', onClick: () => serverDialog({ game }, { onSaved: id => onPick(id), switchScope: false }) },
+      { label: 'Bez serveru', onClick: () => onPick(null) },
     ]) }, 'Změnit'));
 }
 

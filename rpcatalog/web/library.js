@@ -242,7 +242,8 @@ function renderHero() {
   const list = App.media.filter(m => inScope(m, 'media'));
   const sess = list.filter(m => m.type !== 'clip');
   const latest = [...list].sort((a, b) => (b.start || 0) - (a.start || 0))[0];
-  const cover = { thumb: (Shell.games().find(g => g.game === f.game) || {}).thumb };
+  const gg = Shell.games().find(g => g.game === f.game) || {};
+  const cover = { thumb: gg.banner || gg.thumb };
   if (!cover.thumb) cover.thumb = (list.find(m => m.thumb) || {}).thumb;
   const total = list.reduce((s, m) => s + (m.duration || 0), 0);
   const nEv = App.events.filter(e => e.link_count && e.start_time).length;
@@ -259,7 +260,8 @@ function renderHero() {
           stat('Klipy', String(list.length - sess.length)),
           stat('Naposledy', latest && latest.start ? fmt.rel(latest.start) : '—'))),
       latest ? h('button.btn.play', { onclick: () => play(latest) }, icon('play'), 'Přehrát poslední') : null,
-      h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), 'Navrhnout události')));
+      h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), 'Navrhnout události'),
+      h('button.btn.icon', { title: 'Ikona a banner hry', onclick: () => gameArtDialog(f.game) }, icon('image'))));
   void nEv;
 }
 
@@ -624,6 +626,7 @@ Views.register('library', {
     unsubs = [
       App.on('media', () => { for (const id of [...S.sel]) if (!App.mediaById.has(id)) S.sel.delete(id); loadAlbum().then(render); }),
       App.on('albums', () => renderSide(side)),
+      App.on('gameart', () => renderHero()),
       App.on('chars', () => { renderSide(side); renderGrid(); }),
       App.on('events', () => renderInspector()),
       App.on('player', () => {

@@ -61,6 +61,17 @@ def avatar_url(member):
     return f"https://cdn.discordapp.com/embed/avatars/{idx}.png"
 
 
+def user(token, user_id):
+    """Public profile of any user by ID - the bot does not need to share a server with them."""
+    uid = str(user_id).strip()
+    if not uid.isdigit() or not 15 <= len(uid) <= 21:
+        raise DiscordError("Discord ID je číslo o 17–20 číslicích (pravý klik na uživatele → Kopírovat ID uživatele).")
+    u = _get(token, f"/users/{uid}")
+    return {"id": u.get("id"), "username": u.get("username", ""), "global_name": u.get("global_name") or "",
+            "nick": "", "display": u.get("global_name") or u.get("username", ""),
+            "avatar": avatar_url({"user": u}), "bot": bool(u.get("bot"))}
+
+
 def members(token, guild_id):
     out, after = [], "0"
     while True:

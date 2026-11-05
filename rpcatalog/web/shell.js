@@ -52,6 +52,9 @@ const Shell = {
       const recent = App.media.filter(x => x.game === g.game && x.thumb).sort((a, b) => (b.start || 0) - (a.start || 0)).slice(0, 12);
       const best = recent.sort((a, b) => (b.thumb_size || 0) - (a.thumb_size || 0))[0];
       g.thumb = best && best.thumb;
+      const art = (App.gameArt || {})[g.game] || {};
+      g.icon = art.icon || null;
+      g.banner = art.banner || null;
     }
     return [...by.values()].sort((a, b) => b.last - a.last);
   },
@@ -67,14 +70,18 @@ const Shell = {
     el.appendChild(h('.gsep'));
     for (const g of this.games()) {
       const initials = g.game.split(/\s+/).map(w => w[0]).join('').slice(0, 3);
-      el.appendChild(item(g.game, g.thumb ? null : h('span', initials),
+      const pic = g.icon || g.thumb;
+      el.appendChild(item(g.game, pic ? null : h('span', initials),
         `${g.game}\n${fmt.durHuman(g.dur)} nahráno · ${g.n} videí`,
         () => { this.setGuild(g.game); App.go('library', { game: g.game }); },
-        { style: g.thumb ? { backgroundImage: `url("${g.thumb}")` } : { background: gameHue(g.game) },
+        { style: pic ? { backgroundImage: `url("${pic}")` } : { background: gameHue(g.game) },
           menu: e => menu(e, [
             { label: 'Knihovna hry', icon: 'clapperboard', onClick: () => { this.setGuild(g.game); App.go('library', { game: g.game }); } },
             { label: 'Momenty z této hry', icon: 'bookmark', onClick: () => { this.setGuild(g.game); App.go('moments', { game: g.game }); } },
             { label: 'Navrhnout události', icon: 'wand-sparkles', onClick: () => App.go('events', { propose: true }) },
+            { sep: true },
+            { label: 'Ikona a banner hry…', icon: 'image', onClick: () => gameArtDialog(g.game) },
+            { label: 'Přidat server…', icon: 'server', onClick: () => serverDialog({ game: g.game }) },
           ]) }));
     }
   },
@@ -116,9 +123,14 @@ const Shell = {
       }, color ? h('span.dot', { style: { background: color, width: '10px', height: '10px', margin: '0 4px' } }) : icon('layers'), h('span.ellipsis', label),
       extra.n != null ? h('span.chan-n', extra.n) : null);
       nav.appendChild(svChan(null, 'všechny servery', null));
-      svs.forEach(sv => nav.appendChild(svChan(sv.id, sv.name, sv.color, { n: sv.n_media || null,
+      const def = App.defaultServer(game);
+      svs.forEach(sv => nav.appendChild(svChan(sv.id, sv.name + (def === sv.id && svs.length > 1 ? ' ★' : ''), sv.color, { n: sv.n_media || null,
         menu: e => menu(e, [
           { label: 'Upravit server…', icon: 'pencil', onClick: () => serverDialog(sv) },
+          def !== sv.id ? { label: 'Nastavit jako výchozí', icon: 'star', onClick: async () => {
+            await API.call('server.default', { id: sv.id }); await App.loadServers(); await App.refresh('media'); this.renderChannels();
+            toast(`Výchozí server: ${sv.name} – videa bez serveru i nové věci půjdou sem`);
+          } } : { head: 'Výchozí server této hry' },
           { label: 'Smazat server', icon: 'trash-2', danger: true, onClick: async () => {
             if (!await confirmDialog('Smazat server', `Smazat „${sv.name}“? Videa, události a postavy zůstanou, jen bez serveru.`, { danger: true, okLabel: 'Smazat' })) return;
             await API.call('server.delete', { id: sv.id }); await App.loadServers(); if (App.scope.server === sv.id) App.setScope({ server: null });
@@ -283,8 +295,10 @@ function gameHue(g) {
 }
 
 /** Create / edit a server (name, colour, period it was played). */
-function serverDialog(sv) {
+function serverDialog(sv, { onSaved = null, switchScope = true } = {}) {
   const isNew = !sv.id;
+  const games = [...new Set([...Shell.games().map(g => g.game), ...App.servers.map(x => x.game)])].sort((a, b) => a.localeCompare(b, 'cs'));
+  const gameSel = h('select.input', games.map(g => h('option', { value: g, selected: g === sv.game }, g)));
   const name = h('input.input', { value: sv.name || '', placeholder: 'např. Kingdoms Connected – CZ/SK', autofocus: true, onkeydown: e => e.stopPropagation() });
   const day = t => t ? fmt.toInput(t).slice(0, 10) : '';
   const from = h('input.input', { type: 'date', value: day(sv.active_from) });
@@ -296,16 +310,18 @@ function serverDialog(sv) {
     outline: c === color ? '2px solid var(--text)' : 'none', outlineOffset: '2px' }, onclick: () => { color = c; renderSw(); } })));
   renderSw();
   const ts = (v, end) => v ? new Date(v + (end ? 'T23:59:59' : 'T00:00:00')).getTime() / 1000 : null;
-  modal({ title: isNew ? `Nový server – ${sv.game}` : 'Upravit server', icon: 'server',
-    body: h('.col', { style: { gap: '10px' } }, name,
+  modal({ title: isNew ? (sv.game ? `Nový server – ${sv.game}` : 'Nový server') : 'Upravit server', icon: 'server',
+    body: h('.col', { style: { gap: '10px' } }, !sv.game ? h('label.field', 'Hra', gameSel) : null, name,
       h('.small.muted', 'Kdy jsi na serveru hrál – videa z tohoto období se k němu přiřadí sama (nech prázdné, pokud má hra jen jeden server).'),
       h('.row', h('label.field', 'Od', from), h('label.field', 'Do', to)), h('.small.muted', 'Barva'), sw, notes),
     actions: [{ label: 'Zrušit' }, { label: isNew ? 'Přidat' : 'Uložit', primary: true, onClick: async () => {
       if (!name.value.trim()) { toast('Zadej název serveru', 'err'); return false; }
       const f = { name: name.value.trim(), color, active_from: ts(from.value), active_to: ts(to.value, true), notes: notes.value };
-      if (isNew) { const id = await API.call('server.create', { game: sv.game, ...f }); await App.loadServers(); App.setScope({ server: id }); }
+      let id = sv.id;
+      if (isNew) { id = await API.call('server.create', { game: sv.game || gameSel.value, ...f }); await App.loadServers(); if (switchScope) App.setScope({ server: id }); }
       else { await API.call('server.update', { id: sv.id, ...f }); await App.loadServers(); }
-      await App.refresh('media'); Shell.renderChannels(); Views.show(Views.activeName, {});
+      await App.refresh('media'); Shell.renderChannels();
+      if (onSaved) onSaved(id); else Views.show(Views.activeName, {});
     } }] });
 }
 window.serverDialog = serverDialog;
