@@ -1,0 +1,4 @@
+# Volitelné: přepis řeči v záznamech (lokálně na grafické kartě NVIDIA)
+faster-whisper>=1.2
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*

@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QSplitter, QMessageBox
                                QVBoxLayout, QLabel, QToolButton)
 
 from . import config, scanner
+from .analysis import load_results
+from .analysis_jobs import AnalysisJobs
 from .api import Api
 from .previews import PreviewWorker
 from .store import Store
@@ -167,6 +169,8 @@ class MainWindow(QMainWindow):
         self.previews = PreviewWorker()
         self.previews.frames_ready.connect(lambda mid, meta: [p.set_frames(mid, meta) for p in self._players()])
         self.previews.wave_ready.connect(lambda mid, data: [p.set_wave(mid, data) for p in self._players()])
+        self.analysis = AnalysisJobs(self.settings)
+        self.analysis.event.connect(self._on_analysis)    # bound method -> runs in the GUI thread
         self._resume_tick = 0
         self._clip_done.connect(self._on_clip_done)
 
@@ -265,6 +269,12 @@ class MainWindow(QMainWindow):
             ok = r.returncode == 0 and dst.exists()
             self._clip_done.emit(media.id, str(dst), a, b, ok, r.stderr.decode("utf-8", "ignore")[-300:])
         threading.Thread(target=run, daemon=True).start()
+
+    def _on_analysis(self, ev):
+        if ev["phase"] == "done":     # results into the searchable transcript table
+            rows, _ = load_results(ev["id"])
+            self.store.transcript_set(ev["id"], rows)
+        self.api.emit("analysis", ev)
 
     def _on_clip_done(self, media_id, path, a, b, ok, err):
         if not ok:
@@ -617,6 +627,7 @@ class MainWindow(QMainWindow):
             self.popout.close()
         config.save_settings(self.settings)
         self.player.shutdown()
+        self.analysis.cancel()     # resumable: the next run continues where this one stopped
         if self.scan_thread and self.scan_thread.isRunning():
             self.scan_thread.wait(5000)
         super().closeEvent(e)

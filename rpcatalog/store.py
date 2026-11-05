@@ -245,6 +245,15 @@ CREATE TABLE IF NOT EXISTS letters (
 );
 """
 
+# Speech transcript + frame descriptions of videos (see analysis.py), searchable without diacritics.
+# speaker: who talks ("Já" = microphone, "Discord", "Zvuk") or "Obraz" for a frame description.
+SCHEMA_V6 = """
+CREATE VIRTUAL TABLE IF NOT EXISTS transcript USING fts5(
+    text, media_id UNINDEXED, speaker UNINDEXED, t UNINDEXED, t_end UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2'
+);
+"""
+
 EVENT_V2_COLUMNS = {
     "body_html": "TEXT DEFAULT ''",
     "location": "TEXT DEFAULT ''",
@@ -329,6 +338,7 @@ class Store:
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='factions'").fetchone()
         self.db.executescript(SCHEMA_V4)
         self.db.executescript(SCHEMA_V5)
+        self.db.executescript(SCHEMA_V6)
         if fresh_fac:   # turn the old free-text "faction" of characters into real factions
             now = time.time()
             for (name,) in self.db.execute("SELECT DISTINCT TRIM(faction) FROM characters "
@@ -468,7 +478,34 @@ class Store:
                             [(m, normalize_tag(t)) for m in media_ids for t in tags if normalize_tag(t)])
         self.db.commit()
 
+    # ---------- transcript ----------
+    def transcript_set(self, media_id, rows):
+        """Replace a video's transcript. rows: dicts with speaker, t, t_end, text."""
+        self.db.execute("DELETE FROM transcript WHERE media_id=?", (media_id,))
+        self.db.executemany("INSERT INTO transcript (text, media_id, speaker, t, t_end) VALUES (?,?,?,?,?)",
+                            [(r["text"], media_id, r["speaker"], r["t"], r.get("t_end")) for r in rows])
+        self.db.commit()
+
+    def transcript(self, media_id):
+        rows = self.db.execute("SELECT speaker, t, t_end, text FROM transcript WHERE media_id=?", (media_id,))
+        return sorted(({"speaker": s, "t": t, "t_end": e, "text": x} for s, t, e, x in rows), key=lambda r: r["t"])
+
+    def transcript_media_ids(self):
+        return {r[0] for r in self.db.execute("SELECT DISTINCT media_id FROM transcript")}
+
+    def transcript_search(self, query, limit=200):
+        """Full-text hits [{media_id, speaker, t, snippet}]; every word must match (prefixes allowed)."""
+        words = re.findall(r"\w+", query or "")
+        if not words:
+            return []
+        fts = " ".join(f'"{w}"*' for w in words)
+        rows = self.db.execute(
+            "SELECT media_id, speaker, t, snippet(transcript, 0, '[', ']', '…', 12) FROM transcript "
+            "WHERE transcript MATCH ? ORDER BY rank LIMIT ?", (fts, limit))
+        return [{"media_id": m, "speaker": s, "t": t, "snippet": sn} for m, s, t, sn in rows]
+
     def delete_media_row(self, media_id):
+        self.db.execute("DELETE FROM transcript WHERE media_id=?", (media_id,))
         self.db.execute("DELETE FROM media WHERE id=?", (media_id,))
         self.db.execute("DELETE FROM character_links WHERE target_type='bookmark' "
                         "AND target_id NOT IN (SELECT id FROM bookmarks)")

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import QFileDialog
 from . import config, suggest
 from . import discord_link
 from . import gameart
+from .analysis import analysis_dir, load_results
 
 ATT_DIR = config.DATA_DIR / "attachments"
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
@@ -49,7 +50,8 @@ class Api(QObject):
                  "settings.get", "pick_folder", "open_data_dir", "rescan", "bm.list", "bm.get", "snap.grab",
                  "layout.set", "window.bg", "window.zoom", "pane.toggle", "places.list", "place.get",
                  "letters.list", "discord.members", "game.art_sources", "game.art_search", "game.image_data",
-                 "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get"}
+                 "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get",
+                 "analysis.get", "analysis.status", "analysis.search", "analysis.open_timeline"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -223,7 +225,8 @@ class Api(QObject):
         linked = self.store.linked_media_ids()
         chars = self._char_map("media")
         bms = self._bm_map()
-        return [self._media(m, linked, chars, bms) for m in self.store.all_media()]
+        tr = self.store.transcript_media_ids()
+        return [dict(self._media(m, linked, chars, bms), transcribed=m.id in tr) for m in self.store.all_media()]
 
     def m_media_get(self, id):
         m = self.store.media(id)
@@ -234,6 +237,39 @@ class Api(QObject):
         d["links"] = self.store.links(media_id=id)
         d["bm_full"] = self._bms(self.store.bookmarks(media_id=id))
         return d
+
+    # ------------------------------------------------------------ transcript / analysis
+    def m_analysis_get(self, id):
+        jobs = self.host.analysis
+        d = analysis_dir(id)
+        rows = self.store.transcript(id)
+        if not rows and (d / "done.json").exists():    # finished while the app was closed, or run by hand
+            self.store.transcript_set(id, load_results(id)[0])
+            rows = self.store.transcript(id)
+        return {"available": jobs.available(), "state": jobs.state.get(id), "rows": rows,
+                "timeline": (d / "timeline.md").exists(), "vision_model": self.settings.get("ai_vision_model", "qwen3.8:27b")}
+
+    def m_analysis_start(self, ids, vision=False):
+        if not self.host.analysis.available():
+            raise RuntimeError("Chybí knihovny pro přepis: .venv\\Scripts\\pip install -r requirements-ai.txt")
+        self.host.analysis.request([m for m in (self.store.media(i) for i in ids) if m], vision=vision)
+        return True
+
+    def m_analysis_cancel(self):
+        self.host.analysis.cancel()
+        return True
+
+    def m_analysis_status(self):
+        return list(self.host.analysis.state.values())
+
+    def m_analysis_search(self, q, limit=200):
+        return self.store.transcript_search(q, limit)
+
+    def m_analysis_open_timeline(self, id):
+        p = analysis_dir(id) / "timeline.md"
+        if p.exists():
+            os.startfile(str(p))
+        return True
 
     def m_media_update(self, id, **fields):
         if "tags" in fields:

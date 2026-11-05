@@ -119,6 +119,21 @@ Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
   Export MP4 (všechny zvukové stopy, do `data/clips`). `T` = aktuální snímek jako náhled videa.
   Označení postavy v momentu je teď `C`.
 
+## Přepis řeči a popis obrazu (lokální AI)
+Všechno běží na tvém počítači (grafická karta NVIDIA), nic se nikam neposílá a nic se neplatí.
+- **Instalace (jednou):** `.venv\Scripts\pip install -r requirements-ai.txt`. Model řeči (Whisper large-v3, ~3 GB)
+  se stáhne sám při prvním přepisu. Pro popis obrazu nainstaluj [Ollamu](https://ollama.com) a `ollama pull qwen3.8:27b`.
+- **Spuštění:** v panelu videa sekce **Přepis** → *Přepsat řeč* nebo *Řeč + obraz*; pro víc videí pravý klik → Přepis.
+  Běží na pozadí, jedno video po druhém, a po přerušení (i zavření aplikace) naváže, kde skončilo.
+- **Kdo mluví:** každá zvuková stopa se přepisuje zvlášť – **Já** (mikrofon), **Hra** (hlasový chat ve hře, NPC),
+  **Discord**. **Obraz** = popis snímku každých 30 s (model dostane i to, co v tu chvíli zaznívá).
+- **Použití:** klik na řádek přehraje video od toho místa, hledání v přepisu, filtr podle mluvčího.
+  Hledání v Knihovně najde i videa, kde slovo zaznělo (bez ohledu na diakritiku), a ukáže místo na kartě.
+- **Celý záznam jako text:** tlačítko se stránkou otevře `data/analysis/<id>/timeline.md` – hodí se třeba pro shrnutí
+  večera nebo hledání souvislostí s Claudem.
+- Rychlost na RTX 4090: přepis zhruba 15–20× rychleji než reálný čas (ticho se přeskakuje), popis obrazu ~3 s na snímek.
+- Nastavení v `data/settings.json`: `ai_whisper_model`, `ai_language`, `ai_vision_model`, `ai_vision_every`.
+
 ## Obrázky her
 Ikony v levém pruhu a bannery knihovny se při prvním spuštění samy doplní ze Steamu v tomto PC.
 Jinak pravý klik na ikonu hry → „Ikona a banner hry…“: Steam v PC (obal, logo, hero), obchod Steam (hledání),

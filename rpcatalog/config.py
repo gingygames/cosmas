@@ -26,6 +26,12 @@ DEFAULTS = {
     "event_gap_minutes": 45,
     "game_aliases": {},
     "volume": 100,
+    # Transcript of recordings (analysis.py): Whisper model and language, Ollama vision model,
+    # seconds between described frames
+    "ai_whisper_model": "large-v3",
+    "ai_language": "cs",
+    "ai_vision_model": "qwen3.8:27b",
+    "ai_vision_every": 30,
 }
 
 
