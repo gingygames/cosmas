@@ -1,0 +1,639 @@
+/* ============================================================
+   Library – browse, filter, edit and organise recordings
+   ============================================================ */
+'use strict';
+
+(() => {
+const CSS = `
+.lib { display: flex; height: 100%; min-height: 0; }
+.lib-side { padding: 0; }
+.lib-side .grp { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3);
+  margin: 16px 10px 6px; display: flex; align-items: center; }
+.lib-side .grp button { margin-left: auto; }
+.lib-side .it { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: 8px; cursor: pointer;
+  color: var(--text-2); font-size: 13px; }
+.lib-side .it:hover { background: var(--hover); color: var(--text); }
+.lib-side .it.on { background: var(--accent-soft); color: var(--accent-2); }
+.lib-side .it .n { margin-left: auto; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.lib-side .it.sub { padding-left: 34px; height: 28px; font-size: 12.5px; }
+.lib-side .it i { font-size: 15px; }
+.lib-side .it.drop-target { outline-offset: -1px; }
+.lib-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lib-grid-wrap > .game-hero { margin: -4px -24px 0; }
+.lib-grid-wrap > div > .toolbar { padding-left: 0; padding-right: 0; }
+.game-hero { position: relative; height: 230px; flex: none; overflow: hidden; display: flex; align-items: flex-end; }
+.game-hero .bgimg { position: absolute; inset: 0; background: center 35% / cover no-repeat; }
+.game-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.05) 0%, rgba(0,0,0,.25) 45%, var(--bg) 100%); }
+.game-hero .in { position: relative; z-index: 1; padding: 0 24px 16px; display: flex; align-items: flex-end; gap: 24px; width: 100%; }
+.game-hero h2 { margin: 0; font: 800 34px/1.1 var(--font-display); color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.6); letter-spacing: -.5px; }
+.game-hero .stats { display: flex; gap: 26px; margin-top: 12px; }
+.game-hero .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: rgba(255,255,255,.6); font-weight: 600; }
+.game-hero .stat .v { font-size: 14px; color: #fff; font-weight: 600; }
+.game-hero .btn.play { height: 44px; padding: 0 26px; font-size: 15px; font-weight: 700; background: var(--ok); color: #fff; }
+.game-hero .btn.play:hover { filter: brightness(1.1); }
+.lib-grid-wrap { flex: 1; overflow: auto; padding: 4px 24px 30px; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--card-w, 250px), 1fr)); gap: 16px; }
+.lib-day { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; margin: 14px 0 -4px; }
+.lib-day h3 { margin: 0; font: 600 15px var(--font-display); }
+.lib-day h3::first-letter { text-transform: uppercase; }
+.lib-day .faint { font-size: 12px; }
+.lib-day .line { flex: 1; height: 1px; background: var(--border); align-self: center; }
+.mcard { border-radius: 6px; background: var(--surface); overflow: hidden; cursor: pointer;
+  transition: background .12s; position: relative; user-select: none; }
+.mcard:hover { background: var(--surface-2); }
+.mcard.sel { box-shadow: 0 0 0 2px var(--accent); }
+.mcard.playing::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--ok); border-radius: 6px; pointer-events: none; }
+.mcard .th { position: relative; aspect-ratio: 16/9; background: #05060a; overflow: hidden; }
+.mcard .th img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s var(--ease); }
+.mcard:hover .th img { transform: scale(1.02); }
+.mcard .th .badge { position: absolute; left: 8px; top: 8px; backdrop-filter: blur(8px); }
+.mcard .th .dur { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.72); color: #fff; font-size: 11.5px;
+  padding: 2px 7px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.mcard .th .flags { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; }
+.mcard .th .flags span { width: 24px; height: 24px; border-radius: 4px; display: grid; place-items: center; background: rgba(0,0,0,.6);
+  color: var(--accent-2); backdrop-filter: blur(6px); }
+.mcard .th .flags i { font-size: 13px; }
+.mcard .th .pl { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; transition: opacity .2s;
+  background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,.5)); }
+.mcard .th .pl span { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--accent);
+  color: var(--accent-ink); transform: scale(.9); transition: transform .15s var(--ease); }
+.mcard .th .pl i { font-size: 20px; margin-left: 2px; }
+.mcard:hover .th .pl { opacity: 1; }
+.mcard:hover .th .pl span { transform: scale(1); }
+.mcard .th .resume, .mtile .resume { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.25); z-index: 1; }
+.mcard .th .resume i, .mtile .resume i { display: block; height: 100%; background: var(--danger); }
+.mcard .th .bm { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.mcard .th .bm b { position: absolute; bottom: 0; width: 3px; height: 3px; background: var(--accent); border-radius: 2px; }
+.mcard .meta { padding: 10px 12px 11px; }
+.mcard .t { font-weight: 600; font-size: 13.5px; }
+.mcard .s { font-size: 12px; color: var(--text-3); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+.mcard .tags { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 0; }
+.mcard.missing { opacity: .5; }
+.mcard.compact .meta { padding: 7px 10px 8px; }
+.lib-insp { width: 360px; flex: none; overflow: auto; background: var(--bg-2);
+  animation: slidein .2s var(--ease); }
+.lib-insp.in-modal { width: auto; background: none; animation: none; overflow: visible; }
+.lib-insp.in-modal .pad { padding: 0; }
+.lib-insp.pane { width: auto; animation: none; background: var(--bg); overflow: visible; }
+.lib-insp .hero { position: relative; aspect-ratio: 16/9; background: #000; cursor: pointer; }
+.lib-insp .hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lib-insp .hero .pl { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,.6)); }
+.lib-insp .hero .pl span { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--accent);
+  color: var(--accent-ink); }
+.lib-insp .hero .pl i { font-size: 24px; margin-left: 3px; }
+.lib-insp .pad { padding: 14px 16px; }
+.lib-insp .title-in { font: 600 17px var(--font-display); }
+.lib-insp .kv { display: grid; grid-template-columns: 92px 1fr; gap: 6px 10px; font-size: 12.5px; }
+.lib-insp .kv .k { color: var(--text-3); }
+.lib-insp .rowlist .list-row { padding: 6px 8px; font-size: 13px; }
+.tag-input { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px 6px; border-radius: 9px; background: var(--bg-2);
+  border: 1px solid var(--border-2); min-height: 34px; align-items: center; }
+.tag-input:focus-within { border-color: rgba(227,179,65,.55); }
+.tag-input input { border: 0; outline: none; background: none; flex: 1; min-width: 80px; height: 22px; }
+.tag-input .chip { height: 22px; padding: 0 8px; }
+.bulkbar { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center;
+  padding: 8px 10px 8px 16px; border-radius: 14px; background: var(--surface-3); border: 1px solid var(--border-2);
+  box-shadow: var(--shadow); animation: pop .2s var(--ease); z-index: 20; }
+`;
+document.head.appendChild(h('style', CSS));
+
+const SORTS = {
+  new: { label: 'Nejnovější', fn: (a, b) => (b.start || 0) - (a.start || 0) },
+  old: { label: 'Nejstarší', fn: (a, b) => (a.start || 0) - (b.start || 0) },
+  long: { label: 'Nejdelší', fn: (a, b) => (b.duration || 0) - (a.duration || 0) },
+  name: { label: 'Název', fn: (a, b) => a.name.localeCompare(b.name, 'cs') },
+};
+
+let S = null;  // view state
+
+function state() {
+  const ui = App.ui.lib || (App.ui.lib = {});
+  return {
+    filter: ui.filter || { type: 'all' },
+    kinds: new Set(ui.kinds || ['clip', 'session', 'manual']),
+    sort: ui.sort || 'new',
+    group: ui.group !== false,
+    showShort: !!ui.showShort,
+    size: ui.size || 250,
+    q: '',
+    sel: new Set(),
+    anchor: null,
+    albumItems: null,
+    expanded: new Set(ui.expanded || []),
+  };
+}
+function persist() {
+  App.ui.lib = { filter: S.filter, kinds: [...S.kinds], sort: S.sort, group: S.group, showShort: S.showShort,
+    size: S.size, expanded: [...S.expanded] };
+  App.saveUi();
+}
+
+function filtered() {
+  let items = App.media;
+  const f = S.filter;
+  items = items.filter(m => inScope(m, 'media'));
+  if (f.type === 'unlinked') items = items.filter(m => !m.linked);
+  else if (f.type === 'fav') items = items.filter(m => m.favorite);
+  else if (f.type === 'tag') items = items.filter(m => m.tags.includes(f.tag));
+  else if (f.type === 'char') items = items.filter(m => (m.chars || []).includes(f.id));
+  else if (f.type === 'album') items = items.filter(m => S.albumItems && S.albumItems.has(m.id));
+  items = items.filter(m => S.kinds.has(m.type));
+  if (!S.showShort) {
+    const lim = App.settings.short_session_seconds || 60;
+    items = items.filter(m => !(m.type === 'session' && (m.duration || 0) < lim));
+  }
+  const q = S.q.trim().toLowerCase();
+  if (q) {
+    const words = q.split(/\s+/);
+    items = items.filter(m => {
+      const hay = [m.name, m.medal_title, m.description, m.game, ...(m.tags || []).map(t => '#' + t),
+        ...(m.chars || []).map(id => App.charsById.get(id)?.name || '')].join(' ').toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
+  }
+  if (f.type === 'album' && S.sort === 'new' && S.albumOrder) {
+    return [...items].sort((a, b) => (S.albumOrder.get(a.id) ?? 0) - (S.albumOrder.get(b.id) ?? 0));
+  }
+  return [...items].sort(SORTS[S.sort].fn);
+}
+
+/* ---------------- sidebar ---------------- */
+function renderSide(side) {
+  clear(side);
+  const it = (label, ic, spec, n, extra = {}) => {
+    const on = JSON.stringify(spec) === JSON.stringify(S.filter);
+    const el = h('.it' + (on ? '.on' : '') + (extra.sub ? '.sub' : ''), {
+      onclick: () => { S.filter = spec; S.sel.clear(); loadAlbum().then(() => { persist(); render(); }); },
+      oncontextmenu: extra.menu,
+    }, ic ? icon(ic) : (extra.dot ? h('span.dot', { style: { background: extra.dot } }) : null), h('span.ellipsis', label), n != null ? h('span.n', n) : null);
+    if (extra.drop) dropZone(el, extra.drop);
+    return el;
+  };
+  const all = App.media.filter(m => inScope(m, 'media'));
+  side.appendChild(it('Vše', 'library', { type: 'all' }, all.length));
+  side.appendChild(it('Bez události', 'inbox', { type: 'unlinked' }, all.filter(m => !m.linked).length));
+  side.appendChild(it('Oblíbené', 'star', { type: 'fav' }, all.filter(m => m.favorite).length));
+
+  side.appendChild(h('.grp', 'Alba', h('button.btn.ghost.sm.icon', { title: 'Nové album', onclick: newAlbum }, icon('plus'))));
+  if (!App.albums.length) side.appendChild(h('.it.faint', { style: { cursor: 'default' } }, icon('folder-plus'), h('span.small', 'Zatím žádná alba')));
+  App.albums.forEach(a => side.appendChild(it(a.name, 'folder', { type: 'album', id: a.id }, a.n, {
+    drop: ids => API.call('media.bulk', { ids, op: 'album_add', value: a.id }).then(() => { toast(`Přidáno do alba ${a.name}`); App.refresh('media', 'meta'); }),
+    menu: e => menu(e, [
+      { label: 'Přejmenovat', icon: 'pencil', onClick: async () => { const n = await promptDialog('Přejmenovat album', 'Název', a.name); if (n) { await API.call('album.rename', { id: a.id, name: n }); App.refresh('meta'); } } },
+      { label: 'Smazat album', icon: 'trash-2', danger: true, onClick: async () => { if (await confirmDialog('Smazat album', `Smazat album „${a.name}“? Videa zůstanou.`, { danger: true, okLabel: 'Smazat' })) { await API.call('album.delete', { id: a.id }); S.filter = { type: 'all' }; App.refresh('meta'); } } },
+    ]),
+  })));
+
+  if (App.chars.length) {
+    side.appendChild(h('.grp', 'Postavy'));
+    const counts = new Map();
+    all.forEach(m => (m.chars || []).forEach(id => counts.set(id, (counts.get(id) || 0) + 1)));
+    App.chars.filter(c => counts.get(c.id)).forEach(c => {
+      const row = it(c.name, null, { type: 'char', id: c.id }, counts.get(c.id));
+      row.insertBefore(avatar(c, 18), row.firstChild);
+      side.appendChild(row);
+    });
+  }
+
+  if (App.tags.length) {
+    side.appendChild(h('.grp', 'Štítky'));
+    App.tags.forEach(([t, n]) => side.appendChild(it('#' + t, null, { type: 'tag', tag: t }, n)));
+  }
+}
+
+function gameColor(g) {
+  let x = 0; for (const ch of g || '') x = (x * 31 + ch.charCodeAt(0)) >>> 0;
+  return PALETTE[x % PALETTE.length];
+}
+
+function dropZone(el, onIds) {
+  el.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-media')) { e.preventDefault(); el.classList.add('drop-target'); } });
+  el.addEventListener('dragleave', () => el.classList.remove('drop-target'));
+  el.addEventListener('drop', e => {
+    el.classList.remove('drop-target');
+    const raw = e.dataTransfer.getData('application/x-media');
+    if (raw) { e.preventDefault(); onIds(JSON.parse(raw)); }
+  });
+}
+window.mediaDropZone = dropZone;
+
+async function loadAlbum() {
+  if (S.filter.type === 'album') {
+    const ids = await API.call('album.items', { id: S.filter.id });
+    S.albumItems = new Set(ids); S.albumOrder = new Map(ids.map((id, i) => [id, i]));
+  } else { S.albumItems = null; S.albumOrder = null; }
+}
+
+async function newAlbum(ids) {
+  const name = await promptDialog('Nové album', 'Název alba', '', { placeholder: 'např. Nejlepší momenty' });
+  if (!name) return;
+  await API.call('album.create', { name, ids: Array.isArray(ids) ? ids : null });
+  toast(`Album „${name}“ vytvořeno`);
+  App.refresh('meta', 'media');
+}
+
+/* ---------------- grid ---------------- */
+let root, side, grid, gridWrap, insp, head, bulk, countEl, heroEl;
+
+function renderHero() {
+  if (!heroEl) return;
+  const f = { game: App.scope.game };
+  if (!f.game) { heroEl.classList.add('hidden'); clear(heroEl); return; }
+  const list = App.media.filter(m => inScope(m, 'media'));
+  const sess = list.filter(m => m.type !== 'clip');
+  const latest = [...list].sort((a, b) => (b.start || 0) - (a.start || 0))[0];
+  const cover = { thumb: (Shell.games().find(g => g.game === f.game) || {}).thumb };
+  if (!cover.thumb) cover.thumb = (list.find(m => m.thumb) || {}).thumb;
+  const total = list.reduce((s, m) => s + (m.duration || 0), 0);
+  const nEv = App.events.filter(e => e.link_count && e.start_time).length;
+  const stat = (k, v) => h('.stat', h('.k', k), h('.v', v));
+  heroEl.classList.remove('hidden');
+  clear(heroEl).append(
+    h('.bgimg', { style: cover.thumb ? { backgroundImage: `url("${cover.thumb}")` } : { background: gameHue(f.game) } }),
+    h('.in',
+      h('.grow',
+        h('h2', f.game),
+        h('.stats',
+          stat('Nahráno', fmt.durHuman(total)),
+          stat('Celé záznamy', String(sess.length)),
+          stat('Klipy', String(list.length - sess.length)),
+          stat('Naposledy', latest && latest.start ? fmt.rel(latest.start) : '—'))),
+      latest ? h('button.btn.play', { onclick: () => play(latest) }, icon('play'), 'Přehrát poslední') : null,
+      h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), 'Navrhnout události')));
+  void nEv;
+}
+
+function render() {
+  if (!root) return;
+  renderSide(side);
+  renderHero();
+  renderGrid();
+  renderInspector();
+}
+
+function card(m) {
+  const playing = App.player.media_id === m.id;
+  const el = h('.mcard' + (S.sel.has(m.id) ? '.sel' : '') + (playing ? '.playing' : '') + (m.missing ? '.missing' : '') + (S.size < 200 ? '.compact' : ''), {
+    draggable: 'true', 'data-id': m.id,
+    onclick: e => select(m.id, e),
+    ondblclick: () => play(m),
+    oncontextmenu: e => { if (!S.sel.has(m.id)) { S.sel.clear(); S.sel.add(m.id); S.anchor = m.id; refreshSel(); } cardMenu(e); },
+    ondragstart: e => {
+      if (!S.sel.has(m.id)) { S.sel.clear(); S.sel.add(m.id); refreshSel(); }
+      e.dataTransfer.setData('application/x-media', JSON.stringify([...S.sel]));
+      e.dataTransfer.effectAllowed = 'copyLink';
+    },
+  },
+  h('.th', m.thumb ? h('img', { src: m.thumb, loading: 'lazy', draggable: 'false' }) : h('.empty', { style: { padding: '30px' } }, icon('film')),
+    h('span.badge.' + m.type, KIND[m.type]?.label),
+    h('.flags', m.favorite ? h('span', { title: 'Oblíbené' }, icon('star')) : null,
+      m.linked ? h('span', { title: 'Je v události' }, icon('link')) : null,
+      m.sidecars ? h('span', { title: 'Samostatné zvukové stopy' }, icon('audio-lines')) : null),
+    h('span.dur', fmt.dur(m.duration)),
+    m.duration ? h('.bm', (m.bookmarks || []).filter(b => b.source !== 'auto' || b.event_id).map(b => h('b', {
+      style: { left: (b.t / m.duration * 100) + '%', width: b.t_end ? Math.max(0.6, (b.t_end - b.t) / m.duration * 100) + '%' : null, background: b.color || null },
+    }))) : null,
+    m.resume && m.duration ? h('.resume', { title: `Skončil jsi v ${fmt.clock(m.resume)}` }, h('i', { style: { width: Math.min(100, m.resume / m.duration * 100) + '%' } })) : null,
+    h('.pl', { onclick: e => { e.stopPropagation(); play(m); } }, h('span', icon('play')))),
+  h('.meta',
+    h('.t.ellipsis', m.name),
+    h('.s', h('span.ellipsis', `${fmt.time(m.start)} · ${m.game}`)),
+    (m.tags.length || (m.chars || []).length) ? h('.tags',
+      (m.chars || []).length ? avatarStack(m.chars, 20, 4) : null,
+      m.tags.slice(0, 4).map(t => h('span.tag', '#' + t))) : null));
+  return el;
+}
+
+function renderGrid() {
+  const items = filtered();
+  S.items = items;
+  clear(grid);
+  grid.style.setProperty('--card-w', S.size + 'px');
+  if (!items.length) {
+    grid.appendChild(h('div', { style: { gridColumn: '1/-1' } }, emptyState('search-x', 'Nic tu není',
+      S.q ? 'Zkus jiné hledání nebo zapni další typy záznamů.' : 'V tomto filtru zatím nejsou žádná videa.')));
+  }
+  let lastDay = null;
+  const dayTotals = {};
+  if (S.group && S.sort in { new: 1, old: 1 }) items.forEach(m => { const k = m.start ? new Date(m.start * 1000).toDateString() : '?'; dayTotals[k] = (dayTotals[k] || 0) + (m.duration || 0); });
+  const frag = document.createDocumentFragment();
+  for (const m of items) {
+    if (S.group && S.sort in { new: 1, old: 1 }) {
+      const k = m.start ? new Date(m.start * 1000).toDateString() : '?';
+      if (k !== lastDay) {
+        lastDay = k;
+        const n = items.filter(x => x.start && new Date(x.start * 1000).toDateString() === k).length;
+        frag.appendChild(h('.lib-day', h('h3', m.start ? fmt.dateLong(m.start) : 'Bez data'),
+          h('span.faint', `${n} ${fmt.plural(n, 'video', 'videa', 'videí')} · ${fmt.durHuman(dayTotals[k])}`), h('.line')));
+      }
+    }
+    frag.appendChild(card(m));
+  }
+  grid.appendChild(frag);
+  const total = items.reduce((s, m) => s + (m.duration || 0), 0);
+  countEl.textContent = `${items.length} ${fmt.plural(items.length, 'video', 'videa', 'videí')} · ${fmt.durHuman(total)}`;
+  const svx = App.scope.server && App.serversById.get(App.scope.server);
+  Shell.header({ icon: App.scope.game ? 'gamepad-2' : 'clapperboard', title: App.scope.game ? (svx ? `${App.scope.game} · ${svx.name}` : App.scope.game) : 'knihovna', topic: countEl.textContent,
+    actions: [h('button.tb-btn', { title: 'Načíst nové záznamy (F5)', onclick: () => { API.call('rescan'); toast('Hledám nové záznamy…'); } }, icon('refresh-cw'))] });
+  renderBulk();
+}
+
+function refreshSel() {
+  $$('.mcard', grid).forEach(c => c.classList.toggle('sel', S.sel.has(Number(c.dataset.id))));
+  renderInspector(); renderBulk();
+}
+
+function select(id, e) {
+  if (e.shiftKey && S.anchor != null) {
+    const ids = S.items.map(m => m.id);
+    const a = ids.indexOf(S.anchor), b = ids.indexOf(id);
+    if (!e.ctrlKey) S.sel.clear();
+    ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(x => S.sel.add(x));
+  } else if (e.ctrlKey || e.metaKey) {
+    S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id); S.anchor = id;
+  } else {
+    S.sel.clear(); S.sel.add(id); S.anchor = id;
+  }
+  refreshSel();
+}
+
+function play(m, offset) { API.call('media.play', { id: m.id, offset: offset ?? null }); }
+function selected() { return [...S.sel].map(id => App.mediaById.get(id)).filter(Boolean); }
+
+/* ---------------- actions ---------------- */
+async function linkToEvent(ms) {
+  const times = ms.map(m => m.start).filter(Boolean);
+  const r = await pickEvent({ moment: times.length ? Math.min(...times) : null });
+  if (!r) return;
+  const n = await API.call('link.add', { event_id: r.id, media_ids: ms.map(m => m.id), note: r.note });
+  toast(`Připojeno k události (${n})`, 'ok', { label: 'Otevřít', fn: () => App.go('events', { id: r.id }) });
+  App.refresh('media', 'events');
+}
+async function eventFromSelection(ms) {
+  const times = ms.map(m => m.start).filter(Boolean);
+  const start = times.length ? Math.min(...times) : null;
+  const end = ms.length ? Math.max(...ms.map(m => m.end || m.start || 0)) : null;
+  const def = ms.length === 1 ? ms[0].name : `${ms[0].game} – ${start ? fmt.date(start) : ''}`;
+  const title = await promptDialog('Nová událost', `Název události (${ms.length} ${fmt.plural(ms.length, 'záznam se připojí', 'záznamy se připojí', 'záznamů se připojí')})`, def);
+  if (!title) return;
+  const id = await API.call('event.create', { title, start, end, media_ids: ms.map(m => m.id) });
+  await App.refresh('media', 'events');
+  App.go('events', { id });
+}
+async function addTags(ms) {
+  const t = await promptDialog('Přidat štítky', `Štítky pro ${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')}`, '', { placeholder: '#únos #policie' });
+  if (!t) return;
+  const tags = t.split(/[\s,]+/).map(x => x.replace(/^#/, '')).filter(Boolean);
+  await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'add_tags', value: tags });
+  App.refresh('media', 'meta');
+}
+async function addChars(ms) {
+  const ids = await pickCharacters([], { title: 'Kdo je ve videu?' });
+  if (!ids || !ids.length) return;
+  for (const c of ids) await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'char_add', value: c });
+  App.refresh('media', 'chars');
+}
+async function deleteMedia(ms) {
+  const size = ms.reduce((s, m) => s + (m.size || 0), 0);
+  const names = ms.slice(0, 6).map(m => '• ' + m.name).join('\n') + (ms.length > 6 ? '\n…' : '');
+  const linked = ms.filter(m => m.linked).length;
+  const ok = await confirmDialog('Smazat do koše',
+    `Přesunout ${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')} (${fmt.size(size)}) do Koše?\n\n${names}` +
+    (linked ? `\n\n${linked} z nich ${fmt.plural(linked, 'je', 'jsou', 'je')} v událostech – odkazy zmizí.` : '') +
+    '\n\nMedal je pak ve své knihovně uvidí jako chybějící.', { danger: true, okLabel: 'Přesunout do koše' });
+  if (!ok) return;
+  const r = await API.call('media.delete', { ids: ms.map(m => m.id) });
+  S.sel.clear();
+  if (r.failed.length) toast('Některá videa se nepodařilo smazat: ' + r.failed.join(', '), 'err');
+  else toast(`Přesunuto do koše: ${ms.length}`);
+  App.refresh('media', 'events', 'meta');
+}
+
+function cardMenu(e) {
+  const ms = selected(); if (!ms.length) return;
+  const one = ms.length === 1 ? ms[0] : null;
+  const fav = ms.every(m => m.favorite);
+  menu(e, [
+    one ? { label: 'Přehrát', icon: 'play', onClick: () => play(one) } : null,
+    one ? { label: 'Přehrát ve vlastním okně', icon: 'picture-in-picture-2', onClick: () => API.call('media.play', { id: one.id, popout: true }) } : null,
+    { sep: true },
+    { label: 'Připojit k události…', icon: 'link', onClick: () => linkToEvent(ms) },
+    { label: 'Nová událost z výběru', icon: 'calendar-plus', onClick: () => eventFromSelection(ms) },
+    { label: 'Označit postavy…', icon: 'users', onClick: () => addChars(ms) },
+    { label: 'Přidat štítky…', icon: 'tag', onClick: () => addTags(ms) },
+    { label: 'Přidat do alba', icon: 'folder-plus', submenu: [
+      ...App.albums.map(a => ({ label: a.name, icon: 'folder', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_add', value: a.id }); toast(`Přidáno do „${a.name}“`); App.refresh('meta'); } })),
+      App.albums.length ? { sep: true } : null,
+      { label: 'Nové album…', icon: 'plus', onClick: () => newAlbum(ms.map(m => m.id)) },
+    ] },
+    S.filter.type === 'album' ? { label: 'Odebrat z alba', icon: 'folder-minus', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_remove', value: S.filter.id }); await loadAlbum(); App.refresh('meta'); } } : null,
+    { label: 'Změnit typ', icon: 'shapes', submenu: [
+      { label: 'Automaticky', onClick: () => bulk_('kind', null) },
+      ...Object.entries(KIND).map(([k, v]) => ({ label: v.label, icon: v.icon, onClick: () => bulk_('kind', k) })),
+    ] },
+    { label: fav ? 'Odebrat z oblíbených' : 'Přidat do oblíbených', icon: 'star', onClick: () => bulk_('favorite', !fav) },
+    { sep: true },
+    one ? { label: 'Upravit informace…', icon: 'pencil', onClick: () => editMediaDialog(one) } : null,
+    { label: 'Server', icon: 'server', submenu: [
+      ...App.servers.filter(s => ms.every(m => m.game === s.game)).map(s => ({ label: s.name, onClick: async () => { await API.call('server.assign', { type: 'media', ids: ms.map(m => m.id), server_id: s.id }); App.refresh('media'); } })),
+      { label: 'Bez serveru', onClick: async () => { await API.call('server.assign', { type: 'media', ids: ms.map(m => m.id), server_id: null }); App.refresh('media'); } },
+    ] },
+    one ? { label: 'Zobrazit ve složce', icon: 'folder-open', onClick: () => API.call('media.reveal', { id: one.id }) } : null,
+    { label: 'Smazat do koše…', icon: 'trash-2', danger: true, onClick: () => deleteMedia(ms) },
+  ]);
+  async function bulk_(op, value) { await API.call('media.bulk', { ids: ms.map(m => m.id), op, value }); App.refresh('media'); }
+}
+
+function renderBulk() {
+  if (!bulk) return;
+  const n = S.sel.size;
+  bulk.classList.toggle('hidden', n < 2);
+  if (n < 2) return;
+  const ms = selected();
+  clear(bulk).append(
+    h('b', `${n} vybráno`), h('span.faint.small', fmt.durHuman(ms.reduce((s, m) => s + (m.duration || 0), 0))), h('.vsep'),
+    h('button.btn.sm', { onclick: () => linkToEvent(ms) }, icon('link'), 'K události'),
+    h('button.btn.sm', { onclick: () => eventFromSelection(ms) }, icon('calendar-plus'), 'Nová událost'),
+    h('button.btn.sm', { onclick: () => addChars(ms) }, icon('users'), 'Postavy'),
+    h('button.btn.sm', { onclick: () => addTags(ms) }, icon('tag'), 'Štítky'),
+    h('button.btn.sm', { onclick: e => cardMenu(e) }, icon('ellipsis')),
+    h('button.btn.sm.ghost.icon', { title: 'Zrušit výběr', onclick: () => { S.sel.clear(); refreshSel(); } }, icon('x')));
+}
+
+/* ---------------- inspector ---------------- */
+let inspToken = 0, lastDetail = false;
+/** True while the video info is shown under the docked player instead (second pane). */
+function detailPaneShown() { return !!(App.player && App.player.detail); }
+
+async function renderInspector() {
+  const ms = selected();
+  if (ms.length !== 1 || detailPaneShown()) { insp.classList.add('hidden'); return; }
+  insp.classList.remove('hidden');
+  const token = ++inspToken;
+  await mediaPanel(insp, ms[0].id, { isCurrent: () => token === inspToken, rerender: renderInspector });
+}
+
+/** Full info/editing panel for one video (library inspector, pane under the player, edit dialog). */
+async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerender = () => {} } = {}) {
+  const m = await API.call('media.get', { id });
+  if (!isCurrent() || !m) return;
+  clear(box);
+  const save = async fields => {
+    await API.call('media.update', { id: m.id, ...fields });
+    App.refresh('media', 'meta');
+  };
+  const title = h('input.input.bare.title-in', { value: m.title || '', placeholder: m.medal_title || m.name,
+    onchange: e => save({ title: e.target.value.trim() || null }), onkeydown: e => { if (e.key === 'Enter') e.target.blur(); } });
+  const desc = h('textarea.input', { rows: 3, placeholder: 'Poznámky, co se stalo, kdo tam byl…', onchange: e => save({ description: e.target.value }) }, m.description || '');
+
+  const gameIn = h('input.input', { value: m.game || '', list: 'lib-games', onchange: e => e.target.value.trim() && save({ game: e.target.value.trim() }) });
+  const kindSeg = h('.seg', [['', 'Auto'], ...Object.entries(KIND).map(([k, v]) => [k, v.label])].map(([k, label]) =>
+    h('button' + ((m.kind_override || '') === k ? '.on' : ''), { onclick: () => save({ kind_override: k || null }) }, label)));
+
+  box.append(
+    hero ? h('.hero', { onclick: () => play(m) }, m.thumb ? h('img', { src: m.thumb }) : null, h('.pl', h('span', icon('play')))) : null,
+    h('.pad.col', { style: { gap: '12px' } },
+      h('.row', title, h('button.btn.ghost.icon' + (m.favorite ? '.active' : ''), { title: 'Oblíbené', onclick: () => save({ favorite: !m.favorite }) }, icon('star'))),
+      h('.row.small.muted.wrap', h('span.badge.' + m.type, KIND[m.type]?.label), h('span', fmt.range(m.start, m.end)), h('span.faint', '· ' + fmt.dur(m.duration))),
+      tagEditor(m.tags, tags => save({ tags })),
+      desc,
+      h('.section-title', icon('users'), 'Postavy', h('.line')),
+      h('.row.wrap', (m.chars || []).map(id => App.charsById.get(id)).filter(Boolean).map(c =>
+        charChip(c, { onRemove: () => save({ chars: m.chars.filter(x => x !== c.id) }) })),
+      h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(m.chars || [], { title: 'Kdo je ve videu?' }); if (ids) save({ chars: ids }); } }, icon('user-plus'), 'Označit')),
+      h('.section-title', icon('calendar-range'), 'Události', h('.line')),
+      h('.rowlist', m.links.length ? m.links.map(l => h('.list-row', { onclick: () => App.go('events', { id: l.event_id }) },
+        h('span.dot', { style: { background: App.eventsById.get(l.event_id)?.color || 'var(--accent)' } }),
+        h('.grow.ellipsis', l.event_title), l.offset != null ? h('span.kbd', fmt.clock(l.offset)) : null)) :
+        h('.faint.small', { style: { padding: '2px 8px' } }, 'Zatím v žádné události')),
+      h('.row', h('button.btn.sm', { onclick: () => linkToEvent([m]) }, icon('link'), 'Připojit k události'),
+        h('button.btn.sm.ghost', { onclick: () => eventFromSelection([m]) }, icon('calendar-plus'), 'Nová událost')),
+      h('.section-title', icon('folder'), 'Alba', h('.line')),
+      h('.row.wrap', App.albums.map(a => h('span.chip' + (m.albums.includes(a.id) ? '.on' : ''), {
+        onclick: async () => { await API.call('media.bulk', { ids: [m.id], op: m.albums.includes(a.id) ? 'album_remove' : 'album_add', value: a.id }); App.refresh('meta'); rerender(); },
+      }, a.name)), h('span.chip', { onclick: () => newAlbum([m.id]) }, icon('plus'), 'Nové')),
+      h('.section-title', icon('bookmark'), `Záložky${m.bm_full.length ? ' · ' + m.bm_full.length : ''}`, h('.line'),
+        h('button.btn.sm.ghost', { title: 'Záložka na aktuálním místě přehrávání (B)', onclick: () => addBookmarkHere(m.id).then(rerender) }, icon('bookmark-plus'), 'Přidat')),
+      m.bm_full.length ? h('div', bmStrip(m, m.bm_full, { onChange: rerender }),
+        h('div', m.bm_full.filter(b => b.source !== 'auto' || b.event_id || b.note).map(b => bmRow(b, { onChange: rerender }))),
+        m.bm_full.some(b => b.source === 'auto' && !b.event_id && !b.note) ? h('.tiny.faint', { style: { padding: '2px 10px' } },
+          `+ ${m.bm_full.filter(b => b.source === 'auto' && !b.event_id && !b.note).length} automatických herních momentů (šedé čárky)`) : null)
+        : h('.faint.small', { style: { padding: '2px 8px' } }, 'Během přehrávání stiskni B. Shift+B označí začátek a konec úseku.'),
+      h('.section-title', icon('info'), 'Podrobnosti', h('.line')),
+      h('.kv',
+        h('.k', 'Hra'), gameIn,
+        h('.k', 'Server'), serverPicker(m.server_id, async id => { await API.call('media.update', { id: m.id, server_id: id }); await App.refresh('media'); rerender(); }, m.game),
+        h('.k', 'Typ'), kindSeg,
+        h('.k', 'Velikost'), h('div', fmt.size(m.size)),
+        h('.k', 'Zvuk'), h('div', (m.tracks.length ? m.tracks.map(t => ({ all: 'Vše', game: 'Hra', mic: 'Mikrofon', discord: 'Discord', system: 'Systém' }[t.role] || t.name || 'Stopa')).join(', ') : '—') + (m.sidecars ? ` + ${m.sidecars} samostatné` : '')),
+        h('.k', 'Soubor'), h('.small.faint', { style: { wordBreak: 'break-all' } }, m.path)),
+      h('datalist', { id: 'lib-games' }, App.games.map(([g]) => h('option', { value: g }))),
+      h('.row', { style: { marginTop: '6px' } },
+        h('button.btn', { onclick: () => play(m) }, icon('play'), 'Přehrát'),
+        h('button.btn.ghost', { onclick: () => API.call('media.reveal', { id: m.id }) }, icon('folder-open'), 'Ve složce'),
+        h('button.btn.ghost', { title: 'Náhled videa', onclick: e => menu(e, [
+          { label: 'Aktuální snímek z přehrávače (T)', icon: 'camera', disabled: App.player.media_id !== m.id, onClick: () => API.call('player.action', { act: 'thumb' }) },
+          { label: 'Vybrat obrázek…', icon: 'image-up', onClick: async () => { if (await API.call('media.thumb_pick', { id: m.id })) { await App.refresh('media'); rerender(); } } },
+          m.custom_thumb ? { label: 'Vrátit původní náhled', icon: 'rotate-ccw', onClick: async () => { await API.call('media.thumb_reset', { id: m.id }); await App.refresh('media'); rerender(); } } : null,
+        ]) }, icon('image'), 'Náhled'),
+        h('.grow'),
+        h('button.btn.danger', { onclick: () => deleteMedia([m]) }, icon('trash-2')))));
+}
+
+window.mediaPanel = mediaPanel;
+
+function editMediaDialog(m) {
+  const box = h('.lib-insp.in-modal');
+  modal({ title: 'Informace o videu', icon: 'pencil', wide: true, body: box, onClose: () => App.refresh('media', 'meta') });
+  const rerender = () => mediaPanel(box, m.id, { hero: false, rerender });
+  rerender();
+}
+
+function tagEditor(tags, onChange) {
+  tags = [...tags];
+  const box = h('.tag-input');
+  const inp = h('input', { placeholder: tags.length ? '' : '#štítek, Enter…', list: 'lib-tags' });
+  const render = () => {
+    clear(box);
+    tags.forEach(t => box.appendChild(h('span.chip', '#' + t, h('span.x', { onclick: () => { tags = tags.filter(x => x !== t); onChange(tags); render(); } }, icon('x')))));
+    box.appendChild(inp);
+    box.appendChild(h('datalist', { id: 'lib-tags' }, App.tags.map(([t]) => h('option', { value: t }))));
+  };
+  inp.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if ((e.key === 'Enter' || e.key === ',' || e.key === ' ') && inp.value.trim()) {
+      e.preventDefault();
+      const t = inp.value.trim().replace(/^#/, '').toLowerCase().replace(/\s+/g, '_');
+      if (t && !tags.includes(t)) { tags.push(t); onChange(tags); }
+      inp.value = ''; render(); inp.focus();
+    } else if (e.key === 'Backspace' && !inp.value && tags.length) { tags.pop(); onChange(tags); render(); inp.focus(); }
+  });
+  render();
+  return box;
+}
+window.tagEditor = tagEditor;
+
+/* ---------------- mount ---------------- */
+let unsubs = [];
+function onKey(e) {
+  if (e.target.closest('input, textarea, [contenteditable="true"]')) return;
+  if (e.key === 'Delete' && S.sel.size) { e.preventDefault(); deleteMedia(selected()); }
+  else if (e.key === 'Enter' && S.sel.size === 1) { e.preventDefault(); play(selected()[0]); }
+  else if (e.key === 'a' && e.ctrlKey) { e.preventDefault(); S.items.forEach(m => S.sel.add(m.id)); refreshSel(); }
+  else if (e.key === 'Escape' && S.sel.size) { S.sel.clear(); refreshSel(); }
+  else if (e.key === 'f' && e.ctrlKey) { e.preventDefault(); $('#lib-search').focus(); }
+}
+
+Views.register('library', {
+  title: 'Knihovna', short: 'Knihovna', icon: 'clapperboard', order: 10,
+  async mount(r, params) {
+    root = r; S = S || state(); S.q = '';
+    if (params.select) { S.filter = { type: 'all' }; S.sel = new Set(params.select); }
+    if (S.filter.type === 'game') S.filter = { type: 'all' };
+    if (params.game) { S.filter = { type: 'all' }; S.sel.clear(); Shell.setGuild(params.game); }
+    if (params.char) { S.filter = { type: 'char', id: params.char }; S.sel.clear(); }
+    side = h('.lib-side');
+    Shell.slot().appendChild(side);
+    const search = h('input.input#lib-search', { placeholder: 'Hledat názvy, #štítky, postavy, hry…  (Ctrl+F)', value: S.q,
+      oninput: debounce(e => { S.q = e.target.value; renderGrid(); }, 150), onkeydown: e => e.stopPropagation() });
+    const kindChips = h('.row', Object.entries(KIND).map(([k, v]) => h('span.chip' + (S.kinds.has(k) ? '.on' : ''), {
+      onclick: e => { S.kinds.has(k) ? S.kinds.delete(k) : S.kinds.add(k); e.currentTarget.classList.toggle('on'); persist(); renderGrid(); },
+    }, icon(v.icon), v.plural)));
+    const sortSel = h('select.input', { style: { width: '140px' }, onchange: e => { S.sort = e.target.value; persist(); renderGrid(); } },
+      Object.entries(SORTS).map(([k, v]) => h('option', { value: k, selected: S.sort === k ? 'selected' : null }, v.label)));
+    const size = h('input', { type: 'range', min: 170, max: 380, value: S.size, style: { width: '90px', accentColor: 'var(--accent)' },
+      title: 'Velikost karet', oninput: e => { S.size = +e.target.value; grid.style.setProperty('--card-w', S.size + 'px'); persist(); } });
+    countEl = h('span.faint.small');
+    heroEl = h('.game-hero.hidden');
+    head = h('div',
+      h('.toolbar', { style: { paddingTop: '14px' } },
+        h('.search', { style: { flex: '1', minWidth: '240px', maxWidth: '520px' } }, icon('search'), search),
+        kindChips,
+        h('label.check', h('input', { type: 'checkbox', checked: S.showShort, onchange: e => { S.showShort = e.target.checked; persist(); renderGrid(); } }), 'krátké záznamy'),
+        h('label.check', h('input', { type: 'checkbox', checked: S.group, onchange: e => { S.group = e.target.checked; persist(); renderGrid(); } }), 'po dnech'),
+        h('.grow'), icon('layout-grid', 'faint'), size, sortSel));
+    grid = h('.lib-grid');
+    gridWrap = h('.lib-grid-wrap', { onclick: e => { if (e.target === gridWrap || e.target === grid) { S.sel.clear(); refreshSel(); } } }, grid);
+    bulk = h('.bulkbar.hidden');
+    insp = h('.lib-insp.hidden');
+    gridWrap.prepend(heroEl, head);
+    root.appendChild(h('.lib', h('.lib-main', { style: { position: 'relative' } }, gridWrap, bulk), insp));
+    await loadAlbum();
+    render();
+    if (params.select) { const first = $(`.mcard[data-id="${params.select[0]}"]`, grid); first && first.scrollIntoView({ block: 'center' }); }
+    unsubs = [
+      App.on('media', () => { for (const id of [...S.sel]) if (!App.mediaById.has(id)) S.sel.delete(id); loadAlbum().then(render); }),
+      App.on('albums', () => renderSide(side)),
+      App.on('chars', () => { renderSide(side); renderGrid(); }),
+      App.on('events', () => renderInspector()),
+      App.on('player', () => {
+        $$('.mcard', grid).forEach(c => c.classList.toggle('playing', Number(c.dataset.id) === App.player.media_id));
+        const d = detailPaneShown();
+        if (d !== lastDetail) { lastDetail = d; renderInspector(); }
+      }),
+    ];
+    document.addEventListener('keydown', onKey);
+  },
+  unmount() { unsubs.forEach(u => u()); unsubs = []; document.removeEventListener('keydown', onKey); root = null; },
+});
+})();
