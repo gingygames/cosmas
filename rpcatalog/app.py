@@ -1,10 +1,11 @@
 """Main window: web UI (QWebEngine) + native mpv player (docked or popped out)."""
 import os
 import sys
+import time
 import traceback
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QByteArray
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QCursor
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -282,8 +283,9 @@ class MainWindow(QMainWindow):
     def _players(self):
         return [p for p in (self.player, self.popout.player if self.popout else None) if p]
 
-    def _save_resume(self, p):
-        """Remember where a video was left; finished (or barely started) videos start from 0."""
+    def _save_resume(self, p, final=True):
+        """Remember where a video was left; finished (or barely started) videos start from 0.
+        The UI keeps its own copy of the media list, so it is told about every change."""
         if not p or not p.media:
             return
         pos, dur = p.position(), p.media.duration or 0
@@ -294,7 +296,8 @@ class MainWindow(QMainWindow):
         try:
             self.store.set_resume(p.media.id, val)
         except Exception:
-            pass
+            return
+        self.api.emit("resume", {"media_id": p.media.id, "pos": val, "at": time.time(), "final": final})
 
     def active_player(self):
         return self.popout.player if self.popout else self.player
@@ -313,7 +316,7 @@ class MainWindow(QMainWindow):
         p = self.active_player()
         self._resume_tick += 1
         if p.media and not p.paused() and self._resume_tick % 5 == 0:
-            self._save_resume(p)
+            self._save_resume(p, final=False)
         self.api.emit("player", {"media_id": p.media.id if p.media else None,
                                  "pos": p.position() if p.media else 0, "playing": bool(p.media and not p.paused()),
                                  "popout": self.popout is not None,
@@ -513,25 +516,86 @@ class MainWindow(QMainWindow):
             self.previews.request(st["media"])
         self._push_state()
 
+    def _native_frame(self):
+        """Give the frameless window the styles of a normal window again (caption, resize frame,
+        min/max) so Windows snapping, Snap Layouts, FancyZones, Win+arrows and the taskbar
+        treat it like any other app. The visible frame itself is removed in WM_NCCALCSIZE."""
+        if os.name != "nt" or getattr(self, "_hwnd", None):
+            return
+        import ctypes
+        from ctypes import wintypes
+        self._hwnd = hwnd = int(self.winId())
+        u = ctypes.windll.user32
+        u.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+        u.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
+        u.SetWindowLongPtrW.restype = ctypes.c_ssize_t
+        u.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+        WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_SYSMENU = 0x80000000, 0x00C00000, 0x00040000, 0x00080000
+        WS_MINIMIZEBOX, WS_MAXIMIZEBOX = 0x00020000, 0x00010000
+        style = u.GetWindowLongPtrW(hwnd, -16) & 0xFFFFFFFF
+        style = (style & ~WS_POPUP) | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+        u.SetWindowLongPtrW(hwnd, -16, ctypes.c_ssize_t(ctypes.c_int32(style).value).value)
+        try:
+            dwm = ctypes.windll.dwmapi
+
+            class MARGINS(ctypes.Structure):
+                _fields_ = [("l", ctypes.c_int), ("r", ctypes.c_int), ("t", ctypes.c_int), ("b", ctypes.c_int)]
+            dwm.DwmExtendFrameIntoClientArea(wintypes.HWND(hwnd), ctypes.byref(MARGINS(0, 0, 1, 0)))  # shadow
+            pref = ctypes.c_int(2)  # DWMWCP_ROUND – Windows 11 rounded corners
+            dwm.DwmSetWindowAttribute(wintypes.HWND(hwnd), 33, ctypes.byref(pref), ctypes.sizeof(pref))
+        except Exception:
+            pass
+        # SWP_FRAMECHANGED | NOMOVE | NOSIZE | NOZORDER | NOACTIVATE
+        u.SetWindowPos(wintypes.HWND(hwnd), None, 0, 0, 0, 0, 0x0020 | 0x0002 | 0x0001 | 0x0004 | 0x0010)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        self._native_frame()
+
     def nativeEvent(self, event_type, message):
-        if os.name == "nt" and event_type == b"windows_generic_MSG" and not self.isMaximized():
-            import ctypes.wintypes
-            msg = ctypes.wintypes.MSG.from_address(int(message))
-            if msg.message == 0x0084:   # WM_NCHITTEST -> resize handles on the 6 px border
-                x = ctypes.c_short(msg.lParam & 0xFFFF).value
-                y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
-                r = self.frameGeometry()
-                ratio = self.devicePixelRatioF()
-                gx, gy = x / ratio, y / ratio
+        if os.name != "nt" or event_type != b"windows_generic_MSG" or not getattr(self, "_hwnd", None):
+            return super().nativeEvent(event_type, message)
+        import ctypes
+        from ctypes import wintypes
+        msg = wintypes.MSG.from_address(int(message))
+        if msg.hWnd != self._hwnd:
+            return super().nativeEvent(event_type, message)
+        u = ctypes.windll.user32
+        if msg.message == 0x0083 and msg.wParam:   # WM_NCCALCSIZE: whole window is client area
+            if u.IsZoomed(wintypes.HWND(self._hwnd)):
+                # a maximised window with a resize frame sticks out of the monitor by the frame width
+                rect = wintypes.RECT.from_address(msg.lParam)
+                try:
+                    dpi = u.GetDpiForWindow(wintypes.HWND(self._hwnd))
+                    fx = u.GetSystemMetricsForDpi(32, dpi) + u.GetSystemMetricsForDpi(92, dpi)
+                    fy = u.GetSystemMetricsForDpi(33, dpi) + u.GetSystemMetricsForDpi(92, dpi)
+                except Exception:
+                    fx = u.GetSystemMetrics(32) + u.GetSystemMetrics(92)
+                    fy = u.GetSystemMetrics(33) + u.GetSystemMetrics(92)
+                rect.left += fx
+                rect.right -= fx
+                rect.top += fy
+                rect.bottom -= fy
+            return True, 0
+        if msg.message == 0x0084:   # WM_NCHITTEST: resize edges + native caption (drag, snap, FancyZones)
+            pos = QCursor.pos()
+            local = self.mapFromGlobal(pos)
+            w, hgt = self.width(), self.height()
+            if not u.IsZoomed(wintypes.HWND(self._hwnd)):
                 m = 6
-                left, right = gx < r.left() + m, gx > r.right() - m
-                top, bottom = gy < r.top() + m, gy > r.bottom() - m
+                left, right = local.x() < m, local.x() >= w - m
+                top, bottom = local.y() < m, local.y() >= hgt - m
                 code = {(True, False, True, False): 13, (False, True, True, False): 14, (True, False, False, True): 16,
                         (False, True, False, True): 17}.get((left, right, top, bottom))
                 if code is None:
                     code = 10 if left else 11 if right else 12 if top else 15 if bottom else None
                 if code:
                     return True, code
+            tb = self.titlebar
+            tl = tb.mapFrom(self, local)
+            if tb.rect().contains(tl) and not isinstance(tb.childAt(tl), QToolButton):
+                return True, 2      # HTCAPTION
+            return True, 1          # HTCLIENT
         return super().nativeEvent(event_type, message)
 
     def changeEvent(self, e):

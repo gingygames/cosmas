@@ -133,6 +133,7 @@ async function bootDetailPane() {
     toast('Klip vyexportován', 'ok', { label: 'Ve složce', fn: () => API.call('media.reveal', { id: d.id }) });
     App.refresh('media');
   });
+  API.on('resume', applyResume);
   API.on('resumed', d => {
     toast(`Pokračuji od ${fmt.clock(d.pos)}, kde jsi skončil`, 'ok', { label: 'Od začátku', fn: () => {
       API.call('player.action', { act: 'seek0' }); API.call('media.resume_clear', { id: d.media_id });

@@ -121,7 +121,7 @@ Views.register('home', {
   mount(el) {
     root = el;
     Shell.setGuild('home');
-    unsub = [App.on('media', render), App.on('events', render), App.on('bookmarks', render)];
+    unsub = [App.on('media', render), App.on('resume', render),App.on('events', render), App.on('bookmarks', render)];
     render();
   },
   unmount() { unsub.forEach(f => f()); unsub = []; root = null; },

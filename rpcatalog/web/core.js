@@ -470,15 +470,36 @@ function charChip(c, { role, onClick, onRemove } = {}) {
     avatar(c, 22), h('span', c.name), role ? h('span.role', role) : null,
     onRemove ? h('span.x', { onclick: e => { e.stopPropagation(); onRemove(); } }, icon('x')) : null);
 }
+/** red "where you left off" bar on a thumbnail */
+function resumeBar(m) {
+  return m.resume && m.duration ? h('.resume', { title: `Skončil jsi v ${fmt.clock(m.resume)}` },
+    h('i', { style: { width: Math.min(100, m.resume / m.duration * 100) + '%' } })) : null;
+}
+/** saved position changed: update the cached media and every thumbnail of it on screen */
+function applyResume(d) {
+  const m = App.mediaById.get(d.media_id);
+  if (!m) return;
+  const had = !!m.resume;
+  m.resume = d.pos || null;
+  if (d.pos) m.watched_at = d.at;
+  document.querySelectorAll(`.mcard[data-id="${d.media_id}"] .th, .mtile[data-mid="${d.media_id}"]`).forEach(host => {
+    const old = host.querySelector(':scope > .resume');
+    const bar = resumeBar(m);
+    if (old) old.replaceWith(...(bar ? [bar] : []));
+    else if (bar) host.insertBefore(bar, host.querySelector(':scope > .pl, :scope > .play'));
+  });
+  if (had !== !!m.resume || d.final) App.emit('resume');
+}
 function mediaTile(m, { onClick, showBadge = true } = {}) {
   const t = h('.mtile' + (m.thumb ? '' : '.noimg'), {
+    'data-mid': m.id,
     title: `${m.name}\n${m.game} · ${fmt.dt(m.start)} · ${fmt.dur(m.duration)}`,
     onclick: onClick || (() => API.call('media.play', { id: m.id })),
   },
   m.thumb ? h('img', { src: m.thumb, loading: 'lazy' }) : icon('film'),
   showBadge ? h('span.badge.' + m.type, KIND[m.type]?.label || m.type) : null,
   h('span.dur', fmt.dur(m.duration)),
-  m.resume && m.duration ? h('.resume', h('i', { style: { width: Math.min(100, m.resume / m.duration * 100) + '%' } })) : null,
+  resumeBar(m),
   h('.play', icon('play')));
   return t;
 }

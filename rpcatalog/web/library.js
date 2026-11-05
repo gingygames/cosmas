@@ -295,7 +295,7 @@ function card(m) {
     m.duration ? h('.bm', (m.bookmarks || []).filter(b => b.source !== 'auto' || b.event_id).map(b => h('b', {
       style: { left: (b.t / m.duration * 100) + '%', width: b.t_end ? Math.max(0.6, (b.t_end - b.t) / m.duration * 100) + '%' : null, background: b.color || null },
     }))) : null,
-    m.resume && m.duration ? h('.resume', { title: `Skončil jsi v ${fmt.clock(m.resume)}` }, h('i', { style: { width: Math.min(100, m.resume / m.duration * 100) + '%' } })) : null,
+    resumeBar(m),
     h('.pl', { onclick: e => { e.stopPropagation(); play(m); } }, h('span', icon('play')))),
   h('.meta',
     h('.t.ellipsis', m.name),

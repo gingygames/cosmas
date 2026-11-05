@@ -403,6 +403,7 @@ class Api(QObject):
 
     def m_media_resume_clear(self, id):
         self.store.set_resume(id, None)
+        self.emit("resume", {"media_id": id, "pos": None, "at": time.time(), "final": True})
         return True
 
     def m_player_action(self, act):
