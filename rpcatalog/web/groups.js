@@ -231,6 +231,8 @@ function makeView(kind) {
         } }, icon('user-plus'), 'Upravit')),
       mem.length ? memBox : h('.faint.small', 'Zatím nikdo. Pravým tlačítkem na postavě změníš roli nebo ji odebereš.'));
     if (kind === 'places') left.append(...placeSections(g));
+    if ((kind === 'places' || kind === 'factions') && window.mentionsSection)
+      left.append(window.mentionsSection(kind === 'places' ? 'place' : 'faction', g.id));
     left.append(h('.section-title', 'Historie a poznámky'));
     editor = RichEditor({ html: g.body_html || '', placeholder: 'Historie, sídlo, cíle, spojenci a nepřátelé… (@ pro postavu)', ownerType: C.owner, ownerId: g.id, minHeight: 180,
       onChange: html => API.call(C.update, { id: g.id, body_html: html }) });

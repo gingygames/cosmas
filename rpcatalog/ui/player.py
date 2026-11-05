@@ -781,6 +781,11 @@ class PlayerWidget(QWidget):
     def handle_action(self, act):
         if act == "pause":
             self.toggle_pause()
+        elif act == "subs":
+            try:
+                self.player["sub-visibility"] = not self.player["sub-visibility"]
+            except Exception:   # no subtitles loaded
+                pass
         elif act == "fs":
             self.fullscreen_requested.emit()
         elif act == "esc":
@@ -887,7 +892,7 @@ class PlayerWidget(QWidget):
     def keyPressEvent(self, e):
         k, mods = e.key(), e.modifiers()
         acts = {Qt.Key_Space: "pause", Qt.Key_F: "fs", Qt.Key_M: "mute", Qt.Key_P: "pin", Qt.Key_S: "snap", Qt.Key_C: "tagchar", Qt.Key_I: "clip_in", Qt.Key_O: "clip_out", Qt.Key_T: "thumb",
-                Qt.Key_Escape: "esc"}
+                Qt.Key_V: "subs", Qt.Key_Escape: "esc"}
         if k in (Qt.Key_Left, Qt.Key_Right):
             n = 30 if mods & Qt.ShiftModifier else 5
             self.handle_action(f"{'-' if k == Qt.Key_Left else '+'}{n}")
@@ -927,6 +932,10 @@ class PlayerWidget(QWidget):
         self.player["lavfi-complex"] = ""
         self.player["aid"] = "auto"
         self.player["audio-files"] = [s["path"] for s in media.sidecar_list() if os.path.exists(s["path"])]
+        # transcript as subtitles (V toggles them)
+        from ..analysis import analysis_dir
+        srt = analysis_dir(media.id) / "transcript.srt"
+        self.player["sub-files"] = [str(srt)] if self.settings.get("ai_subtitles", True) and srt.exists() else []
         if state:
             self.player.speed = state.get("speed", 1.0)
             self.speed_btn.setText(f"{state.get('speed', 1.0):g}×")

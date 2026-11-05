@@ -119,20 +119,33 @@ Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
   Export MP4 (všechny zvukové stopy, do `data/clips`). `T` = aktuální snímek jako náhled videa.
   Označení postavy v momentu je teď `C`.
 
-## Přepis řeči a popis obrazu (lokální AI)
+## Přepisy, obraz a Kronikář AI (lokální AI)
 Všechno běží na tvém počítači (grafická karta NVIDIA), nic se nikam neposílá a nic se neplatí.
 - **Instalace (jednou):** `.venv\Scripts\pip install -r requirements-ai.txt`. Model řeči (Whisper large-v3, ~3 GB)
-  se stáhne sám při prvním přepisu. Pro popis obrazu nainstaluj [Ollamu](https://ollama.com) a `ollama pull qwen3.8:27b`.
-- **Spuštění:** v panelu videa sekce **Přepis** → *Přepsat řeč* nebo *Řeč + obraz*; pro víc videí pravý klik → Přepis.
-  Běží na pozadí, jedno video po druhém, a po přerušení (i zavření aplikace) naváže, kde skončilo.
-- **Kdo mluví:** každá zvuková stopa se přepisuje zvlášť – **Já** (mikrofon), **Hra** (hlasový chat ve hře, NPC),
-  **Discord**. **Obraz** = popis snímku každých 30 s (model dostane i to, co v tu chvíli zaznívá).
-- **Použití:** klik na řádek přehraje video od toho místa, hledání v přepisu, filtr podle mluvčího.
-  Hledání v Knihovně najde i videa, kde slovo zaznělo (bez ohledu na diakritiku), a ukáže místo na kartě.
-- **Celý záznam jako text:** tlačítko se stránkou otevře `data/analysis/<id>/timeline.md` – hodí se třeba pro shrnutí
-  večera nebo hledání souvislostí s Claudem.
-- Rychlost na RTX 4090: přepis zhruba 15–20× rychleji než reálný čas (ticho se přeskakuje), popis obrazu ~3 s na snímek.
-- Nastavení v `data/settings.json`: `ai_whisper_model`, `ai_language`, `ai_vision_model`, `ai_vision_every`.
+  se stáhne sám při prvním přepisu. Pro obraz a Kronikáře AI nainstaluj [Ollamu](https://ollama.com) a `ollama pull qwen3.8:27b`.
+- **Spuštění:** v panelu videa sekce **Přepis**, pro víc videí pravý klik → Přepis, pro celou knihovnu stránka
+  **Přepisy** → „Přepsat chybějící“. Fronta běží na pozadí jedno video po druhém; po přerušení (i zavření aplikace)
+  naváže, kde skončilo.
+- **Řeč:** každá zvuková stopa zvlášť – **Já** (mikrofon), **Hra** (hlasový chat ve hře, NPC), **Discord**.
+- **Obraz:** hlavně během rozhovorů – když se scéna mění (chůze po světě), snímek každých ~8 s; když postavy sedí
+  a obraz se nemění, jen občas. Model čte **jmenovky nad postavami** (propojí je s postavami a hráči) a při rozhovorech
+  se hledají **tváře** – klik na tvář ji nastaví jako portrét postavy. Jakýkoli úsek jde dopracovat ručně:
+  na pruhu pokrytí v panelu videa táhni myší → „Popsat obraz“.
+- **Kronikář AI:** po přepisu projde záznam silnější textový model po blocích (dělených v pauzách mezi rozhovory,
+  pauzy jsou v textu vyznačené) s průběžnou pamětí děje, se shrnutím předchozího večera stejné hry a se znalostí
+  postav, míst a frakcí z databáze. Vytvoří kapitoly, shrnutí večera, zmínky (uloží se rovnou k postavám, místům,
+  frakcím) a **návrhy** nových událostí, postav, míst a frakcí – přijímají se jedním klikem (stránka Přepisy → Návrhy,
+  nebo v panelu videa); událost dostane odkaz do videa s časem, místo a postavy.
+- **Kde to je vidět:** pruh pokrytí (co je přepsané / popsané / nezpracované), přepis s kapitolami, pauzami,
+  zvýrazněnými jmény, náhledy snímků, jmenovkami a tvářemi; na kartách v Knihovně ikony řeči a obrazu; hledání
+  v Knihovně podle toho, co zaznělo; u postav, míst a frakcí sekce „V záznamech (přepis)“; titulky v přehrávači (V).
+- **Fronta a výkon:** stránka **Přepisy** – aktuální video s krokem, průběhem, odhadem času a rychlostí, pořadí fronty
+  (přetažením), historie, vytížení GPU/VRAM/teploty/CPU/RAM. Ukazatel v levém sloupci. Když hraješ (hra ze Steamu,
+  Epicu, Xboxu, GOG… nebo z nastaveného seznamu), přepisy se samy pozastaví a po hře pokračují.
+- **Nastavení:** Přepisy → Nastavení (modely, jazyk, stopy, hustota snímků, citlivost, jmenovky, tváře, model a délka
+  bloků Kronikáře, kontext o hře a serveru, priorita, pauza při hraní).
+- Výsledky: `data/analysis/<id>/` (přepis po částech, snímky, tváře, `chronicle.json`, `timeline.md` – celý večer jako text).
+- Rychlost na RTX 4090: řeč ~45× rychleji než reálný čas, popis snímku 3–9 s, Kronikář ~1 min na blok.
 
 ## Obrázky her
 Ikony v levém pruhu a bannery knihovny se při prvním spuštění samy doplní ze Steamu v tomto PC.

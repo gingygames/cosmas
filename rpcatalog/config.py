@@ -26,12 +26,35 @@ DEFAULTS = {
     "event_gap_minutes": 45,
     "game_aliases": {},
     "volume": 100,
-    # Transcript of recordings (analysis.py): Whisper model and language, Ollama vision model,
-    # seconds between described frames
+    # Transcripts of recordings (analysis.py, analysis_jobs.py) - edited on the Přepisy page
     "ai_whisper_model": "large-v3",
     "ai_language": "cs",
+    "ai_batch_size": 16,
+    "ai_beam_size": 5,
+    "ai_vad_threshold": 0.5,
+    "ai_junk_filter": True,
+    "ai_tracks": ["Já", "Hra", "Discord", "Zvuk"],
     "ai_vision_model": "qwen3.8:27b",
-    "ai_vision_every": 30,
+    "ai_vision_width": 768,
+    "ai_vision_dialog": True,        # look at the picture during conversations
+    "ai_dialog_every": 8,            # ... every N s while the scene changes (people walk around)
+    "ai_static_every": 45,           # ... and only every N s while it stays the same (people sit and talk)
+    "ai_motion_threshold": 0.06,     # how much the picture must change to count as a new scene (0-1)
+    "ai_conv_gap": 20,               # speech pauses shorter than this are one conversation
+    "ai_base_every": 120,            # outside conversations (0 = never)
+    "ai_detect_names": True,         # read name tags above characters
+    "ai_detect_faces": True,         # cut out faces during conversations
+    "ai_context": "",                # a few words about the game / server for the models
+    "ai_chapters": True,
+    "ai_text_model": "qwen3.8:27b",
+    "ai_chapter_minutes": 15,
+    "ai_chapter_bookmarks": False,   # chapters also as bookmarks (seek bar, Momenty)
+    "ai_autolink": True,             # characters found in a transcript are added to the video
+    "ai_subtitles": True,            # transcript as subtitles in the player
+    "ai_pause_gaming": True,
+    "ai_pause_any_game": True,       # also any game from Steam, Epic, Xbox, GOG… folders
+    "ai_pause_processes": [],        # empty = the games found in recordings
+    "ai_priority": "below",          # idle | below | normal
 }
 
 

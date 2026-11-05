@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QSplitter, QMessageBox
                                QVBoxLayout, QLabel, QToolButton)
 
 from . import config, scanner
-from .analysis import load_results
+from . import chronicle, mentions
+from .analysis import analysis_dir, load_frames, load_results, _read_json
 from .analysis_jobs import AnalysisJobs
 from .api import Api
 from .previews import PreviewWorker
@@ -169,8 +170,13 @@ class MainWindow(QMainWindow):
         self.previews = PreviewWorker()
         self.previews.frames_ready.connect(lambda mid, meta: [p.set_frames(mid, meta) for p in self._players()])
         self.previews.wave_ready.connect(lambda mid, data: [p.set_wave(mid, data) for p in self._players()])
-        self.analysis = AnalysisJobs(self.settings)
+        self.analysis = AnalysisJobs(self.settings, self._world)
+        self.analysis.detected_games = self.store.game_processes()
         self.analysis.event.connect(self._on_analysis)    # bound method -> runs in the GUI thread
+        self._analysis_imported = {}
+        self._games_timer = QTimer(self)
+        self._games_timer.timeout.connect(self.analysis.check_games)
+        self._games_timer.start(10000)
         self._resume_tick = 0
         self._clip_done.connect(self._on_clip_done)
 
@@ -270,11 +276,37 @@ class MainWindow(QMainWindow):
             self._clip_done.emit(media.id, str(dst), a, b, ok, r.stderr.decode("utf-8", "ignore")[-300:])
         threading.Thread(target=run, daemon=True).start()
 
+    def _world(self):
+        """What the chronicle already knows, for the models: names to recognise and use."""
+        chars = [c["name"] + (f" ({c['aliases']})" if c.get("aliases") else "") for c in self.store.characters()]
+        places = [p["name"] for p in self.store.places()]
+        factions = [f["name"] for f in self.store.factions()]
+        names = sorted({c["name"] for c in self.store.characters()} | {p["name"] for p in self.store.players() if p.get("name")})
+        return {"characters": chars, "places": places, "factions": factions, "names": names}
+
     def _on_analysis(self, ev):
-        if ev["phase"] == "done":     # results into the searchable transcript table
-            rows, _ = load_results(ev["id"])
-            self.store.transcript_set(ev["id"], rows)
-        self.api.emit("analysis", ev)
+        mid, final = ev.get("id"), ev.get("phase") == "done"
+        # results go into the searchable transcript table as they come (at most every 8 s while running)
+        if mid and (final or (ev.get("partial") and time.time() - self._analysis_imported.get(mid, 0) > 8)):
+            self._analysis_imported[mid] = time.time()
+            self.import_analysis(mid, final)
+            ev = dict(ev, imported=True)
+        self.api.emit("analysis", dict(ev, queue=self.analysis.snapshot()))
+        if final:
+            self.api.emit("media-changed", {})
+
+    def import_analysis(self, media_id, final=True):
+        rows, _ = load_results(media_id)
+        self.store.transcript_set(media_id, rows)
+        chronicle.import_chronicle(self.store, media_id)
+        matcher = mentions.Matcher([dict(c) for c in self.store.characters()], [dict(p) for p in self.store.players()])
+        found = mentions.find(rows, load_frames(media_id), matcher)
+        found += [{"character_id": x["entity_id"], "t": x["t"], "kind": "ai"}
+                  for x in self.store.entity_mentions_of_media(media_id, "character")]
+        self.store.set_mentions(media_id, found, autolink=self.settings.get("ai_autolink", True))
+        if final:
+            chapters = _read_json(analysis_dir(media_id) / "chapters.json", [])
+            self.store.set_ai_bookmarks(media_id, chapters if self.settings.get("ai_chapter_bookmarks") else [])
 
     def _on_clip_done(self, media_id, path, a, b, ok, err):
         if not ok:

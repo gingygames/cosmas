@@ -10,7 +10,7 @@ const Shell = {
   catsClosed: new Set(),
 
   CHANNELS: [
-    ['Katalog', [['home', 'house', 'přehled'], ['library', 'clapperboard', 'knihovna'], ['moments', 'bookmark', 'momenty'], ['gallery', 'images', 'galerie']]],
+    ['Katalog', [['home', 'house', 'přehled'], ['library', 'clapperboard', 'knihovna'], ['moments', 'bookmark', 'momenty'], ['gallery', 'images', 'galerie'], ['transcripts', 'captions', 'přepisy']]],
     ['Příběh', [['events', 'calendar-range', 'události'], ['timeline', 'chart-gantt', 'časová osa'], ['letters', 'mail', 'holubí pošta']]],
     ['Svět', [['places', 'map', 'místa'], ['factions', 'shield', 'frakce a rody']]],
     ['Postavy', [['characters', 'users', 'databáze postav'], ['players', 'gamepad-2', 'hráči']]],

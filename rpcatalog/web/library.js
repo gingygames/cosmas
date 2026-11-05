@@ -157,8 +157,9 @@ function filtered() {
   return [...items].sort(SORTS[S.sort].fn);
 }
 
-async function transcribe(ms, vision) {
-  await API.call('analysis.start', { ids: ms.map(m => m.id), vision });
+async function transcribe(ms, opts) {
+  await API.call('analysis.start', { ids: ms.map(m => m.id), speech: true, ...opts });
+  TR.refreshQueue();
   toast(ms.length > 1 ? `${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')} ve frontě na přepis` : 'Přepis spuštěn – průběh je v panelu videa');
 }
 
@@ -316,7 +317,8 @@ function card(m) {
     h('.flags', m.favorite ? h('span', { title: 'Oblíbené' }, icon('star')) : null,
       m.linked ? h('span', { title: 'Je v události' }, icon('link')) : null,
       m.sidecars ? h('span', { title: 'Samostatné zvukové stopy' }, icon('audio-lines')) : null,
-      m.transcribed ? h('span.tr-flag', { title: 'Má přepis řeči' }, icon('captions')) : null),
+      m.tr && m.tr.speech ? h('span.tr-flag', { title: 'Má přepis řeči' }, icon('captions')) : null,
+      m.tr && m.tr.vision ? h('span.tr-flag.vis', { title: 'Má popis obrazu' }, icon('scan-eye')) : null),
     h('span.dur', fmt.dur(m.duration)),
     m.duration ? h('.bm', (m.bookmarks || []).filter(b => b.source !== 'auto' || b.event_id).map(b => h('b', {
       style: { left: (b.t / m.duration * 100) + '%', width: b.t_end ? Math.max(0.6, (b.t_end - b.t) / m.duration * 100) + '%' : null, background: b.color || null },
@@ -451,8 +453,11 @@ function cardMenu(e) {
     { label: 'Označit postavy…', icon: 'users', onClick: () => addChars(ms) },
     { label: 'Přidat štítky…', icon: 'tag', onClick: () => addTags(ms) },
     { label: 'Přepis', icon: 'captions', submenu: [
-      { label: 'Přepsat řeč', icon: 'audio-lines', onClick: () => transcribe(ms, false) },
-      { label: 'Přepsat řeč + popsat obraz', icon: 'scan-eye', onClick: () => transcribe(ms, true) },
+      { label: 'Přepsat řeč', icon: 'audio-lines', onClick: () => transcribe(ms, { chapters: false }) },
+      { label: 'Řeč + Kronikář AI', icon: 'sparkles', onClick: () => transcribe(ms, { chapters: true }) },
+      { label: 'Řeč + obraz v rozhovorech + Kronikář AI', icon: 'wand-sparkles', onClick: () => transcribe(ms, { vision: true, chapters: true }) },
+      { sep: true },
+      { label: 'Fronta přepisů', icon: 'list-ordered', onClick: () => App.go('transcripts') },
     ] },
     { label: 'Přidat do alba', icon: 'folder-plus', submenu: [
       ...App.albums.map(a => ({ label: a.name, icon: 'folder', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_add', value: a.id }); toast(`Přidáno do „${a.name}“`); App.refresh('meta'); } })),
@@ -552,7 +557,7 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
         m.bm_full.some(b => b.source === 'auto' && !b.event_id && !b.note) ? h('.tiny.faint', { style: { padding: '2px 10px' } },
           `+ ${m.bm_full.filter(b => b.source === 'auto' && !b.event_id && !b.note).length} automatických herních momentů (šedé čárky)`) : null)
         : h('.faint.small', { style: { padding: '2px 8px' } }, 'Během přehrávání stiskni B. Shift+B označí začátek a konec úseku.'),
-      transcriptSection(m),
+      window.transcriptSection ? window.transcriptSection(m) : null,
       h('.section-title', icon('info'), 'Podrobnosti', h('.line')),
       h('.kv',
         h('.k', 'Hra'), gameIn,
@@ -576,81 +581,6 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
 
 window.mediaPanel = mediaPanel;
 
-/* ---------------- transcript (speech + frame descriptions, made locally by analysis.py) ---------------- */
-const SPEAKER_COLOR = { 'Já': 'var(--accent)', Discord: 'var(--blue)', Hra: 'var(--ok)', Obraz: 'var(--violet)', Zvuk: 'var(--text-2)' };
-const trViews = new Set();
-API.on('analysis', ev => {
-  if (ev.phase === 'done') { const m = App.mediaById.get(ev.id); if (m) m.transcribed = true; }
-  for (const v of [...trViews]) {
-    if (!v.el.isConnected) trViews.delete(v);
-    else if (v.id === ev.id) v.update(ev);
-  }
-});
-
-function transcriptSection(m) {
-  const body = h('.tr-box');
-  let data = null, state = null, q = '', limit = 300;
-  const hidden = new Set();
-  const start = vision => API.call('analysis.start', { ids: [m.id], vision }).catch(() => {});
-  const load = async () => { data = await API.call('analysis.get', { id: m.id }); state = data.state; render(); };
-  trViews.add({ id: m.id, el: body, update: ev => { state = ev; ev.phase === 'done' ? load() : render(); } });
-
-  const mark = (text, words) => {
-    if (!words.length) return text;
-    const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
-    return text.split(re).map((part, i) => i % 2 ? h('mark', part) : part);
-  };
-  const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-  function render() {
-    if (!data) return;
-    clear(body);
-    const running = state && ['queued', 'speech', 'vision'].includes(state.phase);
-    const rows = data.rows;
-    const hasVision = rows.some(r => r.speaker === 'Obraz');
-    if (running) {
-      body.append(h('.tr-progress', h('.grow',
-        h('.small', state.msg || 'Pracuji…'),
-        h('.tr-bar', h('b', { style: { width: Math.round((state.p || 0) * 100) + '%' } }))),
-        h('button.btn.sm.ghost', { onclick: () => API.call('analysis.cancel') }, icon('square-x'), 'Zastavit')));
-    } else if (state && ['error', 'canceled'].includes(state.phase)) {
-      body.append(h('.small' + (state.phase === 'error' ? '.danger' : '.faint'), state.msg));
-    }
-    if (!rows.length) {
-      if (!running) body.append(
-        h('.faint.small', data.available ? 'Přepis řeči z mikrofonu, hry a Discordu – běží lokálně na grafické kartě. Osmihodinový záznam trvá desítky minut.'
-          : 'Chybí knihovny pro přepis: v kořeni Kronikáře spusť .venv\\Scripts\\pip install -r requirements-ai.txt'),
-        data.available ? h('.row.wrap',
-          h('button.btn.sm', { onclick: () => start(false) }, icon('audio-lines'), 'Přepsat řeč'),
-          h('button.btn.sm.ghost', { title: `Navíc popíše snímek každých 30 s (${data.vision_model} v Ollamě)`, onclick: () => start(true) }, icon('scan-eye'), 'Řeč + obraz')) : null);
-      return;
-    }
-    const speakers = [...new Set(rows.map(r => r.speaker))];
-    const words = q.trim() ? fold(q).split(/\s+/).filter(Boolean) : [];
-    const shown = rows.filter(r => !hidden.has(r.speaker) && words.every(w => fold(r.text).includes(w)));
-    const list = h('.tr-list');
-    shown.slice(0, limit).forEach(r => list.appendChild(h('.tr-row' + (r.speaker === 'Obraz' ? '.img' : ''), {
-      title: 'Přehrát odsud', onclick: () => play(m, Math.max(0, r.t - 1)),
-    }, h('span.kbd', fmt.clock(r.t)), h('span.tr-who', { style: { color: SPEAKER_COLOR[r.speaker] || 'var(--text-2)' } }, r.speaker),
-      h('span.tr-text', mark(r.text, q.trim() ? q.trim().split(/\s+/) : [])))));
-    if (shown.length > limit) list.appendChild(h('button.btn.sm.ghost', { onclick: () => { limit += 500; render(); } },
-      `Zobrazit další (${shown.length - limit})`));
-    const search = h('input.input', { placeholder: 'Hledat v přepisu…', value: q, onkeydown: e => e.stopPropagation(),
-      oninput: debounce(e => { q = e.target.value; limit = 300; render(); }, 200) });
-    body.append(
-      h('.row', search, h('button.btn.sm.ghost.icon', { title: 'Otevřít celý přepis jako text', onclick: () => API.call('analysis.open_timeline', { id: m.id }) }, icon('file-text'))),
-      h('.row.wrap', speakers.map(s => h('span.chip' + (hidden.has(s) ? '' : '.on'), {
-        onclick: () => { hidden.has(s) ? hidden.delete(s) : hidden.add(s); render(); },
-      }, h('span.dot', { style: { background: SPEAKER_COLOR[s] || 'var(--text-2)' } }), `${s} · ${rows.filter(r => r.speaker === s).length}`)),
-        !hasVision && !running ? h('span.chip', { title: `Popíše snímek každých 30 s (${data.vision_model} v Ollamě)`, onclick: () => start(true) }, icon('scan-eye'), 'Doplnit obraz') : null),
-      words.length ? h('.tiny.faint', `${shown.length} ${fmt.plural(shown.length, 'výsledek', 'výsledky', 'výsledků')}`) : null,
-      list);
-    const s = body.querySelector('input');
-    if (q) { s.focus(); s.setSelectionRange(q.length, q.length); }
-  }
-  load();
-  return h('div', h('.section-title', icon('captions'), 'Přepis', h('.line')), body);
-}
 
 function editMediaDialog(m) {
   const box = h('.lib-insp.in-modal');

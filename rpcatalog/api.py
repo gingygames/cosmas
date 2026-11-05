@@ -21,7 +21,8 @@ from PySide6.QtWidgets import QFileDialog
 from . import config, suggest
 from . import discord_link
 from . import gameart
-from .analysis import analysis_dir, load_results
+from .analysis import analysis_dir, coverage, load_frames
+from .analysis_jobs import speech_tracks
 
 ATT_DIR = config.DATA_DIR / "attachments"
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
@@ -51,7 +52,9 @@ class Api(QObject):
                  "layout.set", "window.bg", "window.zoom", "pane.toggle", "places.list", "place.get",
                  "letters.list", "discord.members", "game.art_sources", "game.art_search", "game.image_data",
                  "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get",
-                 "analysis.get", "analysis.status", "analysis.search", "analysis.open_timeline"}
+                 "analysis.get", "analysis.queue", "analysis.stats", "analysis.models", "analysis.overview",
+                 "analysis.char_mentions", "analysis.search", "analysis.open_timeline", "analysis.skip",
+                 "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -225,8 +228,9 @@ class Api(QObject):
         linked = self.store.linked_media_ids()
         chars = self._char_map("media")
         bms = self._bm_map()
-        tr = self.store.transcript_media_ids()
-        return [dict(self._media(m, linked, chars, bms), transcribed=m.id in tr) for m in self.store.all_media()]
+        tr = self.store.transcript_status()
+        return [dict(self._media(m, linked, chars, bms), tr=tr.get(m.id), transcribed=bool(tr.get(m.id)))
+                for m in self.store.all_media()]
 
     def m_media_get(self, id):
         m = self.store.media(id)
@@ -239,28 +243,173 @@ class Api(QObject):
         return d
 
     # ------------------------------------------------------------ transcript / analysis
+    WHISPER_MODELS = [
+        ("large-v3", "Large v3 – nejpřesnější (doporučeno)"), ("large-v3-turbo", "Large v3 Turbo – asi 2× rychlejší, o chlup horší"),
+        ("medium", "Medium – rychlý, horší čeština"), ("small", "Small – jen na zkoušku")]
+
     def m_analysis_get(self, id):
         jobs = self.host.analysis
         d = analysis_dir(id)
         rows = self.store.transcript(id)
         if not rows and (d / "done.json").exists():    # finished while the app was closed, or run by hand
-            self.store.transcript_set(id, load_results(id)[0])
+            self.host.import_analysis(id)
             rows = self.store.transcript(id)
-        return {"available": jobs.available(), "state": jobs.state.get(id), "rows": rows,
-                "timeline": (d / "timeline.md").exists(), "vision_model": self.settings.get("ai_vision_model", "qwen3.8:27b")}
 
-    def m_analysis_start(self, ids, vision=False):
+        def url(sub, f):
+            return file_url(d / sub / f) if f else None
+        frames = [{"t": f["t"], "kind": f.get("kind", "base"), "skip": bool(f.get("skip")), "names": f.get("names") or [],
+                   "people": f.get("people"), "place": f.get("place", ""), "thumb": url("frames", f.get("thumb")),
+                   "faces": [{"url": url("faces", x["file"]), "file": x["file"]} for x in f.get("faces") or []]}
+                  for f in load_frames(id)]
+        m = self.store.media(id)
+        return {"available": jobs.available(), "state": jobs.state.get(id), "rows": rows, "frames": frames,
+                "coverage": coverage(id), "mentions": self.store.mentions(media_id=id), "duration": m.duration if m else 0,
+                "speakers": [s["speaker"] for s in speech_tracks(m)] if m else [],
+                "timeline": (d / "timeline.md").exists(), "vision_model": self.settings.get("ai_vision_model"),
+                "proposals": len(self.store.proposals("new", id)),
+                "memory": ((json.loads((d / "chronicle.json").read_text(encoding="utf-8")) or {}).get("memory", "")
+                           if (d / "chronicle.json").exists() else "")}
+
+    def m_analysis_start(self, ids, speech=True, vision=False, chapters=None, ranges=None):
         if not self.host.analysis.available():
             raise RuntimeError("Chybí knihovny pro přepis: .venv\\Scripts\\pip install -r requirements-ai.txt")
-        self.host.analysis.request([m for m in (self.store.media(i) for i in ids) if m], vision=vision)
+        media = [m for m in (self.store.media(i) for i in ids) if m]
+        self.host.analysis.request(media, speech=speech, vision=vision, chapters=chapters, vision_ranges=ranges,
+                                   prev={m.id: self._prev_summary(m) for m in media})
+        return self.host.analysis.snapshot()
+
+    def _prev_summary(self, m):
+        """Summary of the previous transcribed evening of the same game: memory across videos."""
+        if not m.start_time:
+            return ""
+        best = None
+        for o in self.store.all_media():
+            if o.game == m.game and o.start_time and o.start_time < m.start_time and \
+                    (analysis_dir(o.id) / "summary.json").exists() and (best is None or o.start_time > best.start_time):
+                best = o
+        if not best:
+            return ""
+        d = json.loads((analysis_dir(best.id) / "summary.json").read_text(encoding="utf-8"))
+        return f"({fmt_date(best.start_time)}) {d.get('text', '')}"[:1500]
+
+    # ---- Kronikář AI proposals and mentions
+    def m_analysis_proposals(self, media_id=None, status="new"):
+        props = self.store.proposals(status, media_id)
+        media = {}
+        for p in props:
+            if p["media_id"] not in media:
+                m = self.store.media(p["media_id"])
+                media[p["media_id"]] = {"id": m.id, "name": m.display_title, "start": m.start_time,
+                                        "thumb": file_url(m.get("custom_thumb") or m.thumb)} if m else None
+            p["media"] = media[p["media_id"]]
+        return props
+
+    def m_analysis_proposal_accept(self, id, edits=None):
+        from . import chronicle
+        out = chronicle.accept(self.store, self, id, edits)
+        self.host.import_analysis(self.store.proposal(id)["media_id"], True)
+        return out
+
+    def m_analysis_proposal_reject(self, id):
+        self.store.set_proposal_status(id, "rejected")
         return True
 
-    def m_analysis_cancel(self):
-        self.host.analysis.cancel()
+    def m_analysis_entity_mentions(self, type, id):
+        """Where a character / place / faction appears in transcripts, grouped by video."""
+        rows = self.store.entity_mentions(type, id)
+        if type == "character":
+            seen = {(r["media_id"], int(r["t"])) for r in rows}
+            for x in self.store.mentions(character_id=id):
+                if (x["media_id"], int(x["t"])) not in seen:
+                    rows.append({"media_id": x["media_id"], "t": x["t"], "kind": x["kind"],
+                                 "text": self.store.transcript_near(x["media_id"], x["t"]) if x["kind"] == "speech" else ""})
+        out = {}
+        for r in rows:
+            out.setdefault(r["media_id"], []).append(r)
+        res = []
+        for mid, hits in out.items():
+            m = self.store.media(mid)
+            if m:
+                res.append({"media": self._media(m), "hits": sorted(hits, key=lambda h: h["t"])})
+        return sorted(res, key=lambda r: -(r["media"]["start"] or 0))
+
+    def m_analysis_queue(self):
+        return self.host.analysis.snapshot()
+
+    def m_analysis_remove(self, key):
+        self.host.analysis.remove(key)
         return True
 
-    def m_analysis_status(self):
-        return list(self.host.analysis.state.values())
+    def m_analysis_move(self, key, index):
+        self.host.analysis.move(key, index)
+        return True
+
+    def m_analysis_skip(self):
+        self.host.analysis.skip_current()
+        return True
+
+    def m_analysis_pause(self, paused):
+        self.host.analysis.set_paused(paused)
+        return self.host.analysis.snapshot()
+
+    def m_analysis_stats(self):
+        return {"system": self.host.analysis.system_stats(), "queue": self.host.analysis.snapshot()}
+
+    def m_analysis_models(self):
+        try:
+            import urllib.request
+            with urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2) as r:
+                tags = json.loads(r.read()).get("models", [])
+            ollama = [{"name": t["name"], "size": t.get("size"), "family": t.get("details", {}).get("family", "")} for t in tags]
+        except OSError:
+            ollama = None
+        return {"whisper": self.WHISPER_MODELS, "ollama": ollama, "available": self.host.analysis.available(),
+                "games": self.host.analysis.detected_games}
+
+    def m_analysis_overview(self):
+        """Per-video status for the library and the Přepisy page: what is transcribed / seen / missing."""
+        st = self.store.transcript_status()
+        media = [m for m in self.store.all_media() if m.duration]
+        missing = [m for m in media if not st.get(m.id, {}).get("speech")]
+        return {"status": st, "missing_ids": [m.id for m in missing], "missing_s": sum(m.duration for m in missing),
+                "total_s": sum(m.duration for m in media), "count": len(media),
+                "proposals": sum(self.store.proposal_counts().values())}
+
+    def m_analysis_delete(self, id, what="all"):
+        """Throw away results so they can be made again with other settings: speech | vision | chapters | all."""
+        d = analysis_dir(id)
+        pats = {"speech": ["speech_*.json"], "vision": ["captions.jsonl", "frames/*", "faces/*"],
+                "chapters": ["chapters.json", "summary.json"]}
+        for key in (pats if what == "all" else [what]):
+            for pat in pats[key]:
+                for f in d.glob(pat):
+                    f.unlink(missing_ok=True)
+        (d / "done.json").unlink(missing_ok=True)
+        self.host.import_analysis(id)
+        return True
+
+    def m_analysis_char_mentions(self, id):
+        return self.m_analysis_entity_mentions("character", id)
+
+    def m_analysis_face_portrait(self, media_id, t, file, character_id):
+        """A face found in a video becomes the character's portrait, cut again from the full-size frame."""
+        m = self.store.media(media_id)
+        rec = next((f for f in load_frames(media_id) if abs(f["t"] - t) < 0.05), None)
+        face = next((x for x in (rec or {}).get("faces") or [] if x["file"] == file), None)
+        data = None
+        ffmpeg = config.find_tool("ffmpeg")
+        if m and face and ffmpeg:
+            x, y, w, h = face["box"]
+            r = subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", m.path, "-frames:v", "1",
+                                "-vf", f"crop=iw*{w:.4f}:ih*{h:.4f}:iw*{x:.4f}:ih*{y:.4f}", "-q:v", "2", "-f", "image2", "-"],
+                               capture_output=True, creationflags=0x08000000 if os.name == "nt" else 0)
+            data = r.stdout or None
+        if data is None:
+            data = (analysis_dir(media_id) / "faces" / file).read_bytes()
+        dst, mime, kind = self._store_file(data=data, name="portret.jpg")
+        att = self._add("character", character_id, dst, f"Portrét z videa {m.display_title if m else ''}", mime, kind)
+        self.m_char_portrait(character_id, att["id"])
+        return True
 
     def m_analysis_search(self, q, limit=200):
         return self.store.transcript_search(q, limit)
@@ -277,7 +426,7 @@ class Api(QObject):
         if "chars" in fields:
             want = set(fields.pop("chars"))
             have = {l["character_id"] for l in self.store.character_links(target_type="media", target_id=id)
-                    if l["source"] == "manual"}
+                    if l["source"] in ("manual", "transcript")}
             for c in want - have:
                 self.store.link_character(c, "media", id)
             for c in have - want:
@@ -1338,6 +1487,9 @@ class Api(QObject):
                   "discord_token", "discord_guild", "discord_channel", "holub_marker"):
             if k in values:
                 self.settings[k] = values[k]
+        for k in values:           # transcript settings (Přepisy page)
+            if k.startswith("ai_") and k in config.DEFAULTS:
+                self.settings[k] = values[k]
         if not self.settings.get("remember_last_mix"):
             self.settings.pop("last_mix", None)
         self.host.save_settings()
@@ -1355,6 +1507,10 @@ class Api(QObject):
     def m_open_data_dir(self):
         os.startfile(str(config.DATA_DIR))
         return True
+
+
+def fmt_date(t):
+    return time.strftime("%d. %m. %Y", time.localtime(t))
 
 
 def urllib_path(p):
