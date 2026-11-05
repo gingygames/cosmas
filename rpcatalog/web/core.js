@@ -15,15 +15,18 @@ const API = {
   _ready: null,
   init() {
     this._ready = new Promise(resolve => {
-      new QWebChannel(qt.webChannelTransport, ch => {
-        this._bridge = ch.objects.api;
+      const attach = bridge => {
+        this._bridge = bridge;
         this._bridge.notify.connect((kind, payload) => {
           let data = {};
           try { data = JSON.parse(payload); } catch (e) { /* ignore */ }
           (this._listeners[kind] || []).forEach(fn => fn(data));
         });
         resolve();
-      });
+      };
+      // desktop: Python over QWebChannel; browser (web-app/): the same API implemented in JS
+      if (window.KronikarWeb) window.KronikarWeb.bridge().then(attach);
+      else new QWebChannel(qt.webChannelTransport, ch => attach(ch.objects.api));
     });
     return this._ready;
   },

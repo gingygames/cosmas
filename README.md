@@ -5,6 +5,8 @@ databáze postav, časové osy a přehrávač s mixem více zvukových stop naje
 
 Spuštění: zástupce **Kronikář** na ploše, nebo `Kronikar.bat`.
 
+Prototyp verze pro prohlížeč (Chrome/Edge, videa se nikam nenahrávají): `web-app/`, viz [WEB.md](WEB.md).
+
 ## Instalace (Windows)
 1. Python 3.12+, pak v kořeni projektu:
    ```
