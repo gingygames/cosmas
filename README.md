@@ -99,6 +99,9 @@ Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
 ## Discord
 - **Hráči:** Nastavení → Discord: token bota + ID serveru → „Načíst členy a vytvořit hráče“ (jméno a avatar),
   u hráče „Propojit s Discordem“, „Aktualizovat jména a avatary“. Bot potřebuje zapnutý *Server Members Intent*.
+- **Holubí pošta ze schránky (PM):** v Discordu označ zprávy tažením myši, Ctrl+C, v Holubí poště Ctrl+V
+  (nebo Přidat → Vložit ze schránky). Rozpozná autora, čas a text, předvybere zprávy se slovem „holub“,
+  autora přiřadí k postavě podle hráče, opakované vložení nevytvoří duplikáty.
 - **Holubí pošta:** dopisy (zprávy se slovem „holub“, slovo jde změnit) z kanálu na serveru přes bota
   (*Message Content Intent*), z oficiálního exportu dat Discordu (jen tvé vlastní zprávy), nebo ručně.
   Cizí soukromé zprávy Discord automaticky nevydá – boti k nim nemají přístup a automatizace osobního účtu

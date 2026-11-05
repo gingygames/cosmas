@@ -35,7 +35,8 @@ async function load() { list = await API.call('letters.list'); }
 function renderSide() {
   const side = $('.lt-side', root);
   const imp = e => menu(e, [
-    { label: 'Napsat / vložit dopis ručně', icon: 'pencil', onClick: newLetter },
+    { label: 'Vložit ze schránky (zkopírované zprávy z Discordu)', icon: 'clipboard-paste', onClick: pasteFromClipboard },
+    { label: 'Napsat dopis ručně', icon: 'pencil', onClick: newLetter },
     { sep: true },
     { label: 'Import z exportu dat Discordu (.zip)…', icon: 'file-archive', onClick: () => runImport('letters.import_export') },
     { label: 'Import z rozbalené složky exportu…', icon: 'folder-open', onClick: () => runImport('letters.import_folder') },
@@ -92,6 +93,92 @@ function renderDetail() {
       h('button.btn.danger', { onclick: async () => { if (!await confirmDialog('Smazat dopis', 'Opravdu smazat tento dopis?', { danger: true, okLabel: 'Smazat' })) return; await API.call('letter.delete', { id: l.id }); cur = null; await load(); renderRows(); renderDetail(); } }, icon('trash-2'), 'Smazat')));
 }
 
+/* ---- paste messages copied from Discord ---- */
+async function pasteFromClipboard() {
+  let text = '';
+  try { text = await navigator.clipboard.readText(); } catch (e) { /* fall back to the dialog's text box */ }
+  pasteDialog(text);
+}
+
+function guessChar(author) {
+  const a = (author || '').trim().toLowerCase();
+  if (!a) return null;
+  const pl = (App.players || []).find(p => [p.discord_name, p.contact, p.name].some(x => x && x.toLowerCase() === a));
+  if (pl) {
+    const mine = App.chars.filter(c => c.player_id === pl.id && c.status !== 'dead');
+    if (mine.length === 1) return mine[0].id;
+  }
+  const c = App.chars.find(c => c.name.toLowerCase() === a || (c.aliases || '').toLowerCase().split(',').map(x => x.trim()).includes(a));
+  return c ? c.id : null;
+}
+
+function hash(str) { let x = 5381; for (let i = 0; i < str.length; i++) x = (x * 33 + str.charCodeAt(i)) >>> 0; return x.toString(36); }
+
+function pasteDialog(text) {
+  const marker = (App.settings.holub_marker || 'holub').toLowerCase();
+  const ta = h('textarea.input', { rows: 5, placeholder: 'V Discordu označ zprávy (tažením myši přes ně), Ctrl+C, a vlož sem Ctrl+V.', onkeydown: e => e.stopPropagation() }, text || '');
+  const listBox = h('div'), authorsBox = h('div');
+  let msgs = [], sel = new Set(), mode = 'each', recips = [];
+  const map = new Map();          // author -> character id
+  const recBox = h('.row.wrap', { style: { gap: '6px' } });
+  const renderRec = () => clear(recBox).append(
+    ...recips.map(id => App.charsById.get(id)).filter(Boolean).map(c => charChip(c, { onRemove: () => { recips = recips.filter(x => x !== c.id); renderRec(); } })),
+    h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(recips, { title: 'Komu dopisy patří?' }); if (ids) { recips = ids; renderRec(); } } }, icon('user-plus'), 'Adresáti'));
+  const parse = () => {
+    msgs = parseDiscordCopy(ta.value);
+    const marked = msgs.map((m, i) => (m.body.toLowerCase().includes(marker) || m.body.includes('🕊')) ? i : -1).filter(i => i >= 0);
+    sel = new Set(marked.length ? marked : msgs.map((_, i) => i));
+    for (const m of msgs) if (m.author && !map.has(m.author)) map.set(m.author, guessChar(m.author));
+    render();
+  };
+  const render = () => {
+    clear(listBox);
+    if (!msgs.length) { listBox.appendChild(h('.faint.small', 'Zatím nic – vlož zkopírované zprávy.')); clear(authorsBox); return; }
+    listBox.appendChild(h('.small.muted', { style: { margin: '6px 0' } }, `Rozpoznáno ${msgs.length} ${fmt.plural(msgs.length, 'zpráva', 'zprávy', 'zpráv')} – zaškrtnuté se uloží (předvybrané jsou ty se slovem „${marker}“).`));
+    listBox.appendChild(h('.picker-list', { style: { maxHeight: '32vh' } }, msgs.map((m, i) => h('.list-row' + (sel.has(i) ? '.sel' : ''), {
+      style: { alignItems: 'flex-start' },
+      onclick: () => { sel.has(i) ? sel.delete(i) : sel.add(i); render(); },
+    }, h('input', { type: 'checkbox', checked: sel.has(i), style: { marginTop: '3px' } }),
+    h('.grow', { style: { minWidth: 0 } }, h('.small', h('b', m.author || '?'), h('span.faint', m.sent_at ? '  ' + fmt.dt(m.sent_at) : '')),
+      h('.small.muted', { style: { whiteSpace: 'pre-wrap' } }, m.body.length > 280 ? m.body.slice(0, 280) + '…' : m.body))))));
+    const authors = [...new Set(msgs.filter((_, i) => sel.has(i)).map(m => m.author).filter(Boolean))];
+    clear(authorsBox);
+    if (authors.length) {
+      authorsBox.appendChild(h('.small.muted', { style: { margin: '10px 0 6px' } }, 'Kdo je kdo (autor zprávy → postava, která dopis psala):'));
+      authors.forEach(a => {
+        const selEl = h('select.input', { style: { width: '240px' }, onchange: e => map.set(a, e.target.value ? Number(e.target.value) : null) },
+          h('option', { value: '' }, '— jen jméno z Discordu —'),
+          App.chars.map(c => h('option', { value: c.id, selected: map.get(a) === c.id }, c.name)));
+        authorsBox.appendChild(h('.row', { style: { marginBottom: '4px' } }, h('span', { style: { width: '160px' } }, a), icon('arrow-right', 'faint'), selEl));
+      });
+    }
+  };
+  ta.addEventListener('input', debounce(parse, 250));
+  const modeSeg = h('.seg', [['each', 'Každá zpráva = dopis'], ['one', 'Vše jako jeden dopis']].map(([k, l]) =>
+    h('button' + (mode === k ? '.on' : ''), { onclick: e => { mode = k; $$('button', e.currentTarget.parentNode).forEach(b => b.classList.toggle('on', b === e.currentTarget)); } }, l)));
+  renderRec(); parse();
+  modal({ title: 'Dopisy ze schránky', icon: 'clipboard-paste', wide: true,
+    body: h('.col', { style: { gap: '8px' } }, ta, listBox, authorsBox, h('.row.wrap', { style: { gap: '12px', marginTop: '6px' } }, modeSeg, recBox),
+      h('.faint.small', 'Tip: zprávu „Holub“ najdeš v Discordu přes hledání (Ctrl+F → holub), pak je označ a zkopíruj najednou.')),
+    actions: [{ label: 'Zrušit' }, { label: 'Uložit dopisy', primary: true, icon: 'check', onClick: async () => {
+      const chosen = msgs.filter((_, i) => sel.has(i));
+      if (!chosen.length) { toast('Nic není vybráno', 'err'); return false; }
+      const items = mode === 'one'
+        ? [{ author: [...new Set(chosen.map(m => m.author).filter(Boolean))].join(', '), sent_at: chosen[0].sent_at,
+          body: chosen.map(m => chosen.length > 1 && m.author ? `${m.author}:\n${m.body}` : m.body).join('\n\n'), sender: map.get(chosen[0].author) || null }]
+        : chosen.map(m => ({ author: m.author, sent_at: m.sent_at, body: m.body, sender: map.get(m.author) || null }));
+      let first = null, n = 0;
+      for (const it of items) {
+        const id = await API.call('letter.create', { author: it.author || '', sent_at: it.sent_at || undefined, body: it.body,
+          sender_id: it.sender, recipient_ids: recips, source: 'discord-paste', channel: 'Discord (schránka)',
+          source_ref: 'dp:' + hash(`${it.author}|${it.sent_at}|${it.body}`) });
+        if (id) { n++; first = first || id; }
+      }
+      toast(n ? `Uloženo ${n} ${fmt.plural(n, 'dopis', 'dopisy', 'dopisů')}` : 'Tyhle dopisy už v poště jsou');
+      await load(); renderRows(); if (first) open(first);
+    } }] });
+}
+
 async function newLetter() {
   const id = await API.call('letter.create', { title: '', body: '' });
   await load(); open(id);
@@ -111,6 +198,7 @@ function help() {
   modal({ title: 'Dopisy z Discordu', icon: 'circle-help', wide: true, body: h('.col', { style: { gap: '10px' } },
     h('div', h('b', 'Z kanálu na serveru (doporučeno): '), 'pokud se dopisy píšou do kanálu na serveru, kde je tvůj bot, vyplň v Nastavení → Discord ID kanálu. Načtou se zprávy obsahující slovo „holub“ (slovo jde změnit) – od všech hráčů.'),
     h('div', h('b', 'Z exportu dat: '), 'Discord → Uživatelská nastavení → Data a soukromí → Požádat o data (zaškrtni Zprávy). Za pár dní přijde odkaz na package.zip – ten tady vyber. Export obsahuje jen zprávy, které jsi napsal ty.'),
+    h('div', h('b', 'Ze schránky (nejrychlejší pro PM): '), 'v Discordu označ zprávy tažením myši, Ctrl+C, tady Přidat → Vložit ze schránky (nebo jen Ctrl+V v Holubí poště). Rozpozná autora, čas a text.'),
     h('.faint', 'Soukromé zprávy, které ti poslali ostatní, Discord nikomu automaticky nevydá – boti k nim nemají přístup a stahování přes osobní účet je proti pravidlům Discordu (hrozí ban). Takové dopisy přidej ručně (Přidat → Napsat / vložit) – stačí zkopírovat text.')) });
 }
 
@@ -119,6 +207,11 @@ Views.register('letters', {
   async mount(el, params = {}) {
     root = el; charFilter = params.char || null;
     el.appendChild(h('.lt', h('.lt-side'), h('.lt-detail')));
+    el.addEventListener('paste', e => {
+      if (e.target.closest('input, textarea, [contenteditable="true"]') || $('.backdrop')) return;
+      const t = e.clipboardData && e.clipboardData.getData('text/plain');
+      if (t && t.trim()) { e.preventDefault(); pasteDialog(t); }
+    });
     await load();
     renderSide();
     const id = params.id || App.ui.letterId;
