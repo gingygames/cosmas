@@ -76,9 +76,29 @@ function webSyncCard() {
   const when = t => t ? new Date(t * 1000).toLocaleString(I18N.locale) : tr('never yet');
   const poll = () => { clearTimeout(timer); timer = setTimeout(() => box.isConnected && render(), 700); };
   const run = async (method, args) => { await API.call(method, args).catch(() => null); render(); };
+  /* images on the web: used of limit (sync.quota); asked once per sync, hidden silently when offline or unknown */
+  const quotaBox = h('.col', { style: { gap: '4px' } });
+  let quotaFor;
+  const loadQuota = async st => {
+    if (!st.has_token || st.running) { if (!st.has_token) { quotaFor = undefined; clear(quotaBox); } return; }
+    if (quotaFor === (st.last_sync || 0)) return;
+    quotaFor = st.last_sync || 0;
+    const q = await API.call('sync.quota', {}, { quiet: true }).catch(() => null);
+    const sg = q && q.connected !== false && q.storage;
+    if (!sg || typeof sg.used !== 'number') { clear(quotaBox); return; }
+    const files = sg.files || 0, vars = { used: fmtBytes(sg.used), limit: fmtBytes(sg.limit) };
+    const pct = sg.limit > 0 ? Math.min(100, Math.round(sg.used * 100 / sg.limit)) : null;
+    clear(quotaBox).append(
+      h('.small.muted', pct == null
+        ? trn(files, 'Images on the web: {used} ({n} file)', 'Images on the web: {used} ({n} files)', vars)
+        : trn(files, 'Images on the web: {used} of {limit} ({n} file)', 'Images on the web: {used} of {limit} ({n} files)', vars)),
+      pct == null ? null : h('.upd-bar', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), style: { maxWidth: '320px' } },
+        h('div', { style: { width: pct + '%' } })));
+  };
   async function render() {
     const st = await API.call('sync.status').catch(() => null);
     if (!st) return;
+    loadQuota(st);
     const stop = e => e.stopPropagation();
     const token = h('input.input', { type: 'password', placeholder: st.has_token ? tr('saved: {token} (paste a new one to change it)', { token: st.token }) : 'krt_…', onkeydown: stop, autocomplete: 'off',
       onchange: async e => { const v = e.target.value.trim(); if (!v) return; await API.call('sync.set_token', { token: v }).then(() => toast(tr('Token saved'))).catch(() => null); render(); } });
@@ -115,6 +135,7 @@ function webSyncCard() {
           h('button.btn.sm.ghost', { onclick: () => run('sync.cancel') }, tr('Cancel')))) : null,
       h('.small.muted', tr('Last sync: {when}', { when: when(st.last_sync) }) + (st.account ? ' · ' + tr('account {account}', { account: st.account }) : '') + (st.published ? ' · ' + trn(st.published, '{n} record on the web', '{n} records on the web') : '')),
       stats ? h('.small.faint', stats) : null,
+      st.has_token ? quotaBox : null,
       ...(r.warnings || []).map(w => h('.small', { style: { color: 'var(--danger)' } }, w)),
       st.conflicts.length ? h('.col', { style: { gap: '6px' } },
         h('.small', { style: { color: 'var(--danger)' } }, tr('Conflicts ({n}) – the record changed both here and on the web, I did not overwrite anything:', { n: st.conflicts.length })),
@@ -232,7 +253,7 @@ Views.register('settings', {
         tog('start_minimized', tr('Start minimized'), tr('The window starts minimized (or only in the notification area when the option below is on).')),
         tog('close_to_tray', tr('Closing the window keeps the app running in the notification area'), tr('Background work (transcripts, sync, backups) goes on; quit from the icon’s menu. A playing video is paused.'))),
       card(tr('Updates'), tr('New versions are downloaded from gingygames.com / GitHub and checked against their published SHA-256 before installing.'),
-        Updates.panel({ notes: true }), updOpts()));
+        Updates.panel({ notes: true, support: false }), updOpts()));
 
     /* ---- Library ---- */
     const roots = [...(s.roots || [])];

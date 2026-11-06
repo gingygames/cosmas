@@ -103,6 +103,9 @@ const Updates = {
           h('.tiny.faint', tr('Last check: {when}', { when: when(st.last_check) })),
           st.skip ? h('button.btn.sm.ghost', { onclick: () => API.call('update.skip', { version: '' }) }, tr('Stop skipping {version}', { version: st.skip })) : null));
       }
+      // optional support link from the update server – shown only for a real https address
+      if (opts.support !== false && typeof st.support_url === 'string' && /^https:\/\/[^\s"'<>]+$/.test(st.support_url.trim()))
+        rows.push(h('.row', h('a.btn.sm', { href: st.support_url.trim(), title: tr('Opens in your browser') }, icon('heart'), tr('Support Cosmas'))));
       clear(box).append(rows);
     };
     const off = this.on(render);
