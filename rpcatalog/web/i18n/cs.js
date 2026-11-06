@@ -193,6 +193,7 @@ window.I18N_CS = {
  "Bohemia 1403": "Čechy 1403",
  "Bold (Ctrl+B)": "Tučně (Ctrl+B)",
  "Bookmark": "Moment",
+ "Choose catalog.db from the Kosmas desktop app (installed: %LOCALAPPDATA%\\Kronikar, the folder is shown in its Settings) or a JSON export. Importing again duplicates nothing – records are paired by their original ids.": "Vyber catalog.db z desktopové aplikace Kosmas (instalovaná: %LOCALAPPDATA%\\Kronikar, složku ukazuje její Nastavení) nebo export JSON. Opakovaný import nic nezdvojí – záznamy se párují podle původních id.",
  "Copy the catalogue": "Zkopírovat katalog",
  "Delete all records marked as test data, with their journal entries, moments and images? This can’t be undone.": "Smazat všechny záznamy označené jako testovací, i s jejich zápisy, momenty a obrázky? Nejde to vrátit.",
  "Delete all test records? A backup of the catalogue is made first. Videos stay in the library (still marked as test) – files on disk are never touched.": "Smazat všechny testovací záznamy? Nejdřív se udělá záloha katalogu. Videa zůstanou v knihovně (dál označená jako testovací) – soubory na disku se nikdy nemažou.",
