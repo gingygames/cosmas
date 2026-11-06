@@ -40,6 +40,64 @@ const EDITOR_CSS = `
 `;
 (() => { const s = document.createElement('style'); s.textContent = EDITOR_CSS; document.head.appendChild(s); })();
 
+/* ---- sanitizer: stored and pasted rich text (it can come from the web) never reaches the page unfiltered.
+   Same rules as the web server (kronikar-web src/sanitize.js) plus the desktop's file: attachment images. ---- */
+const RICH_KEEP = new Set(['p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'strike', 'del', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li',
+  'blockquote', 'a', 'span', 'img', 'hr', 'code', 'pre', 'div', 'figure', 'figcaption', 'sub', 'sup', 'mark',
+  'table', 'thead', 'tbody', 'tr', 'td', 'th', 'font']);
+// removed together with their content (the parser reads some of them as plain text – unwrapping would make it live HTML)
+const RICH_DROP = new Set(['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select',
+  'link', 'meta', 'base', 'svg', 'math', 'template', 'noscript', 'frame', 'frameset', 'video', 'audio', 'source',
+  'xmp', 'noembed', 'noframes', 'title', 'plaintext', 'listing', 'head', 'param', 'applet', 'portal', 'dialog']);
+const RICH_STYLE_OK = /^(color|background-color|text-align|font-weight|font-style|text-decoration|font-size)$/;
+const richStyle = v => String(v || '').split(';').map(d => d.trim()).filter(d => {
+  const [p, ...rest] = d.split(':');
+  const val = rest.join(':').toLowerCase();
+  return RICH_STYLE_OK.test((p || '').trim().toLowerCase()) && val && !/url\(|expression|javascript:|@import|\\/.test(val);
+}).join('; ');
+const richHref = v => /^(https?:\/\/|mailto:|\/kosmas\/|\/kronika\/|#)/i.test(String(v || '').trim());
+// images: the web's /kosmas/img/<key>, https, and attachments of the desktop app (file:///…, see api.file_url)
+const richSrc = v => /^(\/(?:kosmas|kronika)\/img\/[A-Za-z0-9._-]+|https:\/\/[^\s"'<>]+|file:\/\/\/[^"<>]+)$/i.test(String(v || '').trim());
+
+function sanitizeRich(html) {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString('<!doctype html><html><head></head><body>' + String(html) + '</body></html>', 'text/html');
+  const XHTML = 'http://www.w3.org/1999/xhtml';
+  const clean = parent => {
+    for (const n of [...parent.childNodes]) {
+      if (n.nodeType === Node.TEXT_NODE) continue;
+      if (n.nodeType !== Node.ELEMENT_NODE) { n.remove(); continue; }          // comments, processing instructions
+      const tag = n.localName;
+      if (n.namespaceURI !== XHTML || RICH_DROP.has(tag)) { n.remove(); continue; }
+      clean(n);
+      if (!RICH_KEEP.has(tag)) { n.replaceWith(...n.childNodes); continue; }  // unknown tag: keep its (clean) content
+      for (const { name, value } of [...n.attributes]) {
+        const a = name.toLowerCase();
+        let keep = false;
+        if (a === 'style') { const s = richStyle(value); if (s) { n.setAttribute('style', s); keep = true; } }
+        else if (a === 'class') keep = /^[\w\s-]{0,120}$/.test(value);
+        else if (a === 'data-char-id' || (tag === 'img' && a === 'data-att')) keep = /^\d+$/.test(value);
+        else if (a === 'data-ingame') keep = true;
+        else if (a === 'contenteditable') keep = tag === 'span' && value === 'false';
+        else if (tag === 'a') keep = (a === 'href' && richHref(value)) || a === 'title' || (a === 'target' && value === '_blank');
+        else if (tag === 'img') keep = (a === 'src' && richSrc(value)) || a === 'alt' || a === 'title' || ((a === 'width' || a === 'height') && /^\d{1,4}%?$/.test(value));
+        else if (tag === 'td' || tag === 'th') keep = (a === 'colspan' || a === 'rowspan') && /^\d{1,2}$/.test(value);
+        else if (tag === 'font') keep = a === 'color' && /^#?\w{3,20}$/.test(value);
+        if (!keep) n.removeAttribute(name);
+      }
+      if (tag === 'img' && !n.hasAttribute('src')) n.remove();
+    }
+  };
+  clean(doc.body);
+  return doc.body.innerHTML;
+}
+window.sanitizeRich = sanitizeRich;
+
+/* editors with a change still waiting for the debounce; flushEditors() saves them now (before switching records) */
+const _dirtyEditors = new Set();
+function flushEditors() { [..._dirtyEditors].forEach(f => f()); }
+window.flushEditors = flushEditors;
+
 function mentionHTML(c) {
   return `<span class="mention" contenteditable="false" data-char-id="${c.id}">${escapeHtml(c.name)}</span>&nbsp;`;
 }
@@ -60,7 +118,7 @@ function wireRich(root) {
 }
 
 function renderRich(html) {
-  const el = h('.prose', { html: html || '' });
+  const el = h('.prose', { html: sanitizeRich(html) });
   el.querySelectorAll('[contenteditable]').forEach(n => n.removeAttribute('contenteditable'));
   wireRich(el);
   return el;
@@ -68,8 +126,21 @@ function renderRich(html) {
 
 function RichEditor({ html = '', placeholder = tr('Write…'), ownerType = null, ownerId = null, onChange, minHeight = 160, autofocus = false } = {}) {
   const area = h('.area.prose', { contenteditable: 'true', 'data-ph': placeholder, spellcheck: 'true', style: { minHeight: minHeight + 'px' } });
-  area.innerHTML = html || '';
-  const changed = debounce(() => onChange && onChange(getHTML()), 700);
+  area.innerHTML = sanitizeRich(html);
+  // onChange only gets HTML that differs from the last saved value; the record it belongs to is fixed by the
+  // caller's closure, so a late (debounced or blur) save can never land in another record
+  let lastSaved = null;
+  const fire = () => {
+    _dirtyEditors.delete(flushNow);
+    const v = getHTML();
+    if (v === lastSaved) return;
+    lastSaved = v;
+    onChange && onChange(v);
+  };
+  const pending = debounce(fire, 700);
+  const flushNow = () => pending.flush();
+  const changed = () => { _dirtyEditors.add(flushNow); pending(); };
+  changed.flush = flushNow;
   const exec = (cmd, val = null) => { area.focus(); document.execCommand(cmd, false, val); changed(); };
   const block = tag => exec('formatBlock', tag);
 
@@ -203,7 +274,7 @@ function RichEditor({ html = '', placeholder = tr('Write…'), ownerType = null,
     if (mentionStart) { const q = currentQuery(); if (q === null) closePop(); else showPop(q); }
     changed();
   });
-  area.addEventListener('blur', () => setTimeout(() => { if (!area.contains(document.activeElement)) closePop(); changed.flush && changed.flush(); }, 150));
+  area.addEventListener('blur', () => setTimeout(() => { if (!area.contains(document.activeElement)) closePop(); changed.flush(); }, 150));
 
   /* paste / drop images */
   async function handleFiles(files, e) {
@@ -216,28 +287,50 @@ function RichEditor({ html = '', placeholder = tr('Write…'), ownerType = null,
   }
   area.addEventListener('paste', async e => {
     if (e.clipboardData.files.length && await handleFiles(e.clipboardData.files, e)) return;
-    // paste plain text to keep styling consistent
-    const text = e.clipboardData.getData('text/plain');
-    if (text && !e.clipboardData.getData('text/html').includes('data-char-id')) {
+    const html = e.clipboardData.getData('text/html');
+    // rich text copied from an editor (with character mentions) keeps its formatting – filtered first
+    if (html && html.includes('data-char-id')) {
       e.preventDefault();
-      document.execCommand('insertText', false, text);
+      document.execCommand('insertHTML', false, sanitizeRich(html));
+      wireRich(area); changed();
+      return;
     }
+    // anything else is pasted as plain text to keep styling consistent
+    const text = e.clipboardData.getData('text/plain');
+    if (text) { e.preventDefault(); document.execCommand('insertText', false, text); }
+    else if (html) { e.preventDefault(); document.execCommand('insertHTML', false, sanitizeRich(html)); wireRich(area); changed(); }
   });
-  area.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files, e); });
+  // text dragged in from outside (another page or app) goes through the same filter; moving text inside stays native
+  let dragInside = false;
+  area.addEventListener('dragstart', () => { dragInside = true; });
+  area.addEventListener('dragend', () => { dragInside = false; });
+  area.addEventListener('drop', e => {
+    if (e.dataTransfer.files.length) { handleFiles(e.dataTransfer.files, e); return; }
+    if (dragInside) return;
+    const html = e.dataTransfer.getData('text/html'), text = e.dataTransfer.getData('text/plain');
+    if (!html && !text) return;
+    e.preventDefault();
+    const r = document.caretRangeFromPoint && document.caretRangeFromPoint(e.clientX, e.clientY);
+    area.focus();
+    if (r && area.contains(r.startContainer)) { const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    if (html && html.includes('data-char-id')) document.execCommand('insertHTML', false, sanitizeRich(html));
+    else if (text) document.execCommand('insertText', false, text);
+    wireRich(area); changed();
+  });
 
   wireRich(area);
+  lastSaved = getHTML();
   const el = h('.rte', tb, area);
   if (autofocus) setTimeout(() => area.focus(), 50);
   function getHTML() {
-    const clone = area.cloneNode(true);
-    const out = clone.innerHTML.replace(/<p><br><\/p>$/, '').trim();
+    const out = sanitizeRich(area.innerHTML).replace(/<p><br><\/p>$/, '').trim();
     return out === '<br>' ? '' : out;
   }
   return {
     el, area,
     getHTML,
-    setHTML(v) { area.innerHTML = v || ''; wireRich(area); },
+    setHTML(v) { flushNow(); area.innerHTML = sanitizeRich(v); wireRich(area); lastSaved = getHTML(); },
     focus() { area.focus(); },
-    flush() { changed.flush && changed.flush(); },
+    flush() { flushNow(); },
   };
 }

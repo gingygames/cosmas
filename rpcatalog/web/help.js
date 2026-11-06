@@ -30,7 +30,11 @@ function mdSafe(md) {
 }
 window.mdSafe = mdSafe;
 
-const fmtBytes = n => n == null ? '' : n === 0 ? '0 kB' : n >= 2 ** 30 ? (n / 2 ** 30).toFixed(1) + ' GB' : n >= 2 ** 20 ? (n / 2 ** 20).toFixed(0) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' kB';
+const fmtBytes = n => {
+  if (n == null) return '';
+  const num = (v, d) => v.toLocaleString(I18N.locale, { minimumFractionDigits: d, maximumFractionDigits: d });   // 1,5 GB in Czech
+  return n === 0 ? '0 kB' : n >= 2 ** 30 ? num(n / 2 ** 30, 1) + ' GB' : n >= 2 ** 20 ? num(n / 2 ** 20, 0) + ' MB' : num(Math.max(1, Math.round(n / 1024)), 0) + ' kB';
+};
 window.fmtBytes = fmtBytes;
 
 /* ---------------- updates ---------------- */
@@ -67,6 +71,8 @@ const Updates = {
           : st.state === 'error' && !avail ? h('span', { style: { color: 'var(--danger)' } }, st.error || tr('Update check failed'))
           : tr('You have the latest version ({version}).', { version: st.current })),
         h('.tiny.faint', tr('Installed: {version}', { version: st.current }))));
+      // e.g. an unpacked copy that was not installed with the installer and cannot update itself
+      if (st.note) rows.push(h('.small.muted', icon('info'), ' ', String(st.note)));
       if (avail) {
         const meta = [info.published_at ? new Date(info.published_at).toLocaleDateString(I18N.locale) : null, info.size ? fmtBytes(info.size) : null,
           info.sha256 ? tr('SHA-256 published') : tr('no SHA-256 published')].filter(Boolean).join(' · ');
@@ -99,6 +105,9 @@ const Updates = {
           h('.tiny.faint', tr('Last check: {when}', { when: when(st.last_check) })),
           st.skip ? h('button.btn.sm.ghost', { onclick: () => API.call('update.skip', { version: '' }) }, tr('Stop skipping {version}', { version: st.skip })) : null));
       }
+      // optional support link from the update server – shown only for a real https address
+      if (opts.support !== false && typeof st.support_url === 'string' && /^https:\/\/[^\s"'<>]+$/.test(st.support_url.trim()))
+        rows.push(h('.row', h('a.btn.sm', { href: st.support_url.trim(), title: tr('Opens in your browser') }, icon('heart'), tr('Support Cosmas'))));
       clear(box).append(rows);
     };
     const off = this.on(render);
@@ -128,17 +137,27 @@ async function feedbackDialog({ kind = 'bug', message = '', traceback = null } =
   let cur = kind;
   const stop = e => e.stopPropagation();
   const kindRow = h('.row.wrap', { style: { gap: '6px' } });
-  const renderKinds = () => clear(kindRow).append(kinds.map(([k, ic, label]) => h('span.chip' + (cur === k ? '.on' : ''), { onclick: () => { cur = k; renderKinds(); } }, icon(ic), label)));
+  const renderKinds = () => clear(kindRow).append(kinds.map(([k, ic, label]) => h('span.chip' + (cur === k ? '.on' : ''), { role: 'button', tabindex: '0', 'aria-pressed': String(cur === k),
+    onclick: () => { cur = k; renderKinds(); refreshPreview(); }, onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } } }, icon(ic), label)));
+  // an open preview follows every change of the options and the text
+  let preview = null;
+  const refreshPreview = debounce(async () => {
+    if (!preview || preview.style.display === 'none') return;
+    const p = await API.call('feedback.preview', args()).catch(() => null);
+    if (p && preview.style.display !== 'none') preview.textContent = p.json;
+  }, 300);
   renderKinds();
-  const msg = h('textarea.input', { rows: 6, onkeydown: stop, placeholder: tr('What happened, what did you expect, how can it be reproduced? Or your idea…') }, message);
-  const email = h('input.input', { type: 'email', onkeydown: stop, placeholder: tr('optional – only if you want an answer') });
+  const msg = h('textarea.input', { rows: 6, onkeydown: stop, oninput: () => refreshPreview(), placeholder: tr('What happened, what did you expect, how can it be reproduced? Or your idea…') }, message);
+  const email = h('input.input', { type: 'email', onkeydown: stop, oninput: () => refreshPreview(), placeholder: tr('optional – only if you want an answer') });
   const chk = (label, on, extra) => { const i = h('input', { type: 'checkbox', checked: on }); return [i, h('label.check', i, label, extra || null)]; };
-  const [logC, logL] = chk(tr('Attach the log (last 2000 lines; tokens, e-mails and your user folder are removed)'), kind === 'bug' || !!traceback);
+  // the log is opt-in: it can contain names and paths of recordings
+  const [logC, logL] = chk(tr('Attach the log (last 2000 lines). It can contain file names and paths of your recordings; tokens, e-mails and your user folder are removed.'), false);
   const [shotC, shotL] = chk(tr('Attach a screenshot of the app window'), false,
     shot && shot.data ? h('img', { src: shot.data, style: { height: '38px', borderRadius: '4px', marginLeft: '6px', border: '1px solid var(--border)' } }) : null);
   const [sysC, sysL] = chk(tr('Include system info (Windows version, app version, GPU, RAM)'), true);
   if (!shot || !shot.data) { shotC.disabled = true; }
-  const preview = h('pre.fb-preview', { style: { display: 'none' } });
+  [logC, shotC, sysC].forEach(c => c.addEventListener('change', () => refreshPreview()));
+  preview = h('pre.fb-preview', { style: { display: 'none' } });
   const args = () => ({ kind: cur, message: msg.value, email: email.value.trim(), attach_log: logC.checked, attach_screenshot: shotC.checked,
     include_system: sysC.checked, view: Views.activeName || null, traceback_text: traceback });
   const status = h('.small.muted');
