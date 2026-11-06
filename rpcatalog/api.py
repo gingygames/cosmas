@@ -15,15 +15,35 @@ import traceback
 import uuid
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal, Slot, QUrl
+from PySide6.QtCore import QObject, QThread, Signal, Slot, QUrl
 from PySide6.QtWidgets import QFileDialog
 
 from . import config, suggest
 from . import discord_link
 from . import gameart
+from . import sync as websync
 
 ATT_DIR = config.DATA_DIR / "attachments"
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+
+class SyncThread(QThread):
+    """Synchronizace s webem mimo UI vlákno (vlastní spojení do SQLite)."""
+    done = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, job):
+        super().__init__()
+        self.job = job
+
+    def run(self):
+        try:
+            self.done.emit(self.job())
+        except websync.SyncError as e:
+            self.failed.emit(str(e))
+        except Exception as e:
+            traceback.print_exc()
+            self.failed.emit(f"Synchronizace selhala: {type(e).__name__}: {e}")
 
 
 def file_url(path):
@@ -41,6 +61,7 @@ class Api(QObject):
         self.settings = settings
         self.host = host
         ATT_DIR.mkdir(parents=True, exist_ok=True)
+        self._sync = {"thread": None, "running": False, "progress": "", "error": None}
 
     # ------------------------------------------------------------ dispatch
     READ_ONLY = {"bootstrap", "media.list", "media.get", "media.reveal", "media.play", "player.action",
@@ -49,7 +70,8 @@ class Api(QObject):
                  "settings.get", "pick_folder", "open_data_dir", "rescan", "bm.list", "bm.get", "snap.grab",
                  "layout.set", "window.bg", "window.zoom", "pane.toggle", "places.list", "place.get",
                  "letters.list", "discord.members", "game.art_sources", "game.art_search", "game.image_data",
-                 "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get"}
+                 "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get",
+                 "sync.status", "sync.run", "sync.resolve", "sync.set_token", "sync.settings"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -79,7 +101,7 @@ class Api(QObject):
             "game": m.game, "kind": m.kind, "kind_override": m.kind_override, "type": m.effective_kind,
             "start": m.start_time, "end": m.end_time, "duration": m.duration, "size": m.size,
             "thumb": file_url(m.get("custom_thumb") or m.thumb), "thumb_size": _fsize(m.get("custom_thumb") or m.thumb),
-            "custom_thumb": bool(m.get("custom_thumb")), "server_id": m.get("server_id"), "tags": m.tags, "favorite": bool(m.favorite),
+            "custom_thumb": bool(m.get("custom_thumb")), "server_id": m.get("server_id"), "youtube": m.get("youtube") or "", "tags": m.tags, "favorite": bool(m.favorite),
             "missing": bool(m.missing), "description": m.description or "", "path": m.path,
             "linked": (m.id in linked) if linked is not None else None,
             "tracks": m.track_names(), "bookmarks": bms.get(m.id, []) if bms is not None else self._bm_marks(m.id),
@@ -248,6 +270,8 @@ class Api(QObject):
                 self.store.unlink_character(c, "media", id)
         if "favorite" in fields:
             fields["favorite"] = 1 if fields["favorite"] else 0
+        if "youtube" in fields:
+            fields["youtube"] = websync.youtube_id(fields["youtube"])
         self.store.update_media(id, **fields)
         return self.m_media_get(id)
 
@@ -1294,7 +1318,7 @@ class Api(QObject):
         }
 
     def m_settings_get(self):
-        return {k: v for k, v in self.settings.items() if k not in ("geometry",)}
+        return {k: v for k, v in self.settings.items() if k not in ("geometry", "sync_token")}
 
     def m_settings_set(self, values):
         for k in ("roots", "clip_max_seconds", "short_session_seconds", "hide_short_sessions",
@@ -1308,6 +1332,75 @@ class Api(QObject):
         if values.get("_rescan", True):
             self.host.rescan()
         return True
+
+    # ------------------------------------------------------------ synchronizace s webem
+    def m_sync_status(self):
+        st = websync.status(config.DB_PATH, self.settings)
+        st.update(running=self._sync["running"], progress=self._sync["progress"], error=self._sync["error"])
+        return st
+
+    def m_sync_set_token(self, token=""):
+        token = (token or "").strip()
+        if token and not token.startswith("krt_"):
+            raise ValueError("Tohle není API token Kronikáře (začíná na krt_). Vytvoř ho na webu v Nastavení.")
+        self.settings["sync_token"] = token
+        self.host.save_settings()
+        return self.m_sync_status()
+
+    def m_sync_settings(self, url=None, letters=None, auto=None):
+        if url is not None:
+            url = url.strip().rstrip("/")
+            if url and not re.match(r"^https?://", url):
+                raise ValueError("Adresa serveru musí začínat https://")
+            self.settings["sync_url"] = url or websync.DEFAULT_URL
+        if letters is not None:
+            self.settings["sync_letters"] = bool(letters)
+        if auto is not None:
+            self.settings["sync_auto"] = bool(auto)
+        self.host.save_settings()
+        return self.m_sync_status()
+
+    def _sync_start(self, job, quiet=False):
+        if self._sync["running"]:
+            return self.m_sync_status()
+        if not self.settings.get("sync_token"):
+            raise ValueError("Nejdřív vlož osobní API token z webu.")
+        settings = dict(self.settings)
+        prog = lambda msg: self._sync.__setitem__("progress", msg)
+
+        def work():
+            s = websync.Syncer(config.DB_PATH, settings, ATT_DIR, progress=prog)
+            try:
+                return job(s)
+            finally:
+                s.close()
+
+        def done(res):
+            self._sync.update(running=False, progress="", error=None)
+            self.emit("sync", {"method": "sync.run", "src": None})     # obnovit zobrazená data
+            self.emit("web-sync", res)
+            n = res.get("conflicts") or 0
+            if not quiet or n or res.get("received"):
+                self.emit("toast", {"msg": f"Synchronizováno s webem{f' – {n} konfliktů k vyřešení (Nastavení)' if n else ''}",
+                                    "type": "err" if n else "ok"})
+
+        def failed(msg):
+            self._sync.update(running=False, progress="", error=msg)
+            self.emit("web-sync", {"error": msg})
+            self.emit("toast", {"msg": msg, "type": "err"})
+
+        th = SyncThread(work)
+        th.done.connect(done)
+        th.failed.connect(failed)
+        self._sync.update(thread=th, running=True, progress="Spouštím…", error=None)
+        th.start()
+        return self.m_sync_status()
+
+    def m_sync_run(self, quiet=False):
+        return self._sync_start(lambda s: s.run(), quiet)
+
+    def m_sync_resolve(self, items):
+        return self._sync_start(lambda s: s.resolve(items))
 
     def m_pick_folder(self):
         return QFileDialog.getExistingDirectory(self.host.dialog_parent, "Složka se záznamy") or None

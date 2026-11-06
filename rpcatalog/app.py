@@ -205,6 +205,9 @@ class MainWindow(QMainWindow):
         if geo:
             self.restoreGeometry(QByteArray.fromBase64(geo.encode()))
         QTimer.singleShot(400, self.rescan)
+        if self.settings.get("sync_auto") and self.settings.get("sync_token"):
+            # automatická synchronizace s webovou Kronikou po startu
+            QTimer.singleShot(8000, lambda: self.api.m_sync_run(quiet=True))
         self.auto = QTimer(self, interval=5 * 60 * 1000)
         self.auto.timeout.connect(self.rescan)
         self.auto.start()

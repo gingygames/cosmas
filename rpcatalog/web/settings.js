@@ -30,6 +30,60 @@ function discordCard(s) {
     h('.faint.small', 'Jak na bota: discord.com/developers → New Application → Bot → zkopíruj token a zapni „Server Members Intent“ (a „Message Content Intent“ pro dopisy) → OAuth2 → URL Generator → scope „bot“ → pozvi bota na svůj server.'));
 }
 
+const SYNC_TYPES = { servers: 'Server', players: 'Hráč', factions: 'Frakce', characters: 'Postava', places: 'Místo', events: 'Událost',
+  entries: 'Zápis', letters: 'Dopis', media: 'Video', bookmarks: 'Záložka', attachments: 'Obrázek' };
+const SYNC_KINDS = { both: 'změněno tady i na webu', deleted_remote: 'na webu smazáno, tady změněno', deleted_local: 'tady smazáno, na webu změněno' };
+
+function webSyncCard() {
+  const box = h('.col', { style: { gap: '12px' } });
+  let timer = null;
+  const when = t => t ? new Date(t * 1000).toLocaleString('cs-CZ') : 'zatím nikdy';
+  const poll = () => { clearTimeout(timer); timer = setTimeout(() => box.isConnected && render(), 700); };
+  const run = async (method, args) => { await API.call(method, args).catch(() => null); render(); };
+  async function render() {
+    const st = await API.call('sync.status').catch(() => null);
+    if (!st) return;
+    const stop = e => e.stopPropagation();
+    const token = h('input.input', { type: 'password', placeholder: st.has_token ? `uložený: ${st.token} (vlož nový pro změnu)` : 'krt_…', onkeydown: stop,
+      onchange: async e => { const v = e.target.value.trim(); if (!v) return; await API.call('sync.set_token', { token: v }).then(() => toast('Token uložen')).catch(() => null); render(); } });
+    const url = h('input.input', { value: st.url, onkeydown: stop, onchange: e => run('sync.settings', { url: e.target.value.trim() }) });
+    const check = (key, label) => h('label.check', h('input', { type: 'checkbox', checked: !!st[key], onchange: e => run('sync.settings', { [key]: e.target.checked }) }), label);
+    const r = st.last_result || {};
+    const stats = st.last_sync ? [`odesláno ${r.sent || 0}`, `nahráno obrázků ${r.uploaded || 0}`, `smazáno na webu ${r.deleted_remote || 0}`,
+      `přijato ${r.received || 0}`, `nově z webu ${r.created_local || 0}`, `smazáno tady ${r.deleted_local || 0}`].join(' · ') : '';
+    clear(box).append(
+      h('.row.wrap', { style: { gap: '14px' } },
+        h('label.field', { style: { flex: '1 1 300px' } }, 'Osobní API token', token),
+        h('label.field', { style: { flex: '1 1 220px' } }, 'Adresa serveru', url)),
+      h('.row.wrap', { style: { gap: '18px' } },
+        check('letters', 'Posílat i holubí poštu (jen soukromě)'),
+        check('auto', 'Synchronizovat po startu aplikace')),
+      h('.row.wrap',
+        h('button.btn.primary', { disabled: st.running || !st.has_token, onclick: () => run('sync.run') }, icon('refresh-cw'), st.running ? 'Synchronizuji…' : 'Synchronizovat teď'),
+        h('a.btn.ghost', { href: st.token_url, title: 'Otevře web v prohlížeči – Nastavení → Synchronizace → Nový token' }, icon('key-round'), 'Získat token'),
+        st.has_token ? h('button.btn.ghost', { disabled: st.running, onclick: () => run('sync.set_token', { token: '' }) }, icon('x'), 'Odebrat token') : null),
+      st.running ? h('.small.muted', st.progress || 'Synchronizuji…') : null,
+      st.error ? h('.small', { style: { color: 'var(--danger)' } }, st.error) : null,
+      h('.small.muted', `Poslední synchronizace: ${when(st.last_sync)}${st.account ? ' · účet ' + st.account : ''}${st.published ? ` · na webu ${st.published} záznamů` : ''}`),
+      stats ? h('.small.faint', stats) : null,
+      ...(r.warnings || []).map(w => h('.small', { style: { color: 'var(--danger)' } }, w)),
+      st.conflicts.length ? h('.col', { style: { gap: '6px' } },
+        h('.small', { style: { color: 'var(--danger)' } }, `Konflikty (${st.conflicts.length}) – záznam se změnil tady i na webu, nic jsem nepřepsal:`),
+        ...st.conflicts.map(c => h('.list-row', { style: { background: 'var(--surface)', border: '1px solid var(--border)' } },
+          h('.grow', h('div.ellipsis', `${SYNC_TYPES[c.local_type] || c.local_type}: ${c.title || '#' + c.local_id}`),
+            h('.tiny.faint', SYNC_KINDS[c.kind] || c.kind)),
+          h('button.btn.sm', { disabled: st.running, onclick: () => run('sync.resolve', { items: [{ local_type: c.local_type, local_id: c.local_id, choice: 'mine' }] }) }, 'Ponechat můj (desktop)'),
+          h('button.btn.sm.ghost', { disabled: st.running, onclick: () => run('sync.resolve', { items: [{ local_type: c.local_type, local_id: c.local_id, choice: 'web' }] }) }, 'Vzít z webu'))),
+        st.conflicts.length > 1 ? h('.row',
+          h('button.btn.sm', { disabled: st.running, onclick: () => run('sync.resolve', { items: st.conflicts.map(c => ({ local_type: c.local_type, local_id: c.local_id, choice: 'mine' })) }) }, 'Všude ponechat můj'),
+          h('button.btn.sm.ghost', { disabled: st.running, onclick: () => run('sync.resolve', { items: st.conflicts.map(c => ({ local_type: c.local_type, local_id: c.local_id, choice: 'web' })) }) }, 'Všude vzít z webu')) : null) : null);
+    if (st.running) poll();
+  }
+  API.on('web-sync', () => box.isConnected && render());
+  render();
+  return box;
+}
+
 function importMembers(ms) {
   const have = new Set((App.players || []).map(p => p.discord_id).filter(Boolean));
   const sel = new Set();
@@ -91,6 +145,8 @@ Views.register('settings', {
         card('Vzhled', 'Mění se hned, bez ukládání.', appearanceSection()),
         card('Discord', 'Jména a avatary hráčů se tahají přes tvého bota na serveru. Token zůstává jen v tomto počítači (data/settings.json).',
           discordCard(s)),
+        card('Webová kronika', 'Synchronizace s gingygames.com/kronika: postavy, události, zápisy, frakce, místa, obrázky a videa nahraná na YouTube. Vše je na webu soukromé, dokud to tam sám nezveřejníš. Kontakty hráčů se nikdy neposílají.',
+          webSyncCard()),
         card('Složky se záznamy', 'Složky Medalu (obsahují Clips/, Databases/, Thumbnails/…). Databázi Medalu jen čtu, nikdy do ní nezapisuji.', rootsBox),
         card('Rozdělení záznamů', null,
           h('.row', { style: { gap: '30px' } },
