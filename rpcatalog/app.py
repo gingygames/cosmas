@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import traceback
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QByteArray
 from PySide6.QtGui import QColor, QCursor, QIcon
@@ -127,6 +128,7 @@ class MainWindow(QMainWindow):
         self.setStyleSheet("QMainWindow { background: #0d0f13; } QSplitter::handle { background: #1a1e25; }")
         self.settings = config.load_settings()
         self.store = Store(config.DB_PATH)
+        self.store.hide_test = not self.settings.get("show_test_data")
         self.scan_thread = None
         self.popout = None
         self.fs_temp = False
@@ -678,6 +680,60 @@ class MainWindow(QMainWindow):
         super().closeEvent(e)
 
 
+def _catalog_summary(path):
+    """'123 videos, 45 characters, 6 events' of a catalogue, read-only; '' when it can't be read."""
+    import shutil
+    import sqlite3
+    import tempfile
+    tmp = Path(tempfile.mkdtemp(prefix="kosmas-import-"))
+    try:      # counted on a copy: even a read-only SQLite open would create files next to the original
+        for suffix in ("", "-wal", "-shm"):
+            if (path / ("catalog.db" + suffix)).exists():
+                shutil.copy2(path / ("catalog.db" + suffix), tmp / ("catalog.db" + suffix))
+        db = sqlite3.connect(tmp / "catalog.db")
+        try:
+            n = {t: db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("media", "characters", "events")}
+        finally:
+            db.close()
+    except Exception:
+        return ""
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return ", ".join([i18n.trn(n["media"], "{n} video", "{n} videos"), i18n.trn(n["characters"], "{n} character", "{n} characters"),
+                      i18n.trn(n["events"], "{n} event", "{n} events")])
+
+
+def offer_import():
+    """First start of an installed copy: an existing catalogue (source checkout / portable copy) can be copied in."""
+    for src in config.import_candidates():
+        info = _catalog_summary(src)
+        box = QMessageBox(QMessageBox.Icon.Question, tr("Existing catalogue found"),
+                          tr("Kosmas found a catalogue from an earlier copy of the app:\n{path}\n{info}\n\n"
+                             "Copy it into this installation? The original folder stays exactly as it is.",
+                             path=src, info=info))
+        yes = box.addButton(tr("Copy the catalogue"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("Start with an empty catalogue"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(yes)
+        box.exec()
+        if box.clickedButton() is not yes:
+            continue
+        try:
+            config.import_data(src)
+            return
+        except Exception as e:
+            traceback.print_exc()
+            QMessageBox.warning(None, tr("Existing catalogue found"),
+                                tr("The catalogue could not be copied ({error}). Kosmas starts with an empty catalogue; "
+                                   "the original folder was not changed.", error=e))
+            return
+    if not config.DB_PATH.exists() and config.import_candidates():
+        try:                       # declined: don't ask on every start
+            config.USER_DIR.mkdir(parents=True, exist_ok=True)
+            config.IMPORT_DECLINED.write_text("declined\n", "utf-8")
+        except OSError:
+            pass
+
+
 def main():
     if os.name == "nt":
         try:   # own taskbar button with our icon, grouped with the Start-menu shortcut (same AppUserModelID)
@@ -693,6 +749,7 @@ def main():
     app.setApplicationDisplayName("Kosmas")
     app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyle("Fusion")
+    offer_import()
     import locale
     locale.setlocale(locale.LC_NUMERIC, "C")  # mpv requires C numeric locale
     w = MainWindow()
