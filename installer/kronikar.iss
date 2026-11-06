@@ -7,7 +7,7 @@
 ; /RELAUNCH starts the app again after a silent install.
 
 #ifndef AppVer
-  #define AppVer "1.2.0"
+  #define AppVer "1.2.1"
 #endif
 #ifndef AppNumVer
   #define AppNumVer AppVer

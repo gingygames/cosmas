@@ -3,6 +3,7 @@
     python installer/release.py                 # version from rpcatalog/__init__.py, prints the gh command
     python installer/release.py --draft         # as a draft release
     python installer/release.py --notes NOTES.md --prerelease
+    python installer/release.py --notes installer/release-notes-1.2.1.md --title "Cosmas 1.2.1 Beta"
     python installer/release.py --run           # really create it (needs gh, signed in to gingygames/cosmas)
 
 Uploads build/Cosmas-Setup-<ver>.exe and its .sha256 (made by installer/build.py). Release notes: --notes FILE, or
@@ -40,6 +41,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--version", help="default: rpcatalog/__init__.py")
     ap.add_argument("--notes", help="Markdown file with the release notes")
+    ap.add_argument("--title", help='release title (default: "Cosmas <version>"), e.g. "Cosmas 1.2.1 Beta"')
     ap.add_argument("--draft", action="store_true")
     ap.add_argument("--prerelease", action="store_true")
     ap.add_argument("--run", action="store_true", help="run gh instead of only printing the command")
@@ -62,7 +64,7 @@ def main():
         notes.write_text(TEMPLATE.format(ver=ver, sha=digest), "utf-8")
         print(f"wrote a notes template: {notes} – edit it before publishing")
     cmd = ["gh", "release", "create", f"v{ver}", str(exe), str(sha_file), "--repo", REPO,
-           "--title", f"Cosmas {ver}", "--notes-file", str(notes)]
+           "--title", a.title or f"Cosmas {ver}", "--notes-file", str(notes)]
     if a.draft:
         cmd.append("--draft")
     if a.prerelease or "-" in ver:

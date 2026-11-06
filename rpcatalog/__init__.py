@@ -1,5 +1,5 @@
 """Cosmas (formerly Kronikář) – catalogue of game recordings for RP."""
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 
 def _optional_libs():
