@@ -3,7 +3,7 @@
 <p align="center"><img src="docs/img/banner-cs.png" alt="Kosmas – kronika tvých RP večerů" width="100%"></p>
 
 <p align="center">
-  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Stáhnout pro Windows</b></a> ·
+  <a href="https://github.com/gingygames/cosmas/releases/latest"><b>⬇ Stáhnout pro Windows</b></a> ·
   <a href="https://cosmas.gingygames.com">Web</a> · <a href="https://gingygames.com/kosmas/">Webová kronika</a> ·
   <a href="#instalace">Instalace</a> · <a href="#přihlášení-a-synchronizace-s-webem">Synchronizace</a> ·
   <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#soukromí">Soukromí</a> · <a href="#sestavení-ze-zdrojových-kódů">Ze zdrojových kódů</a>
@@ -34,7 +34,7 @@ Rozhraní je anglicky, nebo česky, když máš Windows v češtině či sloven�
 ## Stažení
 > **Kosmas 1.2.0 je beta.** Je připravený na běžné používání, ale cokoli divného prosím nahlas přes **?** → *Nahlásit chybu* v záhlaví okna.
 
-Stáhni **Cosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
+Stáhni **Cosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://github.com/gingygames/cosmas/releases/latest)
 (odkaz je i na [cosmas.gingygames.com](https://cosmas.gingygames.com)). U každého vydání je vedle instalátoru soubor `.sha256`. 64bitové Windows 10 (1809 a novější) nebo Windows 11.
 
 ## Instalace
@@ -323,5 +323,5 @@ libmpv (mpv), FFmpeg (GPL build), Qt/PySide6 (LGPL), ikony Lucide (ISC).
 ## Odkazy
 - Web: https://cosmas.gingygames.com
 - Webová kronika: https://gingygames.com/kosmas/
-- Stažení: https://github.com/gingygames/kosmas/releases/latest
-- Chyby a nápady: https://github.com/gingygames/kosmas/issues
+- Stažení: https://github.com/gingygames/cosmas/releases/latest
+- Chyby a nápady: https://github.com/gingygames/cosmas/issues

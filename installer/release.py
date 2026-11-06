@@ -3,7 +3,7 @@
     python installer/release.py                 # version from rpcatalog/__init__.py, prints the gh command
     python installer/release.py --draft         # as a draft release
     python installer/release.py --notes NOTES.md --prerelease
-    python installer/release.py --run           # really create it (needs gh, signed in to gingygames/kosmas)
+    python installer/release.py --run           # really create it (needs gh, signed in to gingygames/cosmas)
 
 Uploads build/Cosmas-Setup-<ver>.exe and its .sha256 (made by installer/build.py). Release notes: --notes FILE, or
 build/release-notes-<ver>.md is written from the template below for you to edit first. The web's update endpoint
@@ -22,7 +22,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 from build import BUILD, installer_path, version  # noqa: E402
 
-REPO = "gingygames/kosmas"
+REPO = "gingygames/cosmas"
 TEMPLATE = """## Cosmas {ver}
 
 ### New
