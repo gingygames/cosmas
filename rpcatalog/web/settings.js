@@ -10,9 +10,26 @@ function discordCard(s) {
   const inp = (key, ph, type = 'text') => h('input.input', { type, value: s[key] || '', placeholder: ph, onkeydown: e => e.stopPropagation(),
     onchange: e => { s[key] = e.target.value.trim(); App.settings[key] = s[key]; API.call('settings.set', { values: { [key]: s[key], _rescan: false } }); } });
   const out = h('.small.muted');
+  /* the token never comes back from Python (only discord_token_set); typing a new one saves it, Remove deletes it */
+  const tokenBox = h('.row', { style: { gap: '6px' } });
+  const renderToken = () => {
+    const saved = !!(s.discord_token_set || s.discord_token);
+    const save = async v => {
+      try { await API.call('settings.set', { values: { discord_token: v, _rescan: false } }); } catch (err) { return; }
+      s.discord_token_set = !!v; delete s.discord_token;
+      if (v) toast(tr('Token saved'));
+      renderToken();
+    };
+    clear(tokenBox).append(
+      h('input.input', { type: 'password', value: '', autocomplete: 'off', style: { flex: '1' }, onkeydown: e => e.stopPropagation(),
+        placeholder: saved ? tr('Saved – paste a new token to replace it') : tr('from the Discord Developer Portal → Bot → Token'),
+        onchange: e => { const v = e.target.value.trim(); if (v) save(v); } }),
+      saved ? h('button.btn.sm.ghost', { type: 'button', onclick: () => save('') }, icon('x'), tr('Remove')) : null);
+  };
+  renderToken();
   return h('.col', { style: { gap: '10px' } },
     h('.row.wrap', { style: { gap: '14px' } },
-      h('label.field', { style: { flex: '1 1 300px' } }, tr('Bot token'), inp('discord_token', tr('from the Discord Developer Portal → Bot → Token'), 'password')),
+      h('label.field', { style: { flex: '1 1 300px' } }, tr('Bot token'), tokenBox),
       h('label.field', tr('Server ID (optional)'), inp('discord_guild', tr('right-click the server → Copy ID'))),
       h('label.field', tr('Letters channel ID'), inp('discord_channel', tr('optional'))),
       h('label.field', tr('Word for letters'), inp('holub_marker', 'holub'))),
@@ -102,7 +119,12 @@ function webSyncCard() {
     const stop = e => e.stopPropagation();
     const token = h('input.input', { type: 'password', placeholder: st.has_token ? tr('saved: {token} (paste a new one to change it)', { token: st.token }) : 'krt_…', onkeydown: stop, autocomplete: 'off',
       onchange: async e => { const v = e.target.value.trim(); if (!v) return; await API.call('sync.set_token', { token: v }).then(() => toast(tr('Token saved'))).catch(() => null); render(); } });
-    const url = h('input.input', { value: st.url, onkeydown: stop, onchange: e => run('sync.settings', { url: e.target.value.trim() }) });
+    // another server signs this PC out (Python drops the token) – ask first, then show the sign-in state again
+    const url = h('input.input', { value: st.url, onkeydown: stop, onchange: async e => {
+      const v = e.target.value.trim();
+      if (st.has_token && v !== st.url && !await confirmDialog(tr('Server address'), tr('Changing the server signs you out on this PC.'), { okLabel: tr('Change') })) { e.target.value = st.url; return; }
+      run('sync.settings', { url: v });
+    } });
     const check = (key, label) => h('label.check', h('input', { type: 'checkbox', checked: !!st[key], onchange: e => run('sync.settings', { [key]: e.target.checked }) }), label);
     const r = st.last_result || {};
     const stats = st.last_sync ? [tr('sent {n}', { n: r.sent || 0 }), tr('images uploaded {n}', { n: r.uploaded || 0 }), tr('deleted on the web {n}', { n: r.deleted_remote || 0 }),

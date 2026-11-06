@@ -2493,5 +2493,12 @@ window.I18N_CS = {
  ],
  "Not saved: {error}": "Neuloženo: {error}",
  "Support Cosmas": "Podpořit Kosmas",
- "Opens in your browser": "Otevře se v prohlížeči"
+ "Opens in your browser": "Otevře se v prohlížeči",
+ "This copy wasn't installed with the installer, so it can't update itself. Download the new version from the download page.": "Tahle kopie nebyla nainstalovaná instalátorem, takže se nemůže sama aktualizovat. Novou verzi si stáhni ze stránky ke stažení.",
+ "{app} is already running. If you can't see its window, look for its icon in the notification area.": "{app} už běží. Pokud nevidíš jeho okno, hledej jeho ikonu v oznamovací oblasti.",
+ "Only images from the web (http, https) can be loaded here.": "Sem jde načíst jen obrázek z webu (http, https).",
+ "Other games": "Ostatní",
+ "clip": "klip",
+ "Saved – paste a new token to replace it": "Uložený – nový token sem vlož, pokud ho chceš nahradit",
+ "Changing the server signs you out on this PC.": "Změna serveru tě na tomhle počítači odhlásí."
 };

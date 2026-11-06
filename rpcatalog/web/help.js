@@ -71,6 +71,8 @@ const Updates = {
           : st.state === 'error' && !avail ? h('span', { style: { color: 'var(--danger)' } }, st.error || tr('Update check failed'))
           : tr('You have the latest version ({version}).', { version: st.current })),
         h('.tiny.faint', tr('Installed: {version}', { version: st.current }))));
+      // e.g. an unpacked copy that was not installed with the installer and cannot update itself
+      if (st.note) rows.push(h('.small.muted', icon('info'), ' ', String(st.note)));
       if (avail) {
         const meta = [info.published_at ? new Date(info.published_at).toLocaleDateString(I18N.locale) : null, info.size ? fmtBytes(info.size) : null,
           info.sha256 ? tr('SHA-256 published') : tr('no SHA-256 published')].filter(Boolean).join(' · ');
