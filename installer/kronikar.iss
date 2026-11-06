@@ -30,8 +30,8 @@ AppVersion={#AppVer}
 AppVerName={cm:AppName}{#NameSuffix} {#AppVer}
 AppPublisher=gingygames
 AppPublisherURL=https://cosmas.gingygames.com
-AppSupportURL=https://github.com/gingygames/kosmas/issues
-AppUpdatesURL=https://github.com/gingygames/kosmas/releases/latest
+AppSupportURL=https://github.com/gingygames/cosmas/issues
+AppUpdatesURL=https://github.com/gingygames/cosmas/releases/latest
 VersionInfoVersion={#AppNumVer}
 VersionInfoProductName=Cosmas
 ; folder, file and data names stay "Kronikar" so updates over older installs keep working

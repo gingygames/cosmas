@@ -1959,8 +1959,8 @@ class Api(QObject):
         return {"name": i18n.app_name(), "version": __version__, "dev": config.IS_DEV, "data_dir": str(config.DATA_DIR),
                 "install_dir": str(config.APP_DIR.parent) if not config.IS_DEV else str(config.APP_DIR),
                 "site": "https://cosmas.gingygames.com", "web": "https://gingygames.com/kosmas/",
-                "repo": "https://github.com/gingygames/kosmas", "issues": "https://github.com/gingygames/kosmas/issues",
-                "releases": "https://github.com/gingygames/kosmas/releases"}
+                "repo": "https://github.com/gingygames/cosmas", "issues": "https://github.com/gingygames/cosmas/issues",
+                "releases": "https://github.com/gingygames/cosmas/releases"}
 
     def _updates(self):
         u = getattr(self.host, "updates", None)

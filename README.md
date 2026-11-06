@@ -3,7 +3,7 @@
 <p align="center"><img src="docs/img/banner.png" alt="Cosmas – the chronicle of your roleplay nights" width="100%"></p>
 
 <p align="center">
-  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Download for Windows</b></a> ·
+  <a href="https://github.com/gingygames/cosmas/releases/latest"><b>⬇ Download for Windows</b></a> ·
   <a href="https://cosmas.gingygames.com">Website</a> · <a href="https://gingygames.com/kosmas/">Web chronicle</a> ·
   <a href="#install">Install</a> · <a href="#sign-in-and-sync-with-the-web">Sync</a> ·
   <a href="#ai-on-your-pc-or-a-paid-service">AI</a> · <a href="#privacy">Privacy</a> · <a href="#build-from-source">Build from source</a>
@@ -33,7 +33,7 @@ English / Čeština). In English the app is called Cosmas, in Czech Kosmas – t
 <sub>Screenshots use made-up demo data.</sub>
 
 ## Download
-Get **Cosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
+Get **Cosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://github.com/gingygames/cosmas/releases/latest)
 (also linked from [cosmas.gingygames.com](https://cosmas.gingygames.com)). Each release has a `.sha256` file next to the installer. 64-bit Windows 10 (1809 or newer) or Windows 11.
 
 ## Install
@@ -318,5 +318,5 @@ licences: libmpv (mpv), FFmpeg (GPL build), Qt/PySide6 (LGPL), Lucide icons (ISC
 ## Links
 - Website: https://cosmas.gingygames.com
 - Web chronicle: https://gingygames.com/kosmas/
-- Download: https://github.com/gingygames/kosmas/releases/latest
-- Issues and ideas: https://github.com/gingygames/kosmas/issues
+- Download: https://github.com/gingygames/cosmas/releases/latest
+- Issues and ideas: https://github.com/gingygames/cosmas/issues

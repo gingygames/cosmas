@@ -406,7 +406,7 @@ Views.register('settings', {
         Updates.panel({ notes: false }),
         h('.row.wrap', { style: { gap: '6px' } },
           link(info.site || 'https://cosmas.gingygames.com', tr('Website'), 'globe'), link(info.web || 'https://gingygames.com/kosmas/', tr('Web chronicle')),
-          link(info.repo || 'https://github.com/gingygames/kosmas', 'GitHub'), link(info.issues || 'https://github.com/gingygames/kosmas/issues', tr('Issues and ideas')),
+          link(info.repo || 'https://github.com/gingygames/cosmas', 'GitHub'), link(info.issues || 'https://github.com/gingygames/cosmas/issues', tr('Issues and ideas')),
           h('button.btn.sm.ghost', { onclick: () => feedbackDialog() }, icon('message-square-warning'), tr('Send feedback'))),
         h('.small.faint', tr('Licence: no licence is granted for the code yet. Bundled components keep their own licences: libmpv (mpv, LGPL/GPL), FFmpeg (GPL build), Qt / PySide6 (LGPL), Lucide icons (ISC).'))));
 

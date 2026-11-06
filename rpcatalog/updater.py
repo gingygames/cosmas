@@ -3,7 +3,7 @@
 Where the newest version comes from:
   1. https://gingygames.com/kosmas/api/app/latest[?channel=beta]
      {version, tag, published_at, url, size, sha256, notes_md, notes_url}
-  2. if that fails: the GitHub API (repos/gingygames/kosmas/releases/latest, or the newest release incl. pre-releases
+  2. if that fails: the GitHub API (repos/gingygames/cosmas/releases/latest, or the newest release incl. pre-releases
      for the beta channel); the SHA-256 comes from the asset's digest or from the <installer>.sha256 asset.
 KOSMAS_UPDATE_URL overrides (1) – used by tests and a local fake server.
 
@@ -24,8 +24,8 @@ from pathlib import Path
 from . import __version__, config
 
 LATEST_URL = "https://gingygames.com/kosmas/api/app/latest"
-GITHUB_API = "https://api.github.com/repos/gingygames/kosmas"
-RELEASES_PAGE = "https://github.com/gingygames/kosmas/releases"
+GITHUB_API = "https://api.github.com/repos/gingygames/cosmas"
+RELEASES_PAGE = "https://github.com/gingygames/cosmas/releases"
 UPDATES_DIR = config.DATA_DIR / "updates"
 PENDING = UPDATES_DIR / "pending.json"
 CHECK_EVERY = 12 * 3600

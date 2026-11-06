@@ -42,7 +42,7 @@ class VersionTest(unittest.TestCase):
 
 SHA = "ab" * 32
 ENDPOINT = {"version": "1.2.0", "tag": "v1.2.0", "published_at": "2026-11-06T10:00:00Z",
-            "url": "https://github.com/gingygames/kosmas/releases/download/v1.2.0/Cosmas-Setup-1.2.0.exe",
+            "url": "https://github.com/gingygames/cosmas/releases/download/v1.2.0/Cosmas-Setup-1.2.0.exe",
             "size": 123, "sha256": SHA.upper(), "notes_md": "- new", "notes_url": "https://cosmas.gingygames.com/changelog"}
 GH_RELEASE = {"tag_name": "v1.3.0", "published_at": "2026-12-01T00:00:00Z", "html_url": "https://github.com/x/releases/v1.3.0",
               "body": "notes", "draft": False, "prerelease": False,
