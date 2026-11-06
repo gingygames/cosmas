@@ -2,6 +2,7 @@
 
 Everything runs in temporary folders; the module-level paths of rpcatalog.config are patched per test.
 """
+import json
 import os
 import shutil
 import sqlite3
@@ -132,6 +133,69 @@ class DataDirTest(unittest.TestCase):
         self.assertEqual(config.import_candidates(), [self.dev])
         config.IMPORT_DECLINED.write_text("declined", "utf-8")
         self.assertEqual(config.import_candidates(), [])
+
+    def test_import_while_the_log_is_open(self):
+        """First start of an installed copy: the log (logs/cosmas.log) is open before the import is offered.
+        On Windows an open file can't be moved aside – the import used to fail and leave an empty catalogue."""
+        import logging
+        _catalog(self.dev, n_chars=2)
+        (self.dev / "logs").mkdir()
+        (self.dev / "logs" / "cosmas.log").write_text("log of the old copy\n", "utf-8")
+        self.patch(data_dir=self.user)
+        (self.user / "logs").mkdir(parents=True)
+        fh = logging.FileHandler(self.user / "logs" / "cosmas.log", encoding="utf-8")   # held open like applog's
+        self.addCleanup(fh.close)
+        fh.emit(logging.makeLogRecord({"msg": "this start"}))
+        config.import_data(self.dev)
+        db = sqlite3.connect(self.user / "catalog.db")
+        self.assertEqual(db.execute("SELECT COUNT(*) FROM characters").fetchone()[0], 2)
+        db.close()
+        fh.flush()
+        self.assertEqual((self.user / "logs" / "cosmas.log").read_text("utf-8"), "this start\n")   # stays, not overwritten
+        self.assertEqual(list(self.user.glob("backup-before-import-*")), [])     # nothing else was there
+
+    def test_import_gets_its_own_sync_identity(self):
+        """The original may keep syncing: the copy must not write the same records on the web as the same database."""
+        from rpcatalog import sync
+        _catalog(self.dev)
+        db = sqlite3.connect(self.dev / "catalog.db")
+        sync.ensure_schema(db)
+        for k, v in (("db_uuid", "orig-uuid"), ("last_sync", 1700000000), ("account", "123"), ("id_offset", 5000)):
+            db.execute("INSERT INTO sync_state (key, value) VALUES (?, ?)", (k, json.dumps(v)))
+        db.execute("INSERT INTO published (local_type, local_id, remote_id, rev, hash) VALUES ('characters', 1, 77, 2, 'h')")
+        db.execute("INSERT INTO published_links (src, remote_id, hash) VALUES ('character_links:1', 9, 'h')")
+        db.commit()
+        db.close()
+        (self.dev / "settings.json").write_text(json.dumps({"lang": "en", "sync_token": "krt_secret", "sync_user": "Jan",
+                                                            "sync_auto": True, "sync_url": "https://gingygames.com"}), "utf-8")
+        self.patch(data_dir=self.user)
+        config.import_data(self.dev)
+        db = sqlite3.connect(self.user / "catalog.db")
+        state = {k: json.loads(v) for k, v in db.execute("SELECT key, value FROM sync_state")}
+        self.assertNotIn("db_uuid", state)               # a new one at the first sync -> the pairing question
+        self.assertNotIn("last_sync", state)
+        self.assertEqual((state["account"], state["id_offset"]), ("123", 5000))     # "pair by id" still matches
+        self.assertEqual(db.execute("SELECT COUNT(*) FROM published").fetchone()[0], 0)
+        self.assertEqual(db.execute("SELECT COUNT(*) FROM published_links").fetchone()[0], 0)
+        db.close()
+        s = json.loads((self.user / "settings.json").read_text("utf-8"))
+        self.assertNotIn("sync_token", s)                # signs in on its own
+        self.assertNotIn("sync_user", s)
+        self.assertEqual((s["sync_auto"], s["lang"]), (True, "en"))
+        src = json.loads((self.dev / "settings.json").read_text("utf-8"))
+        self.assertEqual(src["sync_token"], "krt_secret")   # the original keeps everything
+
+    # ---- speech language for new settings
+    def test_ai_language_default_follows_the_ui(self):
+        self.patch(data_dir=self.user)
+        self.user.mkdir(parents=True)
+        for lang, want in (("en", ""), ("cs", "cs")):
+            config.SETTINGS_PATH.write_text(json.dumps({"lang": lang}), "utf-8")
+            self.assertEqual(config.load_settings()["ai_language"], want, lang)
+        config.SETTINGS_PATH.write_text(json.dumps({"lang": "en", "ai_language": "cs"}), "utf-8")
+        self.assertEqual(config.load_settings()["ai_language"], "cs")           # an explicit choice stays
+        config.SETTINGS_PATH.write_text(json.dumps({"lang": "cs", "ai_language": ""}), "utf-8")
+        self.assertEqual(config.load_settings()["ai_language"], "")
 
 
 if __name__ == "__main__":

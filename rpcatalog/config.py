@@ -10,6 +10,19 @@ USER_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Loc
 _DEV_DATA = APP_DIR / "data"
 # A source checkout keeps its data next to the code (as it always did); an installed copy uses USER_DIR.
 IS_DEV = _DEV_DATA.exists() or (APP_DIR / ".git").exists()
+
+
+def _is_installed(app_dir=APP_DIR):
+    """The installer's layout: <folder>\\Kronikar.exe (launcher) and unins000.exe next to app\\ (this code). A copy
+    unpacked anywhere else (e.g. a ZIP in Downloads) is not installed and must never run the installer over its folder."""
+    root = app_dir.parent
+    try:
+        return app_dir.name.lower() == "app" and (root / "Kronikar.exe").is_file() and any(root.glob("unins*.exe"))
+    except OSError:
+        return False
+
+
+IS_INSTALLED = not IS_DEV and _is_installed()
 DATA_DIR = Path(os.environ["KRONIKAR_DATA"]) if os.environ.get("KRONIKAR_DATA") else (_DEV_DATA if IS_DEV else USER_DIR)
 THUMB_DIR = DATA_DIR / "thumbs"
 DB_PATH = DATA_DIR / "catalog.db"
@@ -19,8 +32,13 @@ VENDOR_DIR = APP_DIR / "vendor"
 PYLIBS_DIR = DATA_DIR / "pylibs"
 DEV_POINTER = USER_DIR / "last_dev_data.txt"
 # What moves from a source checkout's data folder into a fresh install (temporary files stay behind)
-_MIGRATE_SKIP = {"tmp", "pylibs", "catalog.db", "catalog.db-wal", "catalog.db-shm", "catalog.db.tmp"}
+_MIGRATE_SKIP = {"tmp", "pylibs", "catalog.db", "catalog.db-wal", "catalog.db-shm", "catalog.db.tmp",
+                 "logs", "updates", "restore-pending.json", "import-raw"}
 _MIGRATE_SKIP_FILES = {"pause.flag", "skip.flag", "queue.json", "queue.tmp", "worker.json"}
+# Made by this start of the app before the import is offered (the log file is open): never moved aside
+_IMPORT_LEAVE = {"logs"}
+# The copy gets its own identity for the web sync (see _forget_sync): these keys of sync_state go
+_SYNC_STATE_DROP = ("db_uuid", "last_sync", "last_result")
 
 
 def should_write_pointer():
@@ -79,7 +97,7 @@ def import_data(src):
     DATA_DIR already holds is first moved aside into backup-before-import-<time>/."""
     src = Path(src)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    keep = {DEV_POINTER.name, IMPORT_DECLINED.name}
+    keep = {DEV_POINTER.name, IMPORT_DECLINED.name} | _IMPORT_LEAVE
     existing = [p for p in DATA_DIR.iterdir() if p.name not in keep and not p.name.startswith("backup-before-import-")
                 and not (p.is_dir() and not any(p.iterdir()))]
     if existing:
@@ -130,6 +148,7 @@ def _import_data(src):
                 for old, new in pairs:
                     db.execute(f'UPDATE "{table}" SET "{col[1]}" = REPLACE("{col[1]}", ?, ?) WHERE "{col[1]}" LIKE ?',
                                (old, new, f"%{old}%"))
+    _forget_sync(db)
     db.execute("PRAGMA journal_mode=DELETE")    # one file to move; the app switches WAL on again
     db.close()
     os.replace(tmp, DB_PATH)
@@ -137,7 +156,28 @@ def _import_data(src):
         txt = SETTINGS_PATH.read_text("utf-8")
         for old, new in pairs:
             txt = txt.replace(json.dumps(old)[1:-1], json.dumps(new)[1:-1])
+        try:      # the copy signs in on its own (the original keeps its token and its device on the web)
+            s = json.loads(txt)
+            if isinstance(s, dict) and ("sync_token" in s or "sync_user" in s):
+                s.pop("sync_token", None)
+                s.pop("sync_user", None)
+                txt = json.dumps(s, ensure_ascii=False, indent=2)
+        except ValueError:
+            pass
         SETTINGS_PATH.write_text(txt, "utf-8")
+
+
+def _forget_sync(db):
+    """The original may keep syncing: if the copy used the same database id and record map, both would write the
+    same records on the web. The copy gets a new id at its first sync and, as an unknown database, goes through the
+    pairing choice (sync.Syncer.check_database). id_offset and the account stay, so "pair by id" still matches."""
+    tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    with db:
+        for t in ("published", "published_links", "sync_conflicts"):
+            if t in tables:
+                db.execute(f"DELETE FROM {t}")
+        if "sync_state" in tables:
+            db.execute(f"DELETE FROM sync_state WHERE key IN ({','.join('?' * len(_SYNC_STATE_DROP))})", _SYNC_STATE_DROP)
 
 DEFAULTS = {
     # Folders that contain Medal recordings (each may have Clips/, Databases/, Thumbnails/)
@@ -168,7 +208,7 @@ DEFAULTS = {
     "ai_text_provider": "ollama",
     "ai_whisper_device": "auto",     # auto | cpu
     "ai_whisper_model": "",
-    "ai_language": "cs",
+    "ai_language": "",               # cs | sk | en | "" = detect; new settings: default_ai_language()
     "ai_batch_size": 16,
     "ai_beam_size": 5,
     "ai_vad_threshold": 0.5,
@@ -268,14 +308,34 @@ def default_roots():
     return roots
 
 
+def default_ai_language(lang_pref="auto"):
+    """Speech language for settings that don't have one yet: Czech (Slovak on a Slovak system) when the UI is Czech,
+    otherwise "" – Whisper detects the language (an English UI says nothing about what people speak)."""
+    from . import i18n
+    if i18n.resolve(lang_pref or "auto") != "cs":
+        return ""
+    if lang_pref == "auto":
+        try:
+            from PySide6.QtCore import QLocale
+            if QLocale.system().name().lower().startswith("sk"):
+                return "sk"
+        except Exception:
+            pass
+    return "cs"
+
+
 def load_settings():
     ensure_dirs()
     s = dict(DEFAULTS)
+    saved = {}
     if SETTINGS_PATH.exists():
         try:
-            s.update(json.loads(SETTINGS_PATH.read_text("utf-8")))
-        except (OSError, ValueError):
-            pass
+            saved = json.loads(SETTINGS_PATH.read_text("utf-8"))
+            s.update(saved)
+        except (OSError, ValueError, TypeError):
+            saved = {}
+    if not isinstance(saved, dict) or "ai_language" not in saved:
+        s["ai_language"] = default_ai_language(s.get("lang"))
     if not s["roots"]:
         s["roots"] = default_roots()
     return s

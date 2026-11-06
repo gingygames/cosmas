@@ -395,3 +395,12 @@ input[type=color] { width: 34px; height: 34px; padding: 0; border: 0; background
   white-space: pre-wrap; word-break: break-word; color: var(--text-2); user-select: text; }
 .crash-bar { position: fixed; right: 18px; bottom: 18px; z-index: 310; display: flex; align-items: center; gap: 10px; max-width: 560px;
   padding: 10px 12px 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--danger); box-shadow: var(--shadow); font-size: 13px; }
+/* dialogs: the box itself takes focus when it has no field (screen readers announce it); busy action button */
+.modal:focus { outline: none; }
+.modal footer .btn[aria-busy="true"] { cursor: progress; }
+
+/* less motion when the system asks for it: no transitions or animations that are only decoration */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+}

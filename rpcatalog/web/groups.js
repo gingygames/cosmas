@@ -106,7 +106,9 @@ const CONF = {
 
 function makeView(kind) {
   const C = CONF[kind];
-  let root, list = [], cur = null, editing = false, q = '', editor = null, unsub = [];
+  let root, list = [], cur = null, editing = false, q = '', editor = null, unsub = [], formSave = null, openTok = 0;
+  /* unsaved notes and form fields are saved to their own record before switching or reloading */
+  function flushEdits() { if (editor) editor.flush(); if (formSave) formSave.flush(); }
 
   async function loadList() { list = await API.call(C.list); App[kind] = list; }
   function img(g, size = 34, cls = '.gp-ico') {
@@ -154,10 +156,12 @@ function makeView(kind) {
   }
 
   async function open(id) {
-    if (editor) { editor.flush(); editor = null; }
+    flushEdits(); editor = null;
     App.ui[kind + 'Id'] = id; App.saveUi();
-    cur = await API.call(C.get, { id });
-    if (!root) return;
+    const tok = ++openTok;
+    const g = await API.call(C.get, { id });
+    if (!root || tok !== openTok) return;
+    cur = g;
     renderRows(); renderDetail();
   }
 
@@ -176,9 +180,10 @@ function makeView(kind) {
     ]);
   }
 
-  async function refresh() { await loadList(); await App.loadChars(); if (cur) open(cur.id); }
+  async function refresh() { flushEdits(); await loadList(); await App.loadChars(); if (cur) open(cur.id); }
 
   function renderDetail() {
+    if (editor) { editor.flush(); editor = null; }
     const d = $('.gp-detail', root); clear(d);
     if (!cur) { d.appendChild(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } }, emptyState(C.icon, list.length ? tr('Select on the left') : tr('Nothing yet'), C.empty, h('button.btn.primary', { onclick: create }, icon('plus'), C.newLabel)))); return; }
     const g = cur;
@@ -236,7 +241,7 @@ function makeView(kind) {
       left.append(window.mentionsSection(kind === 'places' ? 'place' : 'faction', g.id));
     left.append(h('.section-title', tr('History and notes')));
     editor = RichEditor({ html: g.body_html || '', placeholder: tr('History, seat, goals, allies and enemies… (@ for a character)'), ownerType: C.owner, ownerId: g.id, minHeight: 180,
-      onChange: html => API.call(C.update, { id: g.id, body_html: html }) });
+      onChange: html => { g.body_html = html; return API.call(C.update, { id: g.id, body_html: html }); } });
     left.appendChild(editor.el);
     const right = h('div');
     if (kind === 'factions') right.append(...holdingsSection(g));
@@ -333,11 +338,20 @@ function makeView(kind) {
     const parent = g.parent_id && list.find(p => p.id === g.parent_id);
     return h('.row', h('span.chip' + (parent ? '.on' : ''), parent ? parent.name : '—'),
       h('button.btn.sm', { onclick: async () => { const id = await pickPlace(tr('Where is the place?')); if (id && id !== g.id) { g.parent_id = id; save({ parent_id: id }); setTimeout(renderDetail, 350); } } }, tr('Select')),
-      parent ? h('button.btn.sm.ghost.icon', { onclick: () => { g.parent_id = null; save({ parent_id: null }); renderDetail(); } }, icon('x')) : null);
+      parent ? h('button.btn.sm.ghost.icon', { title: tr('Remove'), 'aria-label': tr('Remove'), onclick: () => { g.parent_id = null; save({ parent_id: null }); renderDetail(); } }, icon('x')) : null);
   }
 
   function editForm(g) {
-    const save = debounce(fields => API.call(C.update, { id: g.id, ...fields }).then(loadList).then(renderRows), 300);
+    // quick changes of several fields are merged into one update of this record (a plain debounce kept only the last)
+    if (formSave) formSave.flush();
+    let pend = {};
+    const push = debounce(() => {
+      const fields = pend; pend = {};
+      if (!Object.keys(fields).length) return;
+      return API.call(C.update, { id: g.id, ...fields }).then(loadList).then(renderRows);
+    }, 300);
+    const save = fields => { Object.assign(pend, fields); push(); };
+    formSave = push;
     const inp = (key, ph) => h('input.input', { value: g[key] || '', placeholder: ph, onkeydown: e => e.stopPropagation(), oninput: e => { g[key] = e.target.value; save({ [key]: e.target.value }); } });
     const sw = h('.row', { style: { gap: '6px' } }, PALETTE.map(col => h('span', {
       style: { width: '22px', height: '22px', borderRadius: '50%', background: col, cursor: 'pointer', outline: g.color === col ? '2px solid var(--text)' : 'none', outlineOffset: '2px' },
@@ -370,7 +384,7 @@ function makeView(kind) {
       if (id && list.some(g => g.id === id)) open(id); else renderDetail();
       unsub = [App.on('chars', () => { if (cur && !editing) renderDetail(); })];
     },
-    unmount() { if (editor) editor.flush(); unsub.forEach(f => f()); unsub = []; root = null; },
+    unmount() { flushEdits(); editor = null; formSave = null; unsub.forEach(f => f()); unsub = []; root = null; },
   };
 }
 

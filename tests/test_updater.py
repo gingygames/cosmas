@@ -11,7 +11,7 @@ import urllib.error
 from pathlib import Path
 from unittest import mock
 
-from rpcatalog import updater
+from rpcatalog import config, updater
 
 
 class VersionTest(unittest.TestCase):
@@ -42,7 +42,7 @@ class VersionTest(unittest.TestCase):
 
 SHA = "ab" * 32
 ENDPOINT = {"version": "1.2.0", "tag": "v1.2.0", "published_at": "2026-11-06T10:00:00Z",
-            "url": "https://github.com/gingygames/kosmas/releases/download/v1.2.0/Cosmas-Setup-1.2.0.exe",
+            "url": "https://github.com/gingygames/cosmas/releases/download/v1.2.0/Cosmas-Setup-1.2.0.exe",
             "size": 123, "sha256": SHA.upper(), "notes_md": "- new", "notes_url": "https://cosmas.gingygames.com/changelog"}
 GH_RELEASE = {"tag_name": "v1.3.0", "published_at": "2026-12-01T00:00:00Z", "html_url": "https://github.com/x/releases/v1.3.0",
               "body": "notes", "draft": False, "prerelease": False,
@@ -74,6 +74,14 @@ class FetchTest(unittest.TestCase):
         self.assertEqual(info["sha256"], SHA)               # normalised to lower case
         self.assertEqual(info["source"], "web")
         self.assertEqual(info["size"], 123)
+        self.assertIsNone(info["support_url"])
+
+    def test_support_url_only_https_from_our_endpoint(self):
+        ok = dict(ENDPOINT, support_url="https://ko-fi.com/gingygames")
+        self.assertEqual(updater.fetch_latest(get=fake_get({updater.LATEST_URL: ok}))["support_url"], "https://ko-fi.com/gingygames")
+        for bad in ("javascript:alert(1)", "http://x.example", "file:///C:/x", "", None, 5):
+            info = updater.fetch_latest(get=fake_get({updater.LATEST_URL: dict(ENDPOINT, support_url=bad)}))
+            self.assertIsNone(info["support_url"], bad)
 
     def test_beta_channel_asks_for_it(self):
         seen = []
@@ -128,6 +136,7 @@ class DecideTest(unittest.TestCase):
     def d(self, settings=None, **kw):
         kw.setdefault("current", "1.1.0")
         kw.setdefault("is_dev", False)
+        kw.setdefault("installed", True)
         return updater.decide(kw.pop("info", self.info), settings or {}, **kw)
 
     def test_newer_is_available_and_installable(self):
@@ -147,6 +156,34 @@ class DecideTest(unittest.TestCase):
         self.assertTrue(r["available"])
         self.assertFalse(r["can_install"])
         self.assertFalse(r["auto_download"])
+
+    def test_copy_not_made_by_the_installer_only_announces(self):
+        # e.g. a ZIP unpacked in Downloads: running the installer with /DIR= there would delete its python\ and app\
+        r = self.d({"update_auto_download": True}, installed=False)
+        self.assertTrue(r["available"])
+        self.assertFalse(r["can_install"])
+        self.assertFalse(r["auto_download"])
+        self.assertEqual(r["reason"], "not-installed")
+
+    def test_installed_layout(self):
+        tmp = Path(tempfile.mkdtemp(prefix="cosmas-layout-"))
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        app = tmp / "Kronikar" / "app"
+        app.mkdir(parents=True)
+        self.assertFalse(config._is_installed(app))                     # just the code
+        (app.parent / "Kronikar.exe").write_bytes(b"MZ")
+        self.assertFalse(config._is_installed(app))                     # no uninstaller: not from the installer
+        (app.parent / "unins000.exe").write_bytes(b"MZ")
+        self.assertTrue(config._is_installed(app))
+        other = tmp / "Downloads" / "kosmas-1.2.0"                      # source / ZIP copy: code not in app\
+        other.mkdir(parents=True)
+        (other.parent / "Kronikar.exe").write_bytes(b"MZ")
+        (other.parent / "unins000.exe").write_bytes(b"MZ")
+        self.assertFalse(config._is_installed(other))
+        with mock.patch.object(config, "IS_INSTALLED", False):
+            self.assertIsNone(updater.install_dir())
+        with mock.patch.multiple(config, IS_INSTALLED=True, APP_DIR=app):
+            self.assertEqual(updater.install_dir(), app.parent)
 
     def test_skipped_version(self):
         self.assertFalse(self.d({"update_skip": "1.2.0"})["available"])

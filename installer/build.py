@@ -41,7 +41,8 @@ FFMPEG_URL = ("https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/"
               "ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip")
 CSC = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
 
-# Parts of PySide6 the app never loads (it uses QtCore/Gui/Widgets/WebEngine*/WebChannel only).
+# Parts of PySide6 the app never loads (it uses QtCore/Gui/Widgets/Network/WebEngine*/WebChannel only;
+# QtNetwork: QLocalServer of single_instance.py).
 # Qt6Quick/Qml/Pdf/Positioning/Network/OpenGL stay: QtWebEngine links against them.
 QT_DROP_MODULES = ["3DAnimation", "3DCore", "3DExtras", "3DInput", "3DLogic", "3DRender", "Bluetooth", "Charts",
                    "ChartsQml", "DataVisualization", "DataVisualizationQml", "Designer", "DesignerComponents",

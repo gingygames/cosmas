@@ -105,6 +105,21 @@ def conversations(rows, gap=20.0, pad=2.0):
     return [(max(0.0, a - pad), b + pad) for a, b in spans]
 
 
+def out_lang(cfg):
+    """Language the models write in (worker_config "out_lang"): cs and sk keep the Czech prompts, anything else
+    gets the English ones (a small local model answers in the language it is asked in)."""
+    lang = str(cfg.get("out_lang") or "cs").lower()
+    return lang if lang in ("cs", "sk") else "en"
+
+
+CS_WORD = {"cs": "česky", "sk": "slovensky"}
+# markers written into the transcript text for the text model
+MARKS = {"cs": {"pause": "— — pauza {n} min, nikdo nemluví — —", "frame": "(obraz)", "tags": "jmenovky",
+                "cut": "— — (zkráceno) — —", "short": "(Odpověz stručně.)"},
+         "en": {"pause": "— — pause {n} min, nobody talks — —", "frame": "(picture)", "tags": "name tags",
+                "cut": "— — (shortened) — —", "short": "(Answer briefly.)"}}
+
+
 def clock(sec):
     h, rem = divmod(int(sec), 3600)
     m, s = divmod(rem, 60)
@@ -377,22 +392,43 @@ class Worker:
 
     def _ask_vision(self, img, heard, width=768, height=432):
         cfg = self.cfg
-        prompt = ("Toto je snímek z videozáznamu hraní RP (hraní rolí) ve hře. "
-                  + (cfg["context"].strip() + " " if cfg.get("context", "").strip() else "")
-                  + "Popiš stručně česky (nejvýš 2–3 krátké věty): kde postava je, kdo je kolem, co se děje, "
-                    "důležité předměty nebo text na obrazovce.")
-        if cfg["detect_names"]:
-            prompt += (" Do pole 'jmena' opiš přesně jména, která jsou na obrázku napsaná nad hlavami postav "
-                       "nebo v rozhraní (rozhovor, chat). Nic si nedomýšlej; když žádné nevidíš, dej prázdný seznam.")
-            if cfg.get("known_names"):
-                prompt += " Postavy v tomto světě jsou např.: " + ", ".join(cfg["known_names"][:60]) + "."
-        if cfg.get("appearance"):
-            prompt += (" Do pole 'lide' uveď každou zřetelně viditelnou postavu (nejvýš 6, ne hlavní postavu zezadu "
-                       "v popředí, pokud je vidět jen kus): box = [x1, y1, x2, y2] v souřadnicích 0–1000 vůči šířce "
-                       "a výšce obrázku (celá viditelná postava včetně hlavy), jmeno = jméno napsané přímo nad touto "
-                       "postavou (jinak prázdné), vzhled = krátce oblečení, barvy, vlasy, vousy, pokrývka hlavy.")
-        if heard:
-            prompt += f" V tu chvíli zaznívá: \"{heard[:600]}\""
+        lang = out_lang(cfg)
+        ctx = cfg["context"].strip() + " " if cfg.get("context", "").strip() else ""
+        if lang == "en":
+            prompt = ("This is a frame from a video recording of role-play (RP) gaming. " + ctx
+                      + "Describe it briefly in English in the field 'popis' (at most 2–3 short sentences): where the "
+                        "character is, who is around, what is happening, important objects or text on the screen. "
+                        "'postav' = how many characters are visible, 'misto' = the place, if you can tell.")
+            if cfg["detect_names"]:
+                prompt += (" In the field 'jmena' copy exactly the names written in the picture above the characters' "
+                           "heads or in the interface (dialogue, chat). Don't make anything up; if you see none, give "
+                           "an empty list.")
+                if cfg.get("known_names"):
+                    prompt += " Characters in this world include: " + ", ".join(cfg["known_names"][:60]) + "."
+            if cfg.get("appearance"):
+                prompt += (" In the field 'lide' list every clearly visible character (at most 6; not the main character "
+                           "seen from behind in the foreground if only part of it is visible): box = [x1, y1, x2, y2] in "
+                           "coordinates 0–1000 relative to the width and height of the image (the whole visible figure "
+                           "including the head), jmeno = the name written right above this character (otherwise empty), "
+                           "vzhled = briefly clothes, colours, hair, beard, headwear.")
+            if heard:
+                prompt += f" At that moment one hears: \"{heard[:600]}\""
+        else:
+            prompt = ("Toto je snímek z videozáznamu hraní RP (hraní rolí) ve hře. " + ctx
+                      + f"Popiš stručně {CS_WORD[lang]} (nejvýš 2–3 krátké věty): kde postava je, kdo je kolem, co se "
+                        "děje, důležité předměty nebo text na obrazovce.")
+            if cfg["detect_names"]:
+                prompt += (" Do pole 'jmena' opiš přesně jména, která jsou na obrázku napsaná nad hlavami postav "
+                           "nebo v rozhraní (rozhovor, chat). Nic si nedomýšlej; když žádné nevidíš, dej prázdný seznam.")
+                if cfg.get("known_names"):
+                    prompt += " Postavy v tomto světě jsou např.: " + ", ".join(cfg["known_names"][:60]) + "."
+            if cfg.get("appearance"):
+                prompt += (" Do pole 'lide' uveď každou zřetelně viditelnou postavu (nejvýš 6, ne hlavní postavu zezadu "
+                           "v popředí, pokud je vidět jen kus): box = [x1, y1, x2, y2] v souřadnicích 0–1000 vůči šířce "
+                           "a výšce obrázku (celá viditelná postava včetně hlavy), jmeno = jméno napsané přímo nad touto "
+                           "postavou (jinak prázdné), vzhled = krátce oblečení, barvy, vlasy, vousy, pokrývka hlavy.")
+            if heard:
+                prompt += f" V tu chvíli zaznívá: \"{heard[:600]}\""
         person = {"type": "object", "required": ["box"], "properties": {
             "box": {"type": "array", "items": {"type": "number"}}, "jmeno": {"type": "string"}, "vzhled": {"type": "string"}}}
         schema = {"type": "object", "required": ["popis", "jmena", "postav"], "properties": {
@@ -424,6 +460,7 @@ class Worker:
         """Split the video into blocks for the text model. Boundaries go into silent gaps between
         conversations (never in the middle of one); gaps are written into the text so the model sees them."""
         cfg = self.cfg
+        mk = MARKS["en" if out_lang(cfg) == "en" else "cs"]
         target = float(cfg["chapter_minutes"]) * 60
         blocks, cur, start, last_end, chars = [], [], None, None, 0
         for r in rows:
@@ -437,11 +474,11 @@ class Worker:
                 blocks.append((start, last_end, cur))
                 cur, start, chars = [], None, 0
             elif cur and gap >= 60:
-                cur.append(f"— — pauza {round(gap / 60)} min, nikdo nemluví — —")
+                cur.append(mk["pause"].format(n=round(gap / 60)))
             if start is None:
                 start = r["t"]
             if r["speaker"] == "Obraz":
-                cur.append(f"[{clock(r['t'])}] (obraz) {r['text']}")
+                cur.append(f"[{clock(r['t'])}] {mk['frame']} {r['text']}")
             else:
                 cur.append(f"[{clock(r['t'])}] {r['speaker']}: {r['text']}")
             chars += len(cur[-1])
@@ -452,13 +489,16 @@ class Worker:
 
     def chronicle(self):
         job, cfg = self.job, self.cfg
+        lang = out_lang(cfg)
+        en = lang == "en"
+        mk = MARKS["en" if en else "cs"]
         out = analysis_dir(job["id"])
         rows, _ = load_results(job["id"])
         frames = {round(f["t"], 1): f for f in load_frames(job["id"])}
         for r in rows:     # names read in the picture help the model
             f = frames.get(round(r["t"], 1)) if r["speaker"] == "Obraz" else None
             if f and f.get("names"):
-                r["text"] += f" [jmenovky: {', '.join(f['names'])}]"
+                r["text"] += f" [{mk['tags']}: {', '.join(f['names'])}]"
         blocks = [b for b in self.blocks(rows) if sum(len(x) for x in b[2]) >= 250]
         state = _read_json(out / "chronicle.json", {}) or {}
         done = {b["t"]: b for b in state.get("blocks", [])}
@@ -466,8 +506,9 @@ class Worker:
         found = state.get("found", {})          # names met in this video -> type
         world = cfg.get("world") or {}
         world_txt = "\n".join(f"- {k}: {', '.join(v[:80])}" for k, v in
-                              (("Postavy", world.get("characters", [])), ("Místa", world.get("places", [])),
-                               ("Frakce a rody", world.get("factions", []))) if v)
+                              ((("Characters" if en else "Postavy"), world.get("characters", [])),
+                               (("Places" if en else "Místa"), world.get("places", [])),
+                               (("Factions and houses" if en else "Frakce a rody"), world.get("factions", []))) if v)
         result = []
         for i, (a, z, lines) in enumerate(blocks):
             if a in done:
@@ -476,8 +517,8 @@ class Worker:
             self.checkpoint("chapters", i / max(1, len(blocks)), tr("Chronicle · block {i}/{total} · {time}", i=i + 1, total=len(blocks), time=clock(a)))
             text = "\n".join(lines)
             if len(text) > 22000:          # keep the start and the end of very long blocks
-                text = text[:14000] + "\n— — (zkráceno) — —\n" + text[-8000:]
-            prompt = (
+                text = text[:14000] + "\n" + mk["cut"] + "\n" + text[-8000:]
+            prompt = self._chronicle_prompt(a, z, text, world_txt, memory, found) if en else (
                 "Jsi kronikář RP (hraní rolí) serveru. Dostaneš část přepisu záznamu jednoho hráče: "
                 "'Já' je hráč, který nahrával, 'Hra' jsou ostatní hráči a postavy ve hře (hlasový chat ve hře, NPC), "
                 "'Discord' je hlasový chat, '(obraz)' jsou popisy snímků. Řádky '— — pauza … — —' znamenají ticho "
@@ -488,7 +529,7 @@ class Worker:
                 + (f"\nDosavadní děj tohoto záznamu (paměť): {memory}\n" if memory else "")
                 + (f"\nJména, která už v záznamu padla: {', '.join(f'{k} ({v})' for k, v in list(found.items())[:80])}\n" if found else "")
                 + f"\nÚSEK {clock(a)}–{clock(z)}:\n{text}\n\n"
-                "Vrať česky:\n"
+                f"Vrať {CS_WORD[lang]}:\n"
                 "- nazev: název kapitoly (nejvýš 6 slov)\n"
                 "- shrnuti: 1–3 věty, co se v úseku stalo ve hře\n"
                 "- udalosti: samostatné herní události v úseku (jednání, souboj, obchod, cesta, slavnost…) s časem "
@@ -535,12 +576,44 @@ class Worker:
         if result:
             self.checkpoint("chapters", 1, tr("Summary of the whole recording"))
             d = _ask_text(cfg,
-                          "Toto jsou kapitoly jednoho večera hraní RP (jen herní děj). Napiš česky shrnutí celého večera "
-                          "(4–8 vět, jako zápis do kroniky) a seznam nejdůležitějších momentů.\n"
-                          + (f"Paměť z průběhu: {memory}\n\n" if memory else "\n")
+                          ("These are the chapters of one evening of RP gaming (in-game story only). Write in English "
+                           "a summary of the whole evening (4–8 sentences, like an entry in a chronicle) into 'shrnuti' "
+                           "and a list of the most important moments into 'momenty'.\n"
+                           + (f"Memory from the evening: {memory}\n\n" if memory else "\n")) if en else
+                          (f"Toto jsou kapitoly jednoho večera hraní RP (jen herní děj). Napiš {CS_WORD[lang]} shrnutí "
+                           "celého večera (4–8 vět, jako zápis do kroniky) a seznam nejdůležitějších momentů.\n"
+                           + (f"Paměť z průběhu: {memory}\n\n" if memory else "\n"))
                           + "\n".join(f"{clock(c['t'])} {c['title']}: {c['summary']}" for c in result)[:14000],
                           {"shrnuti": {"type": "string"}, "momenty": {"type": "array", "items": {"type": "string"}}})
             _write_json(out / "summary.json", {"text": d.get("shrnuti", ""), "moments": d.get("momenty", [])})
+
+    def _chronicle_prompt(self, a, z, text, world_txt, memory, found):
+        """The chronicle prompt in English (same structure and JSON keys as the Czech one in chronicle())."""
+        cfg, job = self.cfg, self.job
+        return (
+            "You are the chronicler of a role-play (RP) server. You get part of the transcript of one player's recording: "
+            "'Já' is the player who recorded, 'Hra' are the other players and characters in the game (in-game voice "
+            "chat, NPCs), 'Discord' is voice chat, '(picture)' are descriptions of frames. Lines '— — pause … — —' mean "
+            "silence (often the end of a scene). Tell in-game story (IC) from out-of-character talk (OOC) – OOC does not "
+            "belong in the chronicle.\n"
+            + (f"About the game and the server: {cfg['context'].strip()}\n" if cfg.get("context", "").strip() else "")
+            + (f"\nKnown records in the chronicle (use exactly these names when they are meant):\n{world_txt}\n" if world_txt else "")
+            + (f"\nThe previous evening (for context): {job['prev_summary']}\n" if job.get("prev_summary") else "")
+            + (f"\nThe story of this recording so far (memory): {memory}\n" if memory else "")
+            + (f"\nNames already mentioned in the recording: {', '.join(f'{k} ({v})' for k, v in list(found.items())[:80])}\n" if found else "")
+            + f"\nPART {clock(a)}–{clock(z)}:\n{text}\n\n"
+            "Answer in English:\n"
+            "- nazev: chapter title (at most 6 words)\n"
+            "- shrnuti: 1–3 sentences on what happened in the game in this part\n"
+            "- udalosti: separate in-game events in this part (negotiation, fight, trade, journey, celebration…) with "
+            "time od–do in the format H:MM:SS from the marks in the transcript, place (misto), participants (ucastnici, "
+            "character names) and a description (popis) of 1–3 sentences; only what really is in the transcript\n"
+            "- zminky: characters, places and factions/houses talked about or seen in this part, with time (cas) and "
+            "short context (kontext); typ is one of postava (character), misto (place), frakce (faction)\n"
+            "- nove: names of characters, places and factions that are not among the known records and look like a real "
+            "part of the game world (not players OOC), with a description (popis) of what we know about them\n"
+            "- pamet: updated memory – a short summary of the whole story of the recording so far including this part "
+            "(at most 8 sentences), so the next part knows the context")
 
     # ---- outputs
     def write_text_outputs(self):
@@ -658,7 +731,8 @@ def _ask_text(cfg, prompt, props, ctx=16384, max_tokens=12000, fallback=None):
             log.write(json.dumps({"time": time.time(), "provider": pid, "model": model, "error": str(e)[:500]},
                                  ensure_ascii=False) + "\n")
         if fallback:
-            return _ask_text(cfg, prompt + "\n\n(Odpověz stručně.)", fallback, ctx, max_tokens)
+            return _ask_text(cfg, prompt + "\n\n" + MARKS["en" if out_lang(cfg) == "en" else "cs"]["short"],
+                             fallback, ctx, max_tokens)
         return {}
 
 

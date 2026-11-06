@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 import traceback
 import uuid
@@ -33,6 +34,14 @@ from .analysis_jobs import speech_tracks
 
 ATT_DIR = config.DATA_DIR / "attachments"
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+# errors with a message meant for the user: the UI shows just the message ("ValueError: …" only for real bugs)
+EXPECTED_ERRORS = (ValueError, websync.SyncError, discord_link.DiscordError)
+
+
+def error_text(e):
+    if isinstance(e, EXPECTED_ERRORS) and str(e):
+        return str(e)
+    return f"{type(e).__name__}: {e}"
 
 
 class SyncThread(QThread):
@@ -86,7 +95,7 @@ class Api(QObject):
                  "layout.set", "window.bg", "window.zoom", "pane.toggle", "places.list", "place.get",
                  "letters.list", "discord.members", "game.art_sources", "game.art_search", "game.image_data",
                  "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get",
-                 "sync.status", "sync.run", "sync.resolve", "sync.set_token", "sync.settings", "sync.cancel",
+                 "sync.status", "sync.run", "sync.resolve", "sync.set_token", "sync.settings", "sync.cancel", "sync.quota",
                  "analysis.get", "analysis.queue", "analysis.stats", "analysis.models", "analysis.overview",
                  "analysis.char_mentions", "analysis.search", "analysis.open_timeline", "analysis.skip",
                  "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
@@ -110,8 +119,11 @@ class Api(QObject):
                 self.emit("sync", {"method": method, "src": src})   # lets the other page refresh
             return out
         except Exception as e:  # report to JS instead of crashing the bridge
-            traceback.print_exc()
-            return json.dumps({"error": f"{type(e).__name__}: {e}"}, ensure_ascii=False)
+            if isinstance(e, EXPECTED_ERRORS):
+                print(f"[api] {method}: {e}", file=sys.stderr)
+            else:
+                traceback.print_exc()
+            return json.dumps({"error": error_text(e)}, ensure_ascii=False)
 
     def emit(self, kind, payload=None):
         self.notify.emit(kind, json.dumps(payload or {}, ensure_ascii=False, default=str))
@@ -131,11 +143,11 @@ class Api(QObject):
         def run():
             try:
                 payload = {"id": rid, "ok": fn()}
-            except websync.SyncError as e:
-                payload = {"id": rid, "error": str(e)}
+            except EXPECTED_ERRORS as e:
+                payload = {"id": rid, "error": error_text(e)}
             except Exception as e:
                 traceback.print_exc()
-                payload = {"id": rid, "error": f"{type(e).__name__}: {e}"}
+                payload = {"id": rid, "error": error_text(e)}
             self.emit("bg", payload)
         threading.Thread(target=run, name="kosmas-bg", daemon=True).start()
         return {"_bg": rid}
@@ -1632,9 +1644,11 @@ class Api(QObject):
         }
 
     def m_settings_get(self):
-        return dict({k: v for k, v in self.settings.items() if k not in ("geometry", "sync_token", "update_latest")},
-                    data_dir=str(config.DATA_DIR), **{k: self.settings.get(k, v) for k, v in config.DEFAULTS.items()
-                                                      if k not in self.settings})
+        # secrets never go to the page: the Discord bot token only as "is set" (settings.set still takes a new one)
+        return dict({k: v for k, v in self.settings.items()
+                     if k not in ("geometry", "sync_token", "update_latest", "discord_token")},
+                    data_dir=str(config.DATA_DIR), discord_token_set=bool(self.settings.get("discord_token")),
+                    **{k: self.settings.get(k, v) for k, v in config.DEFAULTS.items() if k not in self.settings})
 
     def m_settings_set(self, values):
         for k in ("roots", "clip_max_seconds", "short_session_seconds", "hide_short_sessions",
@@ -1663,7 +1677,7 @@ class Api(QObject):
             applog.set_level(self.settings["log_level"])
         self.host.save_settings()
         if values.get("_rescan", True):
-            self.host.rescan()
+            self.host.rescan(notify=True)
         return True
 
     # ------------------------------------------------------------ test records
@@ -1731,9 +1745,20 @@ class Api(QObject):
     def m_sync_settings(self, url=None, letters=None, auto=None):
         if url is not None:
             try:
-                self.settings["sync_url"] = websync.check_url(url or websync.DEFAULT_URL)
+                new = websync.check_url(url or websync.DEFAULT_URL)
             except websync.SyncError as e:
                 raise ValueError(str(e))
+            try:
+                old = websync.check_url(self.settings.get("sync_url") or websync.DEFAULT_URL)
+            except websync.SyncError:
+                old = None
+            if new != old:
+                # the token belongs to the old server: never send it (sync, feedback) to another host; sign in again
+                tok = self.settings.pop("sync_token", None)
+                self.settings.pop("sync_user", None)
+                if tok and old:
+                    threading.Thread(target=webauth.revoke, args=(old, tok), daemon=True).start()
+            self.settings["sync_url"] = new
         if letters is not None:
             self.settings["sync_letters"] = bool(letters)
         if auto is not None:
@@ -1803,6 +1828,26 @@ class Api(QObject):
         if pairing not in (None, "match", "copy"):
             raise ValueError(tr("Unknown pairing option"))
         return self._sync_start(lambda s: s.run(pairing=pairing), quiet)
+
+    def m_sync_quota(self):
+        """Plan and storage use on the web chronicle: {connected, plan, storage: {used, files, limit}, enforced,
+        support_url}. Nothing is charged; without a sign-in {connected: false} and no network call."""
+        if not self.settings.get("sync_token"):
+            return {"connected": False}
+        settings = dict(self.settings)
+
+        def job():
+            c = websync.Client(settings.get("sync_url") or websync.DEFAULT_URL, settings.get("sync_token"), timeout=20)
+            d = c.request("GET", "/me/quota")
+            if not isinstance(d, dict):
+                raise websync.SyncError(tr("The server returned an unreadable response – is the server address correct?"))
+            st = d.get("storage") if isinstance(d.get("storage"), dict) else {}
+            sup = d.get("support_url")
+            return {"connected": True, "plan": d.get("plan"),
+                    "storage": {"used": st.get("used"), "files": st.get("files"), "limit": st.get("limit")},
+                    "enforced": bool(d.get("enforced")),
+                    "support_url": sup if isinstance(sup, str) and sup.startswith("https://") else None}
+        return self._bg(job)
 
     def m_sync_cancel(self):
         self._sync["cancel"].set()
@@ -1956,11 +2001,12 @@ class Api(QObject):
     # ------------------------------------------------------------ app info, updates
     def m_app_info(self):
         from . import __version__
-        return {"name": i18n.app_name(), "version": __version__, "dev": config.IS_DEV, "data_dir": str(config.DATA_DIR),
-                "install_dir": str(config.APP_DIR.parent) if not config.IS_DEV else str(config.APP_DIR),
+        return {"name": i18n.app_name(), "version": __version__, "dev": config.IS_DEV, "installed": config.IS_INSTALLED,
+                "data_dir": str(config.DATA_DIR),
+                "install_dir": str(config.APP_DIR.parent) if config.IS_INSTALLED else str(config.APP_DIR),
                 "site": "https://cosmas.gingygames.com", "web": "https://gingygames.com/kosmas/",
-                "repo": "https://github.com/gingygames/kosmas", "issues": "https://github.com/gingygames/kosmas/issues",
-                "releases": "https://github.com/gingygames/kosmas/releases"}
+                "repo": "https://github.com/gingygames/cosmas", "issues": "https://github.com/gingygames/cosmas/issues",
+                "releases": "https://github.com/gingygames/cosmas/releases"}
 
     def _updates(self):
         u = getattr(self.host, "updates", None)
@@ -2044,7 +2090,8 @@ class Api(QObject):
         def job():
             import sqlite3
             from . import __version__
-            db = sqlite3.connect(f"file:{config.DB_PATH.as_posix()}?mode=ro", uri=True)
+            from .backup import ro_uri
+            db = sqlite3.connect(ro_uri(config.DB_PATH), uri=True)
             db.row_factory = sqlite3.Row
             try:
                 rows = db.execute("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()

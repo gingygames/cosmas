@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- only the app's own scripts (and Qt's qwebchannel.js) run: no inline scripts or on*="" handlers, no plugins, no <base> -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' qrc:; object-src 'none'; base-uri 'none'">
   <title>Cosmas</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/lucide.css">

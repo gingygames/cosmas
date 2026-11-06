@@ -5,6 +5,7 @@
 
 (() => {
 let root, tab = 'queue', timer = null, offs = [];
+let flushSettings = null;   // settings changed within the debounce, saved together (see renderSettings)
 const hist = { gpu: [], cpu: [] };
 
 function mount(r, params) {
@@ -16,9 +17,10 @@ function mount(r, params) {
   timer = setInterval(pollStats, 2000);
   pollStats();
 }
-function unmount() { clearInterval(timer); timer = null; offs.forEach(f => f()); offs = []; }
+function unmount() { if (flushSettings) flushSettings(); clearInterval(timer); timer = null; offs.forEach(f => f()); offs = []; }
 
 function render() {
+  if (flushSettings) flushSettings();
   clear(root);
   const tabs = h('.seg.trp-tabs', [['queue', 'list-ordered', tr('Queue and performance')], ['proposals', 'sparkles', tr('Suggestions')], ['ai', 'cpu', tr('Where AI runs')], ['settings', 'sliders-horizontal', tr('Settings')]].map(([k, ic, label]) =>
     h('button' + (tab === k ? '.on' : ''), { onclick: () => { tab = k; render(); } }, icon(ic), label, k === 'proposals' ? h('span.trp-badge#trp-pbadge') : null)));
@@ -213,11 +215,17 @@ async function renderProposals(body) {
 async function renderSettings(body) {
   const s = await API.call('settings.get');
   const models = await API.call('analysis.models').catch(() => ({ whisper: [], ollama: null }));
-  const save = debounce(async (k, v) => {
-    App.settings[k] = v;
-    await API.call('settings.set', { values: { [k]: v, _rescan: false } });
+  // every change is collected – two settings changed within the debounce are both saved (not just the last one)
+  let pend = {};
+  const push = debounce(async () => {
+    const values = pend; pend = {};
+    if (!Object.keys(values).length) return;
+    Object.assign(App.settings, values);
+    await API.call('settings.set', { values: { ...values, _rescan: false } });
     toast(tr('Saved – applies from the next video in the queue'));
   }, 350);
+  const save = (k, v) => { pend[k] = v; push(); };
+  flushSettings = () => push.flush();
   const val = (k, d) => s[k] ?? d;
   const toggle = (k, label, hint) => h('label.trp-opt', h('input', { type: 'checkbox', checked: !!val(k), onchange: e => save(k, e.target.checked) }),
     h('div', h('div', label), hint ? h('.tiny.faint', hint) : null));

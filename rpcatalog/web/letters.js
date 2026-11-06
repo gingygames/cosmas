@@ -24,6 +24,7 @@ document.head.appendChild(h('style', `
 `));
 
 let root, list = [], cur = null, q = '', charFilter = null, unsub = [];
+let pendSave = null;      // the open letter's unsaved fields (debounced); flushed before switching or reloading
 
 const charName = id => (App.charsById.get(id) || {}).name;
 function who(l) {
@@ -32,7 +33,7 @@ function who(l) {
   return `${from} → ${to}`;
 }
 
-async function load() { list = await API.call('letters.list'); }
+async function load() { if (pendSave) await pendSave.flush(); list = await API.call('letters.list'); }
 
 function renderSide() {
   const side = $('.lt-side', root);
@@ -66,14 +67,23 @@ function renderRows() {
     h('.ex', (l.body || '').slice(0, 220)))));
 }
 
-function open(id) { cur = list.find(l => l.id === id) || null; App.ui.letterId = id; App.saveUi(); renderRows(); renderDetail(); }
+function open(id) { if (pendSave) pendSave.flush(); cur = list.find(l => l.id === id) || null; App.ui.letterId = id; App.saveUi(); renderRows(); renderDetail(); }
 
 function renderDetail() {
   const d = $('.lt-detail', root); clear(d);
   if (!cur) { d.appendChild(emptyState('mail', tr('Pigeon post'), tr('Letters between characters – manual, or from Discord (messages containing the word “{word}”).', { word: letterWord() }))); Shell.header({ icon: 'mail', title: tr('pigeon post') }); return; }
   const l = cur;
   Shell.header({ icon: 'mail', title: l.title || who(l), topic: [l.ingame_date, l.sent_at ? fmt.dt(l.sent_at) : '', l.source !== 'manual' ? tr('from Discord') : ''].filter(Boolean).join(' · ') });
-  const save = debounce(f => API.call('letter.update', { id: l.id, ...f }).then(load).then(renderRows), 350);
+  // several quick changes (title, date, text) are merged into one update of this letter
+  if (pendSave) pendSave.flush();
+  let pend = {};
+  const push = debounce(() => {
+    const f = pend; pend = {};
+    if (!Object.keys(f).length) return;
+    return API.call('letter.update', { id: l.id, ...f }).then(load).then(renderRows);
+  }, 350);
+  const save = f => { Object.assign(pend, f); push(); };
+  pendSave = push;
   const charChips = ids => h('.row.wrap', { style: { gap: '6px' } }, ids.map(id => App.charsById.get(id)).filter(Boolean).map(c => charChip(c)));
   const ev = l.event_id && App.eventsById.get(l.event_id);
   const pl = l.place_id && (App.places || []).find(p => p.id === l.place_id);
@@ -81,14 +91,14 @@ function renderDetail() {
     h('.lt-meta',
       h('.k', tr('Title')), h('input.input', { value: l.title || '', placeholder: tr('e.g. Letter about the betrayal'), onkeydown: e => e.stopPropagation(), oninput: e => { l.title = e.target.value; save({ title: l.title }); } }),
       h('.k', tr('From')), h('.row', l.sender_id ? charChips([l.sender_id]) : h('span.faint', l.author || tr('not selected')),
-        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters([], { title: tr('Who sent the letter?'), multi: false }); if (ids && ids[0]) { l.sender_id = ids[0]; await API.call('letter.update', { id: l.id, sender_id: ids[0] }); await load(); open(l.id); } } }, 'Vybrat')),
+        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters([], { title: tr('Who sent the letter?'), multi: false }); if (ids && ids[0]) { l.sender_id = ids[0]; await API.call('letter.update', { id: l.id, sender_id: ids[0] }); await load(); open(l.id); } } }, tr('Select'))),
       h('.k', tr('Addressed to')), h('.row', charChips(l.recipient_ids || []),
-        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(l.recipient_ids || [], { title: tr('Who is the letter for?') }); if (ids) { await API.call('letter.update', { id: l.id, recipient_ids: ids }); await load(); open(l.id); } } }, 'Vybrat')),
+        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(l.recipient_ids || [], { title: tr('Who is the letter for?') }); if (ids) { await API.call('letter.update', { id: l.id, recipient_ids: ids }); await load(); open(l.id); } } }, tr('Select'))),
       h('.k', tr('In-game date')), h('input.input', { value: l.ingame_date || '', placeholder: tr('e.g. 3rd day after the harvest'), onkeydown: e => e.stopPropagation(), oninput: e => { l.ingame_date = e.target.value; save({ ingame_date: l.ingame_date }); } }),
       h('.k', tr('Event')), h('.row', ev ? h('span.chip.on', { onclick: () => App.go('events', { id: ev.id }) }, h('span.dot', { style: { background: ev.color } }), ev.title) : h('span.faint', '—'),
-        h('button.btn.sm', { onclick: async () => { const r = await pickEvent({ title: tr('Which event does the letter belong to?'), moment: l.sent_at, withNote: false }); if (r) { await API.call('letter.update', { id: l.id, event_id: r.id }); await load(); open(l.id); } } }, 'Vybrat')),
+        h('button.btn.sm', { onclick: async () => { const r = await pickEvent({ title: tr('Which event does the letter belong to?'), moment: l.sent_at, withNote: false }); if (r) { await API.call('letter.update', { id: l.id, event_id: r.id }); await load(); open(l.id); } } }, tr('Select'))),
       h('.k', tr('Place')), h('.row', pl ? h('span.chip.on', { onclick: () => App.go('places', { id: pl.id }) }, pl.name) : h('span.faint', '—'),
-        h('button.btn.sm', { onclick: async () => { const id = await pickPlace(tr('From where / to where?')); if (id) { await API.call('letter.update', { id: l.id, place_id: id }); App.places = await API.call('places.list'); await load(); open(l.id); } } }, 'Vybrat'))),
+        h('button.btn.sm', { onclick: async () => { const id = await pickPlace(tr('From where / to where?')); if (id) { await API.call('letter.update', { id: l.id, place_id: id }); App.places = await API.call('places.list'); await load(); open(l.id); } } }, tr('Select')))),
     h('textarea.input.lt-paper', { rows: 14, onkeydown: e => e.stopPropagation(), oninput: e => { l.body = e.target.value; save({ body: l.body }); } }, l.body || ''),
     h('.row', { style: { marginTop: '14px' } },
       l.channel ? h('span.small.faint', tr('Source: {source}', { source: l.channel + (l.author ? ' · ' + l.author : '') })) : null, h('.grow'),
@@ -221,6 +231,6 @@ Views.register('letters', {
     if (id && list.some(l => l.id === id)) open(id); else renderDetail();
     unsub = [App.on('chars', () => renderRows())];
   },
-  unmount() { unsub.forEach(f => f()); unsub = []; root = null; },
+  unmount() { if (pendSave) pendSave.flush(); pendSave = null; unsub.forEach(f => f()); unsub = []; root = null; },
 });
 })();

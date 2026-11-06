@@ -86,6 +86,71 @@ class BackupTest(unittest.TestCase):
             backup.restore("nope.db")
         self.assertFalse((self.tmp / "restore-pending.json").exists())
 
+    def test_odd_characters_in_the_data_folder(self):
+        # '#' and '%' end or change a "file:…?mode=ro" URI unless the path is escaped
+        odd = self.tmp / "a#b %20 c"
+        odd.mkdir()
+        self.db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        shutil.copy2(self.tmp / "catalog.db", odd / "catalog.db")
+        self.assertEqual(backup.check(odd / "catalog.db"), 1)
+        out = backup.make("manual", db_path=odd / "catalog.db", dest=odd / "backups")
+        self.assertEqual(self.titles(out), ["one"])
+
+
+class RestoreSyncTest(unittest.TestCase):
+    """A restored catalogue must not lose its records again at the next sync: what the web deleted since the backup
+    (often exactly what the restore brings back) becomes a conflict, nothing is deleted silently."""
+
+    class Client:
+        token = "krt_test"
+
+        def request(self, *a, **k):
+            raise AssertionError(f"no network expected: {a}")
+
+    def setUp(self):
+        from rpcatalog import sync
+        from rpcatalog.store import Store
+        self.sync = sync
+        self.tmp = Path(tempfile.mkdtemp(prefix="cosmas-bk-sync-"))
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        p = mock.patch.multiple(config, DATA_DIR=self.tmp, DB_PATH=self.tmp / "catalog.db")
+        p.start()
+        self.addCleanup(p.stop)
+        st = Store(self.tmp / "catalog.db")
+        self.cid = st.create_character("Hans")
+        st.db.commit()
+        st.db.close()
+        s = self.syncer()
+        rows, _ = s.collect()
+        # as after a sync: published and unchanged since (the hash of the row), the last sync long ago
+        s.set_pub("characters", self.cid, remote_id=500, rev=3, hash=sync._hash(rows["characters"][self.cid]))
+        s.set_state("last_sync", 100)
+        s.close()
+
+    def syncer(self):
+        return self.sync.Syncer(self.tmp / "catalog.db", {"sync_token": "krt_test"}, self.tmp / "att", client=self.Client())
+
+    def deleted_on_web(self):
+        return {"id": 500, "type": "character", "src": f"characters:{self.cid}", "deleted": True, "rev": 4}
+
+    def test_without_restore_a_clean_row_follows_the_web(self):
+        s = self.syncer()
+        s.apply_remote([self.deleted_on_web()], [])
+        self.assertIsNone(s.row("characters", self.cid))       # the normal case: deleted on the web -> deleted here
+        s.close()
+
+    def test_restored_row_becomes_a_conflict(self):
+        b = backup.make("manual")
+        backup.restore(b.name)
+        r = backup.apply_pending_restore()
+        self.assertEqual(r["restored"], b.name)
+        s = self.syncer()
+        self.assertIsNone(s.pub("characters", self.cid)["hash"])
+        s.apply_remote([self.deleted_on_web()], [])
+        self.assertIsNotNone(s.row("characters", self.cid))    # still here
+        self.assertEqual([(c["local_id"], c["kind"]) for c in s.conflicts()], [(self.cid, "deleted_remote")])
+        s.close()
+
 
 if __name__ == "__main__":
     unittest.main()

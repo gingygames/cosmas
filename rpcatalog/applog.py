@@ -26,7 +26,8 @@ class _Tee:
 
     def __init__(self, orig, level):
         self.orig, self.level, self.buf = orig, level, ""
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._inside = threading.local()
 
     def write(self, s):
         if self.orig is not None:
@@ -34,12 +35,20 @@ class _Tee:
                 self.orig.write(s)
             except Exception:
                 pass
+        # A failing log handler reports its error on sys.stderr, i.e. back here, while this thread is still inside
+        # log.log(): that text only goes to the console (waiting for the lock or logging it again would hang or loop).
+        if getattr(self._inside, "on", False):
+            return len(s)
         with self._lock:
-            self.buf += s
-            while "\n" in self.buf:
-                line, self.buf = self.buf.split("\n", 1)
-                if line.strip():
-                    log.log(self.level, line.rstrip())
+            self._inside.on = True
+            try:
+                self.buf += s
+                while "\n" in self.buf:
+                    line, self.buf = self.buf.split("\n", 1)
+                    if line.strip():
+                        log.log(self.level, line.rstrip())
+            finally:
+                self._inside.on = False
         return len(s)
 
     def flush(self):
@@ -64,6 +73,7 @@ def setup(level="info"):
         os.environ["RPC_DEBUG"] = "1"
     if any(isinstance(h, logging.handlers.RotatingFileHandler) for h in log.handlers):
         return
+    logging.raiseExceptions = False     # a log file that can't be written (rollover blocked, disk full) stays quiet
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         fh = logging.handlers.RotatingFileHandler(LOG_PATH, maxBytes=1_000_000, backupCount=5, encoding="utf-8")

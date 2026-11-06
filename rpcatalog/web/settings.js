@@ -10,9 +10,26 @@ function discordCard(s) {
   const inp = (key, ph, type = 'text') => h('input.input', { type, value: s[key] || '', placeholder: ph, onkeydown: e => e.stopPropagation(),
     onchange: e => { s[key] = e.target.value.trim(); App.settings[key] = s[key]; API.call('settings.set', { values: { [key]: s[key], _rescan: false } }); } });
   const out = h('.small.muted');
+  /* the token never comes back from Python (only discord_token_set); typing a new one saves it, Remove deletes it */
+  const tokenBox = h('.row', { style: { gap: '6px' } });
+  const renderToken = () => {
+    const saved = !!(s.discord_token_set || s.discord_token);
+    const save = async v => {
+      try { await API.call('settings.set', { values: { discord_token: v, _rescan: false } }); } catch (err) { return; }
+      s.discord_token_set = !!v; delete s.discord_token;
+      if (v) toast(tr('Token saved'));
+      renderToken();
+    };
+    clear(tokenBox).append(
+      h('input.input', { type: 'password', value: '', autocomplete: 'off', style: { flex: '1' }, onkeydown: e => e.stopPropagation(),
+        placeholder: saved ? tr('Saved – paste a new token to replace it') : tr('from the Discord Developer Portal → Bot → Token'),
+        onchange: e => { const v = e.target.value.trim(); if (v) save(v); } }),
+      saved ? h('button.btn.sm.ghost', { type: 'button', onclick: () => save('') }, icon('x'), tr('Remove')) : null);
+  };
+  renderToken();
   return h('.col', { style: { gap: '10px' } },
     h('.row.wrap', { style: { gap: '14px' } },
-      h('label.field', { style: { flex: '1 1 300px' } }, tr('Bot token'), inp('discord_token', tr('from the Discord Developer Portal → Bot → Token'), 'password')),
+      h('label.field', { style: { flex: '1 1 300px' } }, tr('Bot token'), tokenBox),
       h('label.field', tr('Server ID (optional)'), inp('discord_guild', tr('right-click the server → Copy ID'))),
       h('label.field', tr('Letters channel ID'), inp('discord_channel', tr('optional'))),
       h('label.field', tr('Word for letters'), inp('holub_marker', 'holub'))),
@@ -76,13 +93,38 @@ function webSyncCard() {
   const when = t => t ? new Date(t * 1000).toLocaleString(I18N.locale) : tr('never yet');
   const poll = () => { clearTimeout(timer); timer = setTimeout(() => box.isConnected && render(), 700); };
   const run = async (method, args) => { await API.call(method, args).catch(() => null); render(); };
+  /* images on the web: used of limit (sync.quota); asked once per sync, hidden silently when offline or unknown */
+  const quotaBox = h('.col', { style: { gap: '4px' } });
+  let quotaFor;
+  const loadQuota = async st => {
+    if (!st.has_token || st.running) { if (!st.has_token) { quotaFor = undefined; clear(quotaBox); } return; }
+    if (quotaFor === (st.last_sync || 0)) return;
+    quotaFor = st.last_sync || 0;
+    const q = await API.call('sync.quota', {}, { quiet: true }).catch(() => null);
+    const sg = q && q.connected !== false && q.storage;
+    if (!sg || typeof sg.used !== 'number') { clear(quotaBox); return; }
+    const files = sg.files || 0, vars = { used: fmtBytes(sg.used), limit: fmtBytes(sg.limit) };
+    const pct = sg.limit > 0 ? Math.min(100, Math.round(sg.used * 100 / sg.limit)) : null;
+    clear(quotaBox).append(
+      h('.small.muted', pct == null
+        ? trn(files, 'Images on the web: {used} ({n} file)', 'Images on the web: {used} ({n} files)', vars)
+        : trn(files, 'Images on the web: {used} of {limit} ({n} file)', 'Images on the web: {used} of {limit} ({n} files)', vars)),
+      pct == null ? null : h('.upd-bar', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), style: { maxWidth: '320px' } },
+        h('div', { style: { width: pct + '%' } })));
+  };
   async function render() {
     const st = await API.call('sync.status').catch(() => null);
     if (!st) return;
+    loadQuota(st);
     const stop = e => e.stopPropagation();
     const token = h('input.input', { type: 'password', placeholder: st.has_token ? tr('saved: {token} (paste a new one to change it)', { token: st.token }) : 'krt_…', onkeydown: stop, autocomplete: 'off',
       onchange: async e => { const v = e.target.value.trim(); if (!v) return; await API.call('sync.set_token', { token: v }).then(() => toast(tr('Token saved'))).catch(() => null); render(); } });
-    const url = h('input.input', { value: st.url, onkeydown: stop, onchange: e => run('sync.settings', { url: e.target.value.trim() }) });
+    // another server signs this PC out (Python drops the token) – ask first, then show the sign-in state again
+    const url = h('input.input', { value: st.url, onkeydown: stop, onchange: async e => {
+      const v = e.target.value.trim();
+      if (st.has_token && v !== st.url && !await confirmDialog(tr('Server address'), tr('Changing the server signs you out on this PC.'), { okLabel: tr('Change') })) { e.target.value = st.url; return; }
+      run('sync.settings', { url: v });
+    } });
     const check = (key, label) => h('label.check', h('input', { type: 'checkbox', checked: !!st[key], onchange: e => run('sync.settings', { [key]: e.target.checked }) }), label);
     const r = st.last_result || {};
     const stats = st.last_sync ? [tr('sent {n}', { n: r.sent || 0 }), tr('images uploaded {n}', { n: r.uploaded || 0 }), tr('deleted on the web {n}', { n: r.deleted_remote || 0 }),
@@ -115,6 +157,7 @@ function webSyncCard() {
           h('button.btn.sm.ghost', { onclick: () => run('sync.cancel') }, tr('Cancel')))) : null,
       h('.small.muted', tr('Last sync: {when}', { when: when(st.last_sync) }) + (st.account ? ' · ' + tr('account {account}', { account: st.account }) : '') + (st.published ? ' · ' + trn(st.published, '{n} record on the web', '{n} records on the web') : '')),
       stats ? h('.small.faint', stats) : null,
+      st.has_token ? quotaBox : null,
       ...(r.warnings || []).map(w => h('.small', { style: { color: 'var(--danger)' } }, w)),
       st.conflicts.length ? h('.col', { style: { gap: '6px' } },
         h('.small', { style: { color: 'var(--danger)' } }, tr('Conflicts ({n}) – the record changed both here and on the web, I did not overwrite anything:', { n: st.conflicts.length })),
@@ -186,13 +229,16 @@ Views.register('settings', {
 
     /* every control saves at once; folders, splitting and game names reload the library */
     const set = async (key, value, { rescan = false, quiet = false } = {}) => {
+      const old = s[key];
       s[key] = value;
-      await API.call('settings.set', { values: { [key]: value, _rescan: rescan } }).catch(() => null);
+      try { await API.call('settings.set', { values: { [key]: value, _rescan: rescan } }, { quiet: true }); }
+      catch (e) { s[key] = old; toast(tr('Not saved: {error}', { error: String(e) }), 'err'); return false; }
       if (key in App.settings || ['short_session_seconds', 'event_gap_minutes', 'hide_short_sessions'].includes(key)) App.settings[key] = value;
       if (!quiet) toast(rescan ? tr('Saved – reloading the library') : tr('Saved'));
+      return true;
     };
     const tog = (key, label, hint, opts) => h('.col', { style: { gap: '2px' } },
-      h('label.check', h('input', { type: 'checkbox', checked: !!s[key], onchange: e => set(key, e.target.checked, opts) }), label),
+      h('label.check', h('input', { type: 'checkbox', checked: !!s[key], onchange: async e => { if (await set(key, e.target.checked, opts) === false) e.target.checked = !!s[key]; } }), label),
       hint ? h('.set-hint', hint) : null);
     const num = (key, label, min, max, opts = {}) => h('label.field', label, h('input.input', {
       type: 'number', min, max, value: s[key], style: { width: '110px' }, onkeydown: stop,
@@ -229,7 +275,7 @@ Views.register('settings', {
         tog('start_minimized', tr('Start minimized'), tr('The window starts minimized (or only in the notification area when the option below is on).')),
         tog('close_to_tray', tr('Closing the window keeps the app running in the notification area'), tr('Background work (transcripts, sync, backups) goes on; quit from the icon’s menu. A playing video is paused.'))),
       card(tr('Updates'), tr('New versions are downloaded from gingygames.com / GitHub and checked against their published SHA-256 before installing.'),
-        Updates.panel({ notes: true }), updOpts()));
+        Updates.panel({ notes: true, support: false }), updOpts()));
 
     /* ---- Library ---- */
     const roots = [...(s.roots || [])];
@@ -326,7 +372,7 @@ Views.register('settings', {
       return box;
     };
     const web = sec('web',
-      card(tr('Web chronicle'), tr('Sync with gingygames.com/kosmas: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.'),
+      card(tr('Web chronicle'), tr('Sync with gingygames.com/kosmas: characters, factions, places, events, journal entries, moments (including AI chapters), video details (names and file names, not the videos themselves) and images. Everything on the web is private until you share or publish it yourself. Player contacts and test records are never sent.'),
         webSyncCard()),
       card('Discord', tr('Player names and avatars are fetched via your bot on the server. The token stays on this computer only (in the settings file in the data folder).'), discordCard(s)),
       card(tr('Test data'), tr('Records marked as test (menu ⋯ → Mark as test record) are hidden everywhere unless shown here, and they are never synced or published.'), testCard()));
@@ -350,7 +396,7 @@ Views.register('settings', {
             h('span', tr('Backups')), h('span', fmtBytes(d.backups))),
           h('.row.wrap', { style: { gap: '8px' } },
             h('button.btn', { onclick: () => API.call('open_data_dir') }, icon('folder-open'), tr('Open data folder')),
-            h('button.btn', { onclick: async () => { const r = await API.call('data.export_json').catch(() => null); if (r) toast(tr('Exported {n} records to {path}', { n: r.rows, path: r.path })); } }, icon('file-json'), tr('Export as JSON…')))),
+            h('button.btn', { onclick: async () => { const r = await API.call('data.export_json').catch(() => null); if (r) toast(trn(r.rows, 'Exported {n} record to {path}', 'Exported {n} records to {path}', { path: r.path })); } }, icon('file-json'), tr('Export as JSON…')))),
         card(tr('Automatic backups'), tr('A copy of the catalogue (catalog.db – events, characters, moments, transcripts…) in the backups folder. Attachments and thumbnails are separate files and are not part of it.'),
           tog('backup_auto', tr('Back up the catalogue automatically')),
           h('.set-row', num('backup_every_hours', tr('Every (hours)'), 1, 336), num('backup_keep', tr('Keep the newest (automatic backups)'), 1, 100)),
@@ -406,7 +452,7 @@ Views.register('settings', {
         Updates.panel({ notes: false }),
         h('.row.wrap', { style: { gap: '6px' } },
           link(info.site || 'https://cosmas.gingygames.com', tr('Website'), 'globe'), link(info.web || 'https://gingygames.com/kosmas/', tr('Web chronicle')),
-          link(info.repo || 'https://github.com/gingygames/kosmas', 'GitHub'), link(info.issues || 'https://github.com/gingygames/kosmas/issues', tr('Issues and ideas')),
+          link(info.repo || 'https://github.com/gingygames/cosmas', 'GitHub'), link(info.issues || 'https://github.com/gingygames/cosmas/issues', tr('Issues and ideas')),
           h('button.btn.sm.ghost', { onclick: () => feedbackDialog() }, icon('message-square-warning'), tr('Send feedback'))),
         h('.small.faint', tr('Licence: no licence is granted for the code yet. Bundled components keep their own licences: libmpv (mpv, LGPL/GPL), FFmpeg (GPL build), Qt / PySide6 (LGPL), Lucide icons (ISC).'))));
 

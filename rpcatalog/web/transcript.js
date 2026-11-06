@@ -44,7 +44,7 @@ const AIQ = {
     this.el = h('.aiq.hidden', { onclick: e => { if (!e.target.closest('button')) App.go('transcripts'); } },
       h('.aiq-ic', icon('audio-lines')),
       h('.grow', { style: { minWidth: 0 } }, h('.aiq-t.ellipsis'), h('.aiq-s.ellipsis'), h('.aiq-bar', h('i'))),
-      h('button.npb.aiq-pause', { onclick: () => API.call('analysis.pause', { paused: !(TR.queue && TR.queue.paused) }).then(TR.refreshQueue) }, icon('pause')));
+      h('button.npb.aiq-pause', { title: tr('Pause transcriptions'), onclick: () => API.call('analysis.pause', { paused: !(TR.queue && TR.queue.paused) }).then(TR.refreshQueue) }, icon('pause')));
     ch.insertBefore(this.el, ch.querySelector('.userbar'));
     return true;
   },
@@ -98,7 +98,7 @@ function proposalCard(p, { onDone } = {}) {
           : p.kind === 'place' ? tr('Place “{name}” added to the chronicle', nm)
           : p.kind === 'faction' ? tr('Faction “{name}” added to the chronicle', nm)
           : tr('“{name}” added to the chronicle', nm), 'ok',
-          r ? { label: tr('Open'), onClick: () => App.go({ event: 'events', character: 'characters', place: 'places', faction: 'factions' }[r.kind], { id: r.id }) } : null);
+          r ? { label: tr('Open'), fn: () => App.go({ event: 'events', character: 'characters', place: 'places', faction: 'factions' }[r.kind], { id: r.id }) } : null);
         App.refresh('events', 'chars', 'media');
         onDone && onDone(p, true);
       } }, icon('check'), tr('Accept'))));
@@ -109,7 +109,7 @@ async function reviewProposals(mediaId) {
   const props = await API.call('analysis.proposals', { media_id: mediaId });
   const body = h('.prop-list');
   const left = h('span.faint');
-  const count = () => { left.textContent = tr('{n} left', { n: body.querySelectorAll('.tprop:not(.gone)').length }); };
+  const count = () => { const n = body.querySelectorAll('.tprop:not(.gone)').length; left.textContent = trn(n, '{n} left', '{n} left'); };
   const order = { event: 0, character: 1, place: 2, faction: 3 };
   props.sort((a, b) => (order[a.kind] - order[b.kind]) || (a.data.t - b.data.t)).forEach(p => body.appendChild(proposalCard(p, { onDone: count })));
   count();
@@ -341,9 +341,9 @@ function transcriptSection(m) {
     step.onchange = upd; upd();
     selBar.classList.remove('hidden');
     clear(selBar).append(icon('scan-eye'), h('b', `${fmt.clock(a)}–${fmt.clock(b)}`), step, info, h('.grow'),
-      h('button.btn.sm.ghost', { onclick: () => TR.play(m.id, a) }, icon('play')),
+      h('button.btn.sm.ghost', { title: tr('Play'), 'aria-label': tr('Play'), onclick: () => TR.play(m.id, a) }, icon('play')),
       h('button.btn.sm.primary', { onclick: () => { start({ speech: false, vision: false, chapters: false, ranges: [[a, b, +step.value]] }); st.sel = null; renderSelBar(); $('.cov-sel', cov)?.classList.add('hidden'); toast(tr('Section added to the queue')); } }, tr('Describe picture')),
-      h('button.btn.sm.ghost.icon', { onclick: () => { st.sel = null; renderSelBar(); $('.cov-sel', cov)?.classList.add('hidden'); } }, icon('x')));
+      h('button.btn.sm.ghost.icon', { title: tr('Clear selection'), 'aria-label': tr('Clear selection'), onclick: () => { st.sel = null; renderSelBar(); $('.cov-sel', cov)?.classList.add('hidden'); } }, icon('x')));
   }
   function drawPlayhead() {
     const ph = $('.cov-ph', cov);
@@ -542,7 +542,7 @@ function mentionsSection(type, id, { title = tr('In recordings (transcript)') } 
         h('.trm-hits', g.hits.slice(0, 12).map(x => h('.trm-hit', { onclick: () => TR.play(g.media.id, x.t - 2), title: x.text || '' },
           h('span.kbd', fmt.clock(x.t)), icon({ speech: 'audio-lines', seen: 'eye', look: 'scan-face', ai: 'sparkles' }[x.kind] || 'dot'),
           h('span.ellipsis', x.text || { seen: tr('name tag / confirmed in picture'), look: tr('recognised by appearance'), speech: tr('mention in speech'), ai: tr('from the chronicle') }[x.kind] || ''))),
-          g.hits.length > 12 ? h('.tiny.faint', tr('+ {n} more', { n: g.hits.length - 12 })) : null)));
+          g.hits.length > 12 ? h('.tiny.faint', trn(g.hits.length - 12, '+ {n} more', '+ {n} more')) : null)));
     }
   }).catch(() => {});
   return box;

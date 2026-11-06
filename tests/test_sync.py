@@ -13,6 +13,7 @@ import struct
 import tempfile
 import time
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 import uuid
@@ -456,12 +457,18 @@ class SyncTest(unittest.TestCase):
         self.assertTrue(any("rozbity" in w for w in res["warnings"]), res)
         rec = self.by_src()[f"characters:{self.c2}"]
         self.assertIsNone(rec["data"].get("portrait_id"))
-        # obrázek z webu, který nejde stáhnout (404)
-        self.web("POST", "/ops", {"ops": [{"op": "create", "type": "image", "data": {
-            "owner_type": "character", "owner_id": rec["id"], "key": "neexistujeXXXXXX.png", "kind": "image"}}]})
+        # obrázek z webu, který nejde stáhnout (404): skutečné nahrání, stažení selže
+        # (klíč souboru si klient na webu sám zapsat nesmí, proto se 404 simuluje na straně klienta)
+        png = self.tmp / "web404.png"
+        _png(png)
+        self.upload_web(rec["id"], png)
         # web upraví postavu s nenahranou přílohou: lokální portrét a obrázek v textu zůstanou
         self.web("POST", "/ops", {"ops": [{"op": "update", "id": rec["id"], "data": {"name": "Hans z webu", "body_html": "<p>Hans z webu</p>"}}]})
-        res = self.run_sync()
+
+        def not_found(client_self, path):
+            raise sync.SyncError(sync.tr("Image {path} could not be downloaded ({code}).", path=path, code=404))
+        with mock.patch.object(sync.Client, "get_bytes", not_found):
+            res = self.run_sync()
         c = self.store.character(self.c2)
         self.assertEqual(c["name"], "Hans z webu")
         self.assertEqual(c["portrait_id"], bad_att)

@@ -1,5 +1,6 @@
 """Shared UI helpers: formatting, labels, theme."""
 import datetime as dt
+import re
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
@@ -19,6 +20,19 @@ KIND_LABEL = {"clip": "Clip", "session": "Recording", "manual": "Manual recordin
 KIND_LABEL_PLURAL = {"clip": "Clips", "session": "Full recordings", "manual": "Manual recordings"}
 KIND_COLOR = {"clip": "#4f9dde", "session": "#c9a227", "manual": "#9b6dd6"}
 MEDIA_MIME = "application/x-rpcatalog-media"
+
+
+_RESERVED_NAMES = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+
+
+def safe_name(s):
+    """A file or folder name Windows accepts (exported clips): none of \\ / : * ? " < > | or control characters, no
+    dots or spaces at the ends (so never "." or ".."), not a reserved device name (CON, NUL, COM1…)."""
+    s = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", str(s or ""))
+    s = re.sub(r"\s+", " ", s).strip(" .")
+    if s.split(".")[0].strip().lower() in _RESERVED_NAMES:
+        s = "_" + s
+    return s
 
 
 def fmt_dur(seconds):

@@ -7,7 +7,7 @@
 ; /RELAUNCH starts the app again after a silent install.
 
 #ifndef AppVer
-  #define AppVer "1.2.0"
+  #define AppVer "1.2.1"
 #endif
 #ifndef AppNumVer
   #define AppNumVer AppVer
@@ -30,8 +30,8 @@ AppVersion={#AppVer}
 AppVerName={cm:AppName}{#NameSuffix} {#AppVer}
 AppPublisher=gingygames
 AppPublisherURL=https://cosmas.gingygames.com
-AppSupportURL=https://github.com/gingygames/kosmas/issues
-AppUpdatesURL=https://github.com/gingygames/kosmas/releases/latest
+AppSupportURL=https://github.com/gingygames/cosmas/issues
+AppUpdatesURL=https://github.com/gingygames/cosmas/releases/latest
 VersionInfoVersion={#AppNumVer}
 VersionInfoProductName=Cosmas
 ; folder, file and data names stay "Kronikar" so updates over older installs keep working
@@ -76,12 +76,13 @@ en.AppComment=Catalogue of game recordings
 cs.AppComment=Katalog herních záznamů
 en.LaunchApp=Start Cosmas
 cs.LaunchApp=Spustit Kosmase
-en.DeleteData=Also delete your catalogue (events, characters, transcripts, thumbnails and downloaded models)?
-cs.DeleteData=Smazat i tvůj katalog (události, postavy, přepisy, náhledy a stažené modely)?
+; the whole data folder goes: say exactly what is in it (exported clips and backups too)
+en.DeleteData=Also delete your catalogue and everything in its folder: events, characters, attachments, transcripts and other AI data, thumbnails, downloaded models, clips exported from Cosmas and all catalogue backups?
+cs.DeleteData=Smazat i tvůj katalog a vše v jeho složce: události, postavy, přílohy, přepisy a další data AI, náhledy, stažené modely, klipy vyexportované z Kosmase a všechny zálohy katalogu?
 en.DataFolder=Folder:
 cs.DataFolder=Složka:
-en.DeleteDataNote=The videos themselves are not deleted. If you choose No, everything will be back after the next install.
-cs.DeleteDataNote=Videa samotná se nesmažou. Když zvolíš Ne, při další instalaci bude vše zpět.
+en.DeleteDataNote=Your recordings in the recording folders (Medal, OBS…) are never touched. If you choose No, everything will be back after the next install.
+cs.DeleteDataNote=Tvoje nahrávky ve složkách se záznamy (Medal, OBS…) zůstanou nedotčené. Když zvolíš Ne, při další instalaci bude vše zpět.
 
 [Tasks]
 #ifndef TestBuild

@@ -34,6 +34,7 @@ from pathlib import Path
 from . import i18n
 from .i18n import tr, trn
 from . import __version__
+from .sanitize import clean_html
 
 DEFAULT_URL = "https://gingygames.com"
 TOKEN_URL = "https://gingygames.com/kosmas/app/#settings"
@@ -964,8 +965,8 @@ class Syncer:
     def _body_in(self, html, old_html=None):
         """Text z webu: zmínky postav a obrázky zpátky na lokální id. Lokálně vložené obrázky,
         které na web (zatím) nešly, se zachovají."""
-        if not html:
-            html = html or ""
+        # the editor puts this into innerHTML of a page that can read local files: allow-list first (sanitize.py)
+        html = clean_html(html)
 
         def ch(m):
             lid = self.local_id("characters", int(m.group(1)))

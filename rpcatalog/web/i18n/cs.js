@@ -13,7 +13,11 @@ window.I18N_CS = {
   "+ {n} automatické herní momenty (šedé čárky)",
   "+ {n} automatických herních momentů (šedé čárky)"
  ],
- "+ {n} more": "+ {n} dalších",
+ "+ {n} more": [
+  "+ {n} další",
+  "+ {n} další",
+  "+ {n} dalších"
+ ],
  "+ {n} separate": "+ {n} samostatné",
  "+10 s": "+10 s",
  "+{n} more": "+{n} další",
@@ -212,7 +216,7 @@ window.I18N_CS = {
  "Export": "Export",
  "Export the clip": "Export klipu",
  "frame": "snímek",
- "Kosmas found a catalogue from an earlier copy of the app:\n{path}\n{info}\n\nCopy it into this installation? The original folder stays exactly as it is.": "Kosmas našel katalog z dřívější kopie aplikace:\n{path}\n{info}\n\nZkopírovat ho do této instalace? Původní složka zůstane přesně tak, jak je.",
+ "Cosmas found a catalogue from an earlier copy of the app:\n{path}\n{info}\n\nCopy it into this installation? The original folder stays exactly as it is.": "Kosmas našel katalog z dřívější kopie aplikace:\n{path}\n{info}\n\nZkopírovat ho do této instalace? Původní složka zůstane přesně tak, jak je.",
  "Mark as test record": "Označit jako testovací záznam",
  "Marked as a real record": "Označeno jako skutečný záznam",
  "Marked as test record": "Označeno jako testovací záznam",
@@ -1674,7 +1678,7 @@ window.I18N_CS = {
  "Sync failed: {error}": "Synchronizace selhala: {error}",
  "Sync is waiting for your choice (Settings → Web chronicle)": "Synchronizace čeká na tvou volbu (Nastavení → Webová kronika)",
  "Sync now": "Synchronizovat teď",
- "Sync with gingygames.com/kosmas: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.": "Synchronizace s gingygames.com/kosmas: postavy, události, zápisy, frakce, místa, obrázky a videa nahraná na YouTube. Vše je na webu soukromé, dokud to tam sám nezveřejníš. Kontakty hráčů se nikdy neposílají.",
+ "Sync with gingygames.com/kosmas: characters, factions, places, events, journal entries, moments (including AI chapters), video details (names and file names, not the videos themselves) and images. Everything on the web is private until you share or publish it yourself. Player contacts and test records are never sent.": "Synchronizace s gingygames.com/kosmas: postavy, frakce, místa, události, deníkové zápisy, momenty (včetně kapitol od AI), údaje o videích (názvy a názvy souborů, ne samotná videa) a obrázky. Všechno je na webu soukromé, dokud to sám nenasdílíš nebo nezveřejníš. Kontakty hráčů a testovací záznamy se nikdy neposílají.",
  "Sync with the desktop app": "Synchronizace s desktopem",
  "Synced views work with local videos": "Synchronizované pohledy fungují s lokálními videi",
  "Synced with the web": "Synchronizováno s webem",
@@ -1717,7 +1721,7 @@ window.I18N_CS = {
  "The address doesn't exist – check the server address.": "Adresa neexistuje – zkontroluj adresu serveru.",
  "The Anthropic key does not have permission for this: {message}": "Klíč Anthropic k tomu nemá oprávnění: {message}",
  "The bookmark will be deleted.": "Moment se smaže.",
- "The catalogue could not be copied ({error}). Kosmas starts with an empty catalogue; the original folder was not changed.": "Katalog se nepodařilo zkopírovat ({error}). Kosmas začne s prázdným katalogem; původní složka se nezměnila.",
+ "The catalogue could not be copied ({error}). Cosmas starts with an empty catalogue; the original folder was not changed.": "Katalog se nepodařilo zkopírovat ({error}). Kosmas začne s prázdným katalogem; původní složka se nezměnila.",
  "The desktop app plays every format with all audio tracks, exports MP4 clips, transcribes recordings with AI and works offline.": "Desktopová aplikace přehraje každý formát se všemi zvukovými stopami, exportuje klipy do MP4, přepisuje záznamy pomocí AI a funguje offline.",
  "The Kosmas desktop app exports an MP4 with all audio tracks in a few seconds.": "Desktopový Kosmas vyexportuje MP4 se všemi zvukovými stopami za pár sekund.",
  "The moment will be deleted.": "Moment se smaže.",
@@ -2077,7 +2081,11 @@ window.I18N_CS = {
   "{n} obrázky",
   "{n} obrázků"
  ],
- "{n} left": "{n} zbývá",
+ "{n} left": [
+  "{n} zbývá",
+  "{n} zbývají",
+  "{n} zbývá"
+ ],
  "{n} member": [
   "{n} člen",
   "{n} členové",
@@ -2120,7 +2128,11 @@ window.I18N_CS = {
   "{n} výsledky",
   "{n} výsledků"
  ],
- "{n} selected": "{n} vybráno",
+ "{n} selected": [
+  "{n} vybrané",
+  "{n} vybraná",
+  "{n} vybraných"
+ ],
  "{n} selected character": [
   "{n} vybraná postava",
   "{n} vybrané postavy",
@@ -2199,9 +2211,9 @@ window.I18N_CS = {
  "Share": "Sdílet",
  "Publishing to the web…": "Nahrávám na web…",
  "Saving…": "Ukládám…",
- "Sharing works through the web chronicle. Sign in with Discord – the record is uploaded to your private chronicle and you decide who can see it.": "Sdílení jde přes webovou kroniku. Přihlas se přes Discord – záznam se nahraje do tvé soukromé kroniky a ty rozhodneš, kdo ho uvidí.",
+ "Sharing works through the web chronicle. Sign in with Discord – sharing then syncs your whole catalogue to your private web chronicle, and only what you share is visible to others.": "Sdílení jde přes webovou kroniku. Přihlas se přes Discord – sdílení pak synchronizuje celý tvůj katalog do tvé soukromé webové kroniky a ostatní uvidí jen to, co nasdílíš.",
  "A moment is shared together with its video “{title}”.": "Moment se sdílí spolu se svým videem „{title}“.",
- "The record is not on the web yet – choosing a link or Public uploads it now.": "Záznam ještě není na webu – volba Odkaz nebo Veřejné ho hned nahraje.",
+ "The record is not on the web yet. Choosing a link or Public first syncs your whole catalogue to your private web chronicle: characters, factions, places, events, journal entries, moments (including AI chapters), video details (names and file names, not the videos) and attached images. Only this record becomes visible to others – everything else stays private.": "Záznam ještě není na webu. Volba „Kdo má odkaz“ nebo „Veřejné“ nejdřív synchronizuje celý tvůj katalog do tvé soukromé webové kroniky: postavy, frakce, místa, události, deníkové zápisy, momenty (včetně kapitol od AI), údaje o videích (názvy a názvy souborů, ne samotná videa) a přiložené obrázky. Ostatní uvidí jen tento záznam – všechno ostatní zůstane soukromé.",
  "Share…": "Sdílet…",
  "Copies the link – paste it into Discord, it shows a preview card": "Zkopíruje odkaz – vlož ho do Discordu, ukáže se náhled",
  "Link copied – paste it into Discord, it shows a preview card.": "Odkaz zkopírován – vlož ho do Discordu, ukáže se náhled.",
@@ -2333,7 +2345,7 @@ window.I18N_CS = {
  "Question": "Dotaz",
  "What happened, what did you expect, how can it be reproduced? Or your idea…": "Co se stalo, co jsi čekal(a) a jak to zopakovat? Nebo tvůj nápad…",
  "optional – only if you want an answer": "nepovinné – jen pokud chceš odpověď",
- "Attach the log (last 2000 lines; tokens, e-mails and your user folder are removed)": "Přiložit log (posledních 2000 řádků; tokeny, e-maily a tvoje uživatelská složka se odstraní)",
+ "Attach the log (last 2000 lines). It can contain file names and paths of your recordings; tokens, e-mails and your user folder are removed.": "Přiložit log (posledních 2000 řádků). Může obsahovat názvy souborů a cesty k tvým záznamům; tokeny, e-maily a tvoje uživatelská složka se z něj odstraní.",
  "Attach a screenshot of the app window": "Přiložit snímek okna aplikace",
  "Include system info (Windows version, app version, GPU, RAM)": "Přidat informace o systému (verze Windows a aplikace, grafika, RAM)",
  "The error details (traceback, redacted) are attached.": "Podrobnosti chyby (traceback, očištěný) jsou přiložené.",
@@ -2421,7 +2433,7 @@ window.I18N_CS = {
  "Video thumbnails": "Náhledy videí",
  "Transcripts and AI results": "Přepisy a výsledky AI",
  "Backups": "Zálohy",
- "Exported {n} records to {path}": [
+ "Exported {n} record to {path}": [
   "Exportován {n} záznam do {path}",
   "Exportovány {n} záznamy do {path}",
   "Exportováno {n} záznamů do {path}"
@@ -2462,5 +2474,31 @@ window.I18N_CS = {
  "Issues and ideas": "Chyby a nápady",
  "Send feedback": "Poslat zpětnou vazbu",
  "Licence: no licence is granted for the code yet. Bundled components keep their own licences: libmpv (mpv, LGPL/GPL), FFmpeg (GPL build), Qt / PySide6 (LGPL), Lucide icons (ISC).": "Licence: ke kódu zatím není udělena žádná licence. Přibalené komponenty mají vlastní licence: libmpv (mpv, LGPL/GPL), FFmpeg (GPL build), Qt / PySide6 (LGPL), ikony Lucide (ISC).",
- "Changes are saved right away.": "Změny se ukládají hned."
+ "Changes are saved right away.": "Změny se ukládají hned.",
+ "Previous image": "Předchozí obrázek",
+ "Next image": "Další obrázek",
+ "Auto": "Automaticky",
+ "This character is used on Discord: with a link or Public, its card with the link is posted in the community Discord channel 🧙│postavy.": "Tahle postava se používá na Discordu: když ji sdílíš odkazem nebo veřejně, objeví se její karta s odkazem v komunitním kanálu 🧙│postavy na Discordu.",
+ "This character is used on Discord, so its card with the link is posted in the community Discord channel 🧙│postavy.": "Tahle postava se používá na Discordu, takže se její karta s odkazem objeví v komunitním kanálu 🧙│postavy na Discordu.",
+ "Videos and their moments show up on the shared event only when you publish the video too (a video shared by link shows up when the event is opened through its link).": "Videa a jejich momenty se u sdílené události ukážou, jen když zveřejníš i samotné video (video sdílené odkazem se ukáže, když někdo otevře událost přes její odkaz).",
+ "Images on the web: {used} ({n} file)": [
+  "Obrázky na webu: {used} ({n} soubor)",
+  "Obrázky na webu: {used} ({n} soubory)",
+  "Obrázky na webu: {used} ({n} souborů)"
+ ],
+ "Images on the web: {used} of {limit} ({n} file)": [
+  "Obrázky na webu: {used} z {limit} ({n} soubor)",
+  "Obrázky na webu: {used} z {limit} ({n} soubory)",
+  "Obrázky na webu: {used} z {limit} ({n} souborů)"
+ ],
+ "Not saved: {error}": "Neuloženo: {error}",
+ "Support Cosmas": "Podpořit Kosmas",
+ "Opens in your browser": "Otevře se v prohlížeči",
+ "This copy wasn't installed with the installer, so it can't update itself. Download the new version from the download page.": "Tahle kopie nebyla nainstalovaná instalátorem, takže se nemůže sama aktualizovat. Novou verzi si stáhni ze stránky ke stažení.",
+ "{app} is already running. If you can't see its window, look for its icon in the notification area.": "{app} už běží. Pokud nevidíš jeho okno, hledej jeho ikonu v oznamovací oblasti.",
+ "Only images from the web (http, https) can be loaded here.": "Sem jde načíst jen obrázek z webu (http, https).",
+ "Other games": "Ostatní",
+ "clip": "klip",
+ "Saved – paste a new token to replace it": "Uložený – nový token sem vlož, pokud ho chceš nahradit",
+ "Changing the server signs you out on this PC.": "Změna serveru tě na tomhle počítači odhlásí."
 };

@@ -28,7 +28,8 @@ const API = {
     });
     return this._ready;
   },
-  call(method, args = {}) {
+  /** opts.quiet: no error toast (the caller handles or hides the error) */
+  call(method, args = {}, { quiet = false } = {}) {
     return this._ready.then(() => new Promise((resolve, reject) => {
       // new things created while a server is selected belong to that server
       if (/^(event|char|faction|place)\.create$/.test(method) && App.scope && args.server_id === undefined) {
@@ -38,16 +39,16 @@ const API = {
       this._bridge.call(method, JSON.stringify(Object.assign({}, args, { _src: this.src })), res => {
         let r;
         try { r = JSON.parse(res); } catch (e) { reject(String(e)); return; }
-        if (r.error) { toast(r.error, 'err'); reject(r.error); }
-        else if (r.ok && r.ok._bg) this._bgWait(r.ok._bg, resolve, reject);   // network work in a Python thread
+        if (r.error) { if (!quiet) toast(r.error, 'err'); reject(r.error); }
+        else if (r.ok && r.ok._bg) this._bgWait(r.ok._bg, resolve, reject, quiet);   // network work in a Python thread
         else resolve(r.ok);
       });
     }));
   },
   /* results of background calls arrive as the "bg" notification {id, ok | error} */
   _bgPending: {}, _bgEarly: {},
-  _bgWait(id, resolve, reject) {
-    const done = d => { if (d.error) { toast(d.error, 'err'); reject(d.error); } else resolve(d.ok); };
+  _bgWait(id, resolve, reject, quiet = false) {
+    const done = d => { if (d.error) { if (!quiet) toast(d.error, 'err'); reject(d.error); } else resolve(d.ok); };
     if (this._bgEarly[id]) { done(this._bgEarly[id]); delete this._bgEarly[id]; return; }
     this._bgPending[id] = done;
   },
@@ -102,9 +103,13 @@ const icon = (name, cls = '') => h('i', { class: `icon-${name} ${cls}`.trim() })
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
+/* d.flush() runs a pending call right away (with its arguments) and does nothing when no call is pending */
 function debounce(fn, ms = 300) {
-  let t; const d = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
-  d.flush = (...a) => { clearTimeout(t); fn(...a); }; return d;
+  let t = null, last = [];
+  const d = (...a) => { last = a; clearTimeout(t); t = setTimeout(() => { t = null; fn(...last); }, ms); };
+  d.flush = () => { if (t === null) return; clearTimeout(t); t = null; return fn(...last); };
+  d.cancel = () => { clearTimeout(t); t = null; };
+  return d;
 }
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -379,31 +384,77 @@ function overlayRoot() { return $('#overlays'); }
 
 function toast(msg, type = 'ok', action) {
   let box = $('#toasts');
-  if (!box) { box = h('div', { id: 'toasts' }); document.body.appendChild(box); }
+  if (!box) { box = h('div', { id: 'toasts', role: 'status', 'aria-live': 'polite' }); document.body.appendChild(box); }
+  const run = action && (action.fn || action.onClick);
   const t = h('.toast.' + type, icon(type === 'err' ? 'circle-alert' : 'circle-check'), h('span', msg),
-    action ? h('span.act', { onclick: () => { action.fn(); t.remove(); } }, action.label) : null);
+    action ? h('span.act', { role: 'button', tabindex: '0', onclick: () => { run && run(); t.remove(); } }, action.label) : null);
   box.appendChild(t);
   setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = 0; setTimeout(() => t.remove(), 300); },
     type === 'err' ? 6000 : 3200);
 }
 
-/** modal({title, body, actions:[{label, primary, danger, onClick}], wide, xwide, onClose}) */
+/** modal({title, body, actions:[{label, primary, danger, onClick}], wide, xwide, onClose})
+    Stacked dialogs: Escape closes only the topmost one; Tab stays inside it. While an action's onClick runs,
+    the footer buttons are disabled (no double sends). */
+const _modals = [];
+let _modalSeq = 0;
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
 function modal({ title, body, actions = [], wide = false, xwide = false, onClose, icon: ic }) {
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); onClose && onClose(); };
-  const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  let closed = false, busy = false;
+  const prevFocus = document.activeElement;
+  const titleId = 'modal-title-' + (++_modalSeq);
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    back.remove(); document.removeEventListener('keydown', onKey, true);
+    const i = _modals.indexOf(back); if (i >= 0) _modals.splice(i, 1);
+    // focus goes back where it was – unless another dialog is still open on top
+    const top = _modals[_modals.length - 1];
+    if (prevFocus && prevFocus.isConnected && prevFocus.focus && (!top || top.contains(prevFocus))) { try { prevFocus.focus(); } catch (e) { /* ignore */ } }
+    onClose && onClose();
+  };
+  const onKey = e => {
+    if (_modals[_modals.length - 1] !== back) return;     // only the topmost dialog reacts
+    if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
+    if (e.key === 'Tab') {
+      const els = [...box.querySelectorAll(FOCUSABLE)].filter(el => el.getClientRects().length);
+      if (!els.length) { e.preventDefault(); box.focus(); return; }
+      const first = els[0], last = els[els.length - 1];
+      if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && (document.activeElement === first || document.activeElement === box)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  };
   const footer = h('footer');
   for (const a of actions) {
-    footer.appendChild(h(`button.btn${a.primary ? '.primary' : ''}${a.danger ? '.danger' : ''}`, {
-      onclick: async () => { const r = a.onClick ? await a.onClick() : true; if (r !== false) close(); },
-    }, a.icon ? icon(a.icon) : null, a.label));
+    const b = h(`button.btn${a.primary ? '.primary' : ''}${a.danger ? '.danger' : ''}`, {
+      type: 'button',
+      onclick: async () => {
+        if (busy || closed) return;
+        busy = true;
+        const btns = [...footer.querySelectorAll('button')];
+        btns.forEach(x => { x.disabled = true; }); b.setAttribute('aria-busy', 'true');
+        let r;
+        try { r = a.onClick ? await a.onClick() : true; } catch (e) { r = false; console.error(e); }
+        busy = false;
+        btns.forEach(x => { x.disabled = false; }); b.removeAttribute('aria-busy');
+        if (r !== false) close();
+      },
+    }, a.icon ? icon(a.icon) : null, a.label);
+    footer.appendChild(b);
   }
-  const box = h(`.modal${wide ? '.wide' : ''}${xwide ? '.xwide' : ''}`,
-    h('header', ic ? icon(ic) : null, h('h2', title), h('button.btn.ghost.icon', { onclick: close, title: tr('Close') }, icon('x'))),
+  const box = h(`.modal${wide ? '.wide' : ''}${xwide ? '.xwide' : ''}`, { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId, tabindex: '-1' },
+    h('header', ic ? icon(ic) : null, h('h2', { id: titleId }, title), h('button.btn.ghost.icon', { type: 'button', onclick: close, title: tr('Close'), 'aria-label': tr('Close') }, icon('x'))),
     h('.body', body), actions.length ? footer : null);
   const back = h('.backdrop', { onmousedown: e => { if (e.target === back) close(); } }, box);
   overlayRoot().appendChild(back);
+  _modals.push(back);
   document.addEventListener('keydown', onKey, true);
-  setTimeout(() => { const f = box.querySelector('[autofocus], .input'); f && f.focus(); }, 30);
+  setTimeout(() => {
+    if (closed || box.contains(document.activeElement)) return;
+    const f = box.querySelector('[autofocus], .input');
+    (f || box).focus();
+  }, 30);
   return { close, box };
 }
 
@@ -681,16 +732,16 @@ function lightbox(items, index = 0) {
     h('.row', { style: { position: 'fixed', top: '16px', right: '16px' } },
       srcBtn,
       h('button.btn.icon', { title: tr('Open in image viewer'), onclick: () => API.call('att.open', { id: items[i].id }) }, icon('external-link')),
-      h('button.btn.icon', { onclick: () => close() }, icon('x'))),
-    items.length > 1 ? h('button.btn.icon', { style: { position: 'fixed', left: '16px', top: '50%' }, onclick: () => { i = (i - 1 + items.length) % items.length; show(); } }, icon('chevron-left')) : null,
-    items.length > 1 ? h('button.btn.icon', { style: { position: 'fixed', right: '16px', top: '50%' }, onclick: () => { i = (i + 1) % items.length; show(); } }, icon('chevron-right')) : null);
+      h('button.btn.icon', { title: tr('Close'), 'aria-label': tr('Close'), onclick: () => close() }, icon('x'))),
+    items.length > 1 ? h('button.btn.icon', { title: tr('Previous image'), 'aria-label': tr('Previous image'), style: { position: 'fixed', left: '16px', top: '50%' }, onclick: () => { i = (i - 1 + items.length) % items.length; show(); } }, icon('chevron-left')) : null,
+    items.length > 1 ? h('button.btn.icon', { title: tr('Next image'), 'aria-label': tr('Next image'), style: { position: 'fixed', right: '16px', top: '50%' }, onclick: () => { i = (i + 1) % items.length; show(); } }, icon('chevron-right')) : null);
   const onKey = e => {
     if (e.key === 'Escape') close();
     if (e.key === 'ArrowLeft' && items.length > 1) { i = (i - 1 + items.length) % items.length; show(); }
     if (e.key === 'ArrowRight' && items.length > 1) { i = (i + 1) % items.length; show(); }
     e.stopPropagation();
   };
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); };
+  const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); const k = _modals.indexOf(back); if (k >= 0) _modals.splice(k, 1); };
   document.addEventListener('keydown', onKey, true);
-  overlayRoot().appendChild(back); show();
+  overlayRoot().appendChild(back); _modals.push(back); show();
 }
