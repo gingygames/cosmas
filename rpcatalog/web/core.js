@@ -80,7 +80,10 @@ function h(tag, attrs, ...children) {
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
     if (k === 'class') el.className += (el.className ? ' ' : '') + v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'style' && typeof v === 'object') {
+      // custom properties (--bm, --c …) need setProperty – Object.assign silently drops them
+      for (const [p, x] of Object.entries(v)) { if (p.startsWith('--')) { if (x != null) el.style.setProperty(p, x); } else el.style[p] = x; }
+    }
     else if (k === 'html') el.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
     else if (k === 'value') el.value = v;
