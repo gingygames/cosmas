@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Stáhnout pro Windows</b></a> ·
-  <a href="https://cosmas.gingygames.com">Web aplikace</a> · <a href="https://gingygames.com/kosmas/">Webová kronika</a> ·
+  <a href="https://cosmas.gingygames.com">Web</a> · <a href="https://gingygames.com/kosmas/">Webová kronika</a> ·
   <a href="#instalace">Instalace</a> · <a href="#přihlášení-a-synchronizace-s-webem">Synchronizace</a> ·
   <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#soukromí">Soukromí</a> · <a href="#sestavení-ze-zdrojových-kódů">Ze zdrojových kódů</a>
 </p>
@@ -22,7 +22,7 @@
 - volitelně **synchronizace s webovou kronikou** na [gingygames.com/kosmas](https://gingygames.com/kosmas/) – postavu nebo událost
   nasdílíš odkazem a postavy použiješ v komunitním botovi na Discordu.
 
-Rozhraní je anglicky, nebo česky, když máš Windows v češtině či slovenštině (Nastavení → Jazyk: Automaticky / English / Čeština).
+Rozhraní je anglicky, nebo česky, když máš Windows v češtině či slovenštině (Nastavení → Obecné → Jazyk: Automaticky / English / Čeština).
 
 | | |
 |:-:|:-:|
@@ -32,6 +32,8 @@ Rozhraní je anglicky, nebo česky, když máš Windows v češtině či sloven�
 <sub>Snímky ukazují smyšlená ukázková data (anglické rozhraní).</sub>
 
 ## Stažení
+> **Kosmas 1.2.0 je beta.** Je připravený na běžné používání, ale cokoli divného prosím nahlas přes **?** → *Nahlásit chybu* v záhlaví okna.
+
 Stáhni **Cosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
 (odkaz je i na [cosmas.gingygames.com](https://cosmas.gingygames.com)). U každého vydání je vedle instalátoru soubor `.sha256`. 64bitové Windows 10 (1809 a novější) nebo Windows 11.
 
@@ -40,13 +42,18 @@ Stáhni **Cosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://githu
    - Instaluje se jen pro tvého uživatele (`%LOCALAPPDATA%\Programs\Kronikar`): bez práv správce, bez Pythonu, nic dalšího –
      přehrávač (libmpv) i ffmpeg jsou uvnitř.
    - Zástupci se vytvoří v nabídce Start a na ploše (ten na ploše můžeš odškrtnout).
+   - Instalátor zatím není digitálně podepsaný, takže Windows může ukázat *Systém Windows ochránil váš počítač* (SmartScreen).
+     Klikni na **Další informace → Přesto spustit**. Jestli chceš mít jistotu, že je soubor pravý, porovnej jeho SHA-256 se souborem
+     `.sha256` u vydání (PowerShell: `Get-FileHash .\Cosmas-Setup-<verze>.exe`).
 2. **Aktualizace:** Kosmas sám hlídá nové verze (chvíli po spuštění a pak každých 12 hodin) a v záhlaví okna ukáže
    **Aktualizace x.y.z**. *Aktualizovat* stáhne instalátor na pozadí a ověří ho podle zveřejněného SHA-256, *Restartovat a nainstalovat*
    aplikaci řádně zavře, potichu nainstaluje novou verzi a znovu ji spustí. Nastavení → Obecné → Aktualizace: automatická kontrola,
    stahování na pozadí, kanál stabilní nebo beta, *Zkontrolovat*, *Tuhle verzi přeskočit*. Funguje i ruční spuštění novějšího
    instalátoru; data zůstanou a starší instalace (Kronikář 1.0, Kosmas 1.1) se aktualizují na místě včetně zástupců.
    Anglicky se aplikace jmenuje **Cosmas**, česky **Kosmas** – zástupce pojmenuje instalátor podle svého jazyka.
-3. **Odinstalace:** *Nastavení Windows → Aplikace → Kosmas*. Zeptá se, jestli smazat i katalog (výchozí je ponechat); videa se nikdy nemažou.
+3. **Odinstalace:** *Nastavení Windows → Aplikace → Kosmas*. Zeptá se, jestli smazat i katalog (výchozí je ponechat).
+   Smazání odstraní celou datovou složku: katalog, přílohy, data AI, vyexportované klipy i zálohy. Záznamů ve složkách s nahrávkami
+   se odinstalace nikdy nedotkne.
 
 ## První spuštění
 - Kosmas sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v **Nastavení → Knihovna**.
@@ -56,13 +63,13 @@ Stáhni **Cosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://githu
 - Pokud jsi Kosmase dřív spouštěl ze zdrojových kódů nebo z přenosné kopie, první spuštění ten katalog najde a **zeptá se**,
   jestli ho má zkopírovat. Původní složka se nikdy nepřesouvá ani nemění.
 - Chceš si něco vyzkoušet a nezaneřádit kroniku? Označ záznamy jako testovací (⋯ → *Označit jako testovací záznam*): jsou skryté,
-  dokud nezapneš **Nastavení → Testovací data → Zobrazit testovací data**, nikdy se nesynchronizují a *Smazat testovací data* je
+  dokud nezapneš **Nastavení → Web a synchronizace → Testovací data → Zobrazit testovací data**, nikdy se nesynchronizují a *Smazat testovací data* je
   odstraní (po záloze).
 
 ## Přihlášení a synchronizace s webem
 Webová kronika na [gingygames.com/kosmas](https://gingygames.com/kosmas/) ukáže tvoje postavy, události, frakce a místa v prohlížeči
 a umožní je sdílet.
-1. **Nastavení → Webová kronika → Přihlásit se přes Discord.** Otevře se prohlížeč; přihlas se Discordem a klikni na **Povolit**. Nic se nekopíruje.
+1. **Nastavení → Web a synchronizace → Přihlásit se přes Discord.** Otevře se prohlížeč; přihlas se Discordem a klikni na **Povolit**. Nic se nekopíruje.
    (Když se prohlížeč nemůže vrátit do aplikace, použij zobrazený kód.)
 2. **Synchronizovat teď** – nebo zaškrtni *Synchronizovat po startu aplikace*. Změny jdou oběma směry; když se tentýž záznam změnil na obou stranách,
    vybereš, která verze platí.
@@ -203,7 +210,7 @@ chybě aplikace sama nabídne poslat hlášení s podrobnostmi.
 ## Discord
 - **Hráči bez serveru:** stačí token bota (bot nemusí být nikde pozvaný) a u hráče „Propojit podle ID“ – stáhne jméno
   a avatar z veřejného profilu. Discord ID: Nastavení → Pokročilé → Režim vývojáře, pravý klik → Kopírovat ID uživatele.
-- **Hráči ze serveru:** Nastavení → Discord: token bota + ID serveru → „Načíst členy a vytvořit hráče“ (jméno a avatar),
+- **Hráči ze serveru:** Nastavení → Web a synchronizace → Discord: token bota + ID serveru → „Načíst členy a vytvořit hráče“ (jméno a avatar),
   u hráče „Propojit s Discordem“, „Aktualizovat jména a avatary“. Bot potřebuje zapnutý *Server Members Intent*.
 - **Holubí pošta ze schránky (PM):** v Discordu označ zprávy tažením myši, Ctrl+C, v Holubí poště Ctrl+V
   (nebo Přidat → Vložit ze schránky). Rozpozná autora, čas a text, předvybere zprávy se slovem „holub“,
@@ -314,7 +321,7 @@ Repozitář zatím nemá soubor s licencí, takže ke kódu žádná licence ud�
 libmpv (mpv), FFmpeg (GPL build), Qt/PySide6 (LGPL), ikony Lucide (ISC).
 
 ## Odkazy
-- Web aplikace: https://cosmas.gingygames.com
+- Web: https://cosmas.gingygames.com
 - Webová kronika: https://gingygames.com/kosmas/
 - Stažení: https://github.com/gingygames/kosmas/releases/latest
 - Chyby a nápady: https://github.com/gingygames/kosmas/issues

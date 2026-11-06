@@ -33,6 +33,8 @@ English / Čeština). In English the app is called Cosmas, in Czech Kosmas – t
 <sub>Screenshots use made-up demo data.</sub>
 
 ## Download
+> **Cosmas 1.2.0 is a beta.** It is ready for everyday use, but please report anything odd with **?** → *Report a bug* in the title bar.
+
 Get **Cosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
 (also linked from [cosmas.gingygames.com](https://cosmas.gingygames.com)). Each release has a `.sha256` file next to the installer. 64-bit Windows 10 (1809 or newer) or Windows 11.
 
@@ -41,14 +43,18 @@ Get **Cosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://gith
    - It installs for your user only (`%LOCALAPPDATA%\Programs\Kronikar`): no admin rights, no Python, nothing else needed –
      the video player (libmpv) and ffmpeg are bundled.
    - Shortcuts go to the Start menu and to the desktop (you can untick the desktop one).
+   - The installer isn't code-signed yet, so Windows may show *Windows protected your PC* (SmartScreen). Click **More info → Run anyway**.
+     To be sure the file is the real one, compare its SHA-256 with the `.sha256` file of the release
+     (PowerShell: `Get-FileHash .\Cosmas-Setup-<version>.exe`).
 2. **Updating:** Cosmas checks for new versions by itself (shortly after the start, then every 12 hours) and shows
    **Update x.y.z** in the title bar. *Update now* downloads the installer in the background, checks it against the published SHA-256,
    and *Restart and install* closes the app cleanly, installs silently and starts it again. Settings → General → Updates: automatic
    checks on/off, download in the background, stable or beta channel, *Check now*, *Skip this version*. Running a newer installer by
    hand works too; it keeps your data, and older installs (Kronikář 1.0, Kosmas 1.1) are updated in place with their shortcuts
    replaced.
-3. **Uninstalling:** *Windows Settings → Apps → Cosmas*. You're asked whether to delete your catalogue too (default: keep it);
-   your videos are never deleted.
+3. **Uninstalling:** *Windows Settings → Apps → Cosmas*. You're asked whether to delete your catalogue too (default: keep it).
+   Deleting it removes the whole data folder: the catalogue, attachments, AI data, clips you exported and the backups.
+   Your recordings in the recording folders are never touched.
 
 ## First run
 - Cosmas looks for your Medal folders by itself (`Videos\Medal`, `X:\Medal`). Add other folders in **Settings → Library**.
@@ -58,12 +64,12 @@ Get **Cosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://gith
 - If you used Cosmas before from a source checkout or a portable copy, the first start finds that catalogue and **asks** whether to copy
   it in. The original folder is never moved or changed.
 - Want to try things out without cluttering your chronicle? Mark records as test data (⋯ → *Mark as test record*): they are hidden
-  unless **Settings → Test data → Show test data** is on, they never sync, and *Delete test data* removes them (after a backup).
+  unless **Settings → Web & sync → Test data → Show test data** is on, they never sync, and *Delete test data* removes them (after a backup).
 
 ## Sign in and sync with the web
 The web chronicle at [gingygames.com/kosmas](https://gingygames.com/kosmas/) shows your characters, events, factions and places in the
 browser and lets you share them.
-1. **Settings → Web chronicle → Sign in with Discord.** Your browser opens; sign in with Discord and click **Allow**. Nothing to copy.
+1. **Settings → Web & sync → Sign in with Discord.** Your browser opens; sign in with Discord and click **Allow**. Nothing to copy.
    (If the browser can't return to the app, use the code shown instead.)
 2. **Sync now** – or tick *Sync after the app starts*. Changes go both ways; when both sides changed the same record you choose which wins.
 3. Everything on the web is **private** until you share it: the **Share** button on a character, faction, place, event or moment offers
@@ -205,7 +211,7 @@ sent later. After an unexpected error the app offers to send a report with the d
 ## Discord
 - **Players without a server:** all you need is a bot token (the bot doesn't have to be invited anywhere) and "Link by ID" on the player – it pulls
   the name and avatar from the public profile. To get a Discord ID: Settings → Advanced → Developer Mode, then right-click → Copy User ID.
-- **Players from a server:** Settings → Discord: bot token + server ID → "Load members and create players" (name and avatar),
+- **Players from a server:** Settings → Web & sync → Discord: bot token + server ID → "Load members and create players" (name and avatar),
   then "Link with Discord" on a player, and "Update names and avatars". The bot needs the *Server Members Intent* enabled.
 - **Pigeon post from the clipboard (DMs):** in Discord, select messages by dragging the mouse, press Ctrl+C, then Ctrl+V in Pigeon post
   (or Add → Paste from clipboard). It recognizes the author, time and text, preselects messages containing the marker word ("holub" = pigeon by default),
