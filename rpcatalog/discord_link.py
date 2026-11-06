@@ -14,10 +14,11 @@ import urllib.request
 import zipfile
 from datetime import datetime
 
+from . import __version__
 from .i18n import tr
 
 API = "https://discord.com/api/v10"
-UA = "RPKatalog (local catalog app, 1.0)"
+UA = f"DiscordBot (https://github.com/gingygames/cosmas, {__version__})"     # the form Discord asks bots to use
 
 
 class DiscordError(Exception):
@@ -136,7 +137,7 @@ def channel_letters(token, channel_id, marker, limit=5000):
 def export_letters(path, marker):
     """Letters from Discord's data package (Settings → Data & Privacy → Request data).
     `path` is the downloaded .zip or its unpacked folder. Contains only messages YOU sent."""
-    files = {}
+    files, z = {}, None
     if os.path.isdir(path):
         for root, _, names in os.walk(path):
             for n in names:
@@ -149,7 +150,14 @@ def export_letters(path, marker):
             files[n] = lambda n=n: z.read(n)
     else:
         raise DiscordError(tr("Choose the package.zip file from Discord or its unpacked folder."))
+    try:
+        return _export_letters(files, marker)
+    finally:
+        if z is not None:
+            z.close()
 
+
+def _export_letters(files, marker):
     def find(suffix):
         return [k for k in files if k.lower().endswith(suffix.lower())]
 
