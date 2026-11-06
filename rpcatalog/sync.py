@@ -96,6 +96,9 @@ NOT_NULL = {"entries": {"event_id"}, "bookmarks": {"media_id", "t"}, "attachment
 MAX_PX = 1600
 UPLOAD_MIME = {"image/webp", "image/jpeg", "image/png", "image/gif", "image/avif"}
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+# tlačítko Sdílet: druh záznamu v UI -> lokální tabulka (moment se sdílí se svým videem)
+SHARE_KINDS = {"character": "characters", "faction": "factions", "place": "places", "event": "events",
+               "bookmark": "bookmarks", "video": "media"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS published (
@@ -1433,6 +1436,107 @@ class Syncer:
         self.stats["conflicts"] = len(self.conflicts())
         return dict(self.stats, at=time.time(), warnings=self.warnings[:20])
 
+    # ---------- sdílení jednoho záznamu (tlačítko Sdílet)
+    def share_target(self, kind, lid):
+        """(tabulka, id, titulek, via) – moment se sdílí spolu se svým videem (via = video)."""
+        table = SHARE_KINDS.get(kind)
+        if not table:
+            raise SyncError(tr("This record can't be shared."))
+        row = self.row(table, lid)
+        if row is None:
+            raise SyncError(tr("The record no longer exists."))
+        title = row.get("title") if table in ("events", "bookmarks") else row.get("name")
+        via = None
+        if table == "media":
+            from .store import Media
+            title = Media(row).sync_title
+        if table == "bookmarks":
+            m = self.row("media", row["media_id"])
+            if m is None:
+                raise SyncError(tr("The record no longer exists."))
+            from .store import Media
+            via = {"type": "video", "title": Media(m).sync_title}
+            table, lid = "media", row["media_id"]
+        return table, lid, title or "", via
+
+    def share_info(self, kind, lid):
+        """Stav sdílení: {signed_in, published, visibility, share_url, title, via}. Bez tokenu bez sítě."""
+        table, tid, title, via = self.share_target(kind, lid)
+        p = self.pub(table, tid) or {}
+        out = {"kind": kind, "id": lid, "title": title, "via": via, "desktop": True, "signed_in": bool(self.client.token),
+               "published": bool(p.get("remote_id")), "visibility": p.get("visibility") or "private", "share_url": None}
+        if not out["signed_in"] or not out["published"]:
+            return out
+        try:
+            rec = self.client.request("GET", f"/records/{p['remote_id']}")
+        except SyncError as e:
+            if getattr(e, "status", None) in (403, 404):
+                out["published"] = False                # smazané na webu / jiný účet → příští synchronizace to vyřeší
+                return out
+            raise
+        if rec.get("deleted"):
+            out["published"] = False
+            return out
+        vis = rec.get("visibility") or "private"
+        self.set_pub(table, tid, visibility=vis)
+        out.update(visibility=vis, remote_id=rec["id"], share_url=rec.get("share_url") or self._share_url(rec))
+        return out
+
+    def _share_url(self, rec):
+        site = self.client.base.rsplit("/kronika/api", 1)[0]
+        if rec.get("visibility") == "link" and rec.get("share_token"):
+            return f"{site}/kronika/k/{rec['share_token']}"
+        if rec.get("visibility") == "public":
+            return f"{site}/kronika/z/{rec['id']}"
+        return None
+
+    def share_set(self, kind, lid, visibility=None, rotate=False):
+        """Změní viditelnost (private | link | public) nebo vygeneruje nový odkaz (rotate).
+        Nepublikovaný záznam se nejdřív nahraje celou synchronizací (run) – volající to řídí."""
+        if visibility is not None and visibility not in ("private", "link", "public"):
+            raise SyncError(tr("Unknown visibility"))
+        if not self.client.token:
+            raise SyncError(tr("Sign in with Discord first (Settings → Web chronicle)."))
+        table, tid, _, _ = self.share_target(kind, lid)
+        p = self.pub(table, tid) or {}
+        if not p.get("remote_id"):
+            if visibility in (None, "private"):
+                return self.share_info(kind, lid)
+            raise SyncError(tr("The record isn't on the web yet – it can't be put there (a video needs a YouTube link "
+                               "or has to be in a recordings folder)."))
+        op = {"op": "meta", "id": p["remote_id"]}
+        if visibility is not None:
+            op["visibility"] = visibility
+        if rotate:
+            op["share_token"] = "rotate"
+        self.client.request("POST", "/ops", {"ops": [op]})
+        return self.share_info(kind, lid)
+
+    def share_publish(self, kind, lid, visibility):
+        """Celá synchronizace (záznam se dostane na web) a pak viditelnost. Vrací výsledek synchronizace + share."""
+        res = self.run()
+        res["share"] = self.share_set(kind, lid, visibility)
+        return res
+
+
+def is_published(db_path, kind, lid):
+    """Je záznam (u momentu jeho video) už na webu? Jen lokální mapa, bez sítě."""
+    table = SHARE_KINDS.get(kind)
+    if not table:
+        return False
+    db = sqlite3.connect(str(db_path), timeout=30)
+    try:
+        ensure_schema(db)
+        if table == "bookmarks":
+            r = db.execute("SELECT media_id FROM bookmarks WHERE id=?", (lid,)).fetchone()
+            if not r:
+                return False
+            table, lid = "media", r[0]
+        r = db.execute("SELECT remote_id FROM published WHERE local_type=? AND local_id=?", (table, lid)).fetchone()
+        return bool(r and r[0])
+    finally:
+        db.close()
+
 
 def status(db_path, settings):
     """Stav pro UI (bez sítě)."""
@@ -1451,5 +1555,5 @@ def status(db_path, settings):
         "token": mask_token(settings.get("sync_token")), "has_token": bool(settings.get("sync_token")),
         "letters": bool(settings.get("sync_letters")), "auto": bool(settings.get("sync_auto")),
         "last_sync": st.get("last_sync") or None, "last_result": st.get("last_result"),
-        "account": st.get("account_name"), "published": n, "conflicts": conflicts, "token_url": TOKEN_URL,
+        "account": st.get("account_name"), "user": settings.get("sync_user") or st.get("account_name"), "published": n, "conflicts": conflicts, "token_url": TOKEN_URL,
     }

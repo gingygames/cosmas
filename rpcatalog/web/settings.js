@@ -34,9 +34,45 @@ const SYNC_TYPES = { servers: tr('Server'), players: tr('Player'), factions: tr(
   entries: tr('Entry'), letters: tr('Letter'), media: tr('Video'), bookmarks: tr('Bookmark'), attachments: tr('Image') };
 const SYNC_KINDS = { both: tr('changed here and on the web'), deleted_remote: tr('deleted on the web, changed here'), deleted_local: tr('deleted here, changed on the web') };
 
+/* Sign in with Discord: the browser opens the web, the user allows Kosmas and the browser comes back to a one-shot
+   local address (loopback + PKCE). When that can't work, a short code is shown instead. Resolves true once signed in. */
+function webSignIn() {
+  return new Promise(resolve => {
+    let done = false, st = null;
+    const body = h('.col', { style: { gap: '12px', minWidth: 'min(400px, 100%)' } });
+    const finish = ok => { if (done) return; done = true; m.close(); resolve(ok); };
+    const start = mode => API.call('auth.start', { mode }).then(s => { st = s; render(); }).catch(() => null);
+    const render = () => {
+      if (done || !st) return;
+      if (st.state === 'done') { finish(true); return; }
+      const useCode = h('button.btn.sm.ghost', { onclick: () => start('device') }, icon('hash'), tr('Use a code instead'));
+      clear(body);
+      if (st.state === 'browser') body.append(
+        h('.row', { style: { gap: '10px', alignItems: 'center' } }, icon('loader'), h('div', tr('Finish signing in in your browser: sign in with Discord and click Allow.'))),
+        h('.tiny.faint', tr('Kosmas is waiting for the browser to come back (up to 5 minutes).')),
+        h('.row.wrap', h('button.btn.sm', { onclick: () => API.call('auth.open', { which: 'browser' }) }, icon('external-link'), tr('Open the page again')), useCode));
+      else if (st.state === 'device') body.append(
+        st.user_code ? [
+          h('div', tr('Open the page, check that it shows this code and click Allow:')),
+          h('div', { style: { font: '700 28px ui-monospace, monospace', letterSpacing: '.12em', textAlign: 'center', padding: '8px', borderRadius: '8px', background: 'var(--input)', userSelect: 'all' } }, st.user_code),
+          h('.row.wrap', h('button.btn.primary', { onclick: () => API.call('auth.open', { which: 'device' }) }, icon('external-link'), tr('Open page'))),
+          h('.tiny.faint', tr('Kosmas finishes signing in by itself a few seconds after you allow it.')),
+        ] : h('.row', { style: { gap: '10px' } }, icon('loader'), tr('Getting a code…')));
+      else if (st.state === 'error') body.append(
+        h('.small', { style: { color: 'var(--danger)' } }, st.error || tr('Sign-in failed.')),
+        h('.row.wrap', h('button.btn.sm.primary', { onclick: () => start('browser') }, icon('log-in'), tr('Try again')), useCode));
+      else finish(false);
+    };
+    API.on('web-auth', s => { st = s; render(); });
+    const m = modal({ title: tr('Sign in with Discord'), icon: 'log-in', body, onClose: () => { if (!done) { done = true; API.call('auth.cancel').catch(() => null); resolve(false); } } });
+    start('browser');
+  });
+}
+window.webSignIn = webSignIn;
+
 function webSyncCard() {
   const box = h('.col', { style: { gap: '12px' } });
-  let timer = null;
+  let timer = null, advOpen = false;
   const when = t => t ? new Date(t * 1000).toLocaleString(I18N.locale) : tr('never yet');
   const poll = () => { clearTimeout(timer); timer = setTimeout(() => box.isConnected && render(), 700); };
   const run = async (method, args) => { await API.call(method, args).catch(() => null); render(); };
@@ -44,24 +80,30 @@ function webSyncCard() {
     const st = await API.call('sync.status').catch(() => null);
     if (!st) return;
     const stop = e => e.stopPropagation();
-    const token = h('input.input', { type: 'password', placeholder: st.has_token ? tr('saved: {token} (paste a new one to change it)', { token: st.token }) : 'krt_…', onkeydown: stop,
+    const token = h('input.input', { type: 'password', placeholder: st.has_token ? tr('saved: {token} (paste a new one to change it)', { token: st.token }) : 'krt_…', onkeydown: stop, autocomplete: 'off',
       onchange: async e => { const v = e.target.value.trim(); if (!v) return; await API.call('sync.set_token', { token: v }).then(() => toast(tr('Token saved'))).catch(() => null); render(); } });
     const url = h('input.input', { value: st.url, onkeydown: stop, onchange: e => run('sync.settings', { url: e.target.value.trim() }) });
     const check = (key, label) => h('label.check', h('input', { type: 'checkbox', checked: !!st[key], onchange: e => run('sync.settings', { [key]: e.target.checked }) }), label);
     const r = st.last_result || {};
     const stats = st.last_sync ? [tr('sent {n}', { n: r.sent || 0 }), tr('images uploaded {n}', { n: r.uploaded || 0 }), tr('deleted on the web {n}', { n: r.deleted_remote || 0 }),
       tr('received {n}', { n: r.received || 0 }), tr('new from the web {n}', { n: r.created_local || 0 }), tr('deleted here {n}', { n: r.deleted_local || 0 })].join(' · ') : '';
+    const signOut = async () => {
+      if (await confirmDialog(tr('Disconnect this device'), tr('Kosmas forgets the sign-in on this computer and the web revokes it. Your records stay linked – after you sign in again, syncing continues where it left off.'), { okLabel: tr('Disconnect') }))
+        run('auth.sign_out');
+    };
     clear(box).append(
-      h('.row.wrap', { style: { gap: '14px' } },
-        h('label.field', { style: { flex: '1 1 300px' } }, tr('Personal API token'), token),
-        h('label.field', { style: { flex: '1 1 220px' } }, tr('Server address'), url)),
+      st.has_token
+        ? h('.row.wrap', { style: { gap: '10px', alignItems: 'center' } }, icon('circle-check'),
+          h('.grow', st.user ? h('span', { html: tr('Signed in as {name}', { name: '<b>' + escapeHtml(st.user) + '</b>' }) }) : tr('Signed in')),
+          h('button.btn.sm.ghost', { disabled: st.running, onclick: signOut }, icon('log-out'), tr('Sign out / disconnect this device')))
+        : h('.col', { style: { gap: '6px' } },
+          h('div', h('button.btn.primary', { onclick: async () => { if (await webSignIn()) render(); } }, icon('log-in'), tr('Sign in with Discord'))),
+          h('.tiny.faint', tr('Opens your browser – sign in with the community Discord and allow Kosmas. Nothing to copy.'))),
       h('.row.wrap', { style: { gap: '18px' } },
         check('letters', tr('Also send pigeon post (private only)')),
         check('auto', tr('Sync after the app starts'))),
       h('.row.wrap',
-        h('button.btn.primary', { disabled: st.running || !st.has_token, onclick: () => run('sync.run') }, icon('refresh-cw'), st.running ? tr('Syncing…') : tr('Sync now')),
-        h('a.btn.ghost', { href: st.token_url, title: tr('Opens the website in the browser – Settings → Sync → New token') }, icon('key-round'), tr('Get token')),
-        st.has_token ? h('button.btn.ghost', { disabled: st.running, onclick: () => run('sync.set_token', { token: '' }) }, icon('x'), tr('Remove token')) : null),
+        h('button.btn' + (st.has_token ? '.primary' : ''), { disabled: st.running || !st.has_token, onclick: () => run('sync.run') }, icon('refresh-cw'), st.running ? tr('Syncing…') : tr('Sync now'))),
       st.running ? h('.small.muted', st.progress || tr('Syncing…')) : null,
       st.error ? h('.small', { style: { color: 'var(--danger)' } }, st.error) : null,
       st.need_pairing ? h('.col', { style: { gap: '8px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '10px', background: 'var(--surface)' } },
@@ -84,9 +126,19 @@ function webSyncCard() {
         st.conflicts.length > 1 ? h('.row',
           h('button.btn.sm', { disabled: st.running, onclick: () => run('sync.resolve', { items: st.conflicts.map(c => ({ local_type: c.local_type, local_id: c.local_id, choice: 'mine' })) }) }, tr('Keep mine everywhere')),
           h('button.btn.sm.ghost', { disabled: st.running, onclick: () => run('sync.resolve', { items: st.conflicts.map(c => ({ local_type: c.local_type, local_id: c.local_id, choice: 'web' })) }) }, tr('Take from the web everywhere'))) : null) : null);
+    box.append(h('details', { open: advOpen, ontoggle: e => { advOpen = e.target.open; } },
+      h('summary.small.muted', { style: { cursor: 'pointer' } }, tr('Advanced')),
+      h('.col', { style: { gap: '10px', marginTop: '10px' } },
+        h('.row.wrap', { style: { gap: '14px' } },
+          h('label.field', { style: { flex: '1 1 220px' } }, tr('Server address'), url),
+          h('label.field', { style: { flex: '1 1 300px' } }, tr('Paste a personal API token instead'), token)),
+        h('.row.wrap',
+          h('a.btn.sm.ghost', { href: st.token_url, title: tr('Opens the website in the browser – Settings → Sync → New token') }, icon('key-round'), tr('Get token')),
+          st.has_token ? h('button.btn.sm.ghost', { disabled: st.running, onclick: () => run('sync.set_token', { token: '' }) }, icon('x'), tr('Forget the token without revoking it')) : null))));
     if (st.running) poll();
   }
   API.on('web-sync', () => box.isConnected && render());
+  API.on('web-auth', s => { if (box.isConnected && (s.state === 'done' || s.state === 'idle')) render(); });
   render();
   return box;
 }

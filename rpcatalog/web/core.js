@@ -20,6 +20,7 @@ const API = {
         this._bridge.notify.connect((kind, payload) => {
           let data = {};
           try { data = JSON.parse(payload); } catch (e) { /* ignore */ }
+          if (kind === 'bg') this._bgDone(data);
           (this._listeners[kind] || []).forEach(fn => fn(data));
         });
         resolve();
@@ -37,9 +38,22 @@ const API = {
       this._bridge.call(method, JSON.stringify(Object.assign({}, args, { _src: this.src })), res => {
         let r;
         try { r = JSON.parse(res); } catch (e) { reject(String(e)); return; }
-        if (r.error) { toast(r.error, 'err'); reject(r.error); } else resolve(r.ok);
+        if (r.error) { toast(r.error, 'err'); reject(r.error); }
+        else if (r.ok && r.ok._bg) this._bgWait(r.ok._bg, resolve, reject);   // network work in a Python thread
+        else resolve(r.ok);
       });
     }));
+  },
+  /* results of background calls arrive as the "bg" notification {id, ok | error} */
+  _bgPending: {}, _bgEarly: {},
+  _bgWait(id, resolve, reject) {
+    const done = d => { if (d.error) { toast(d.error, 'err'); reject(d.error); } else resolve(d.ok); };
+    if (this._bgEarly[id]) { done(this._bgEarly[id]); delete this._bgEarly[id]; return; }
+    this._bgPending[id] = done;
+  },
+  _bgDone(d) {
+    const fn = this._bgPending[d.id];
+    if (fn) { delete this._bgPending[d.id]; fn(d); } else this._bgEarly[d.id] = d;
   },
   on(kind, fn) { (this._listeners[kind] = this._listeners[kind] || []).push(fn); },
 };

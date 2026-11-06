@@ -18,6 +18,7 @@ from pathlib import Path
 import threading
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot, QUrl, Qt
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFileDialog
 
 from . import config, suggest
@@ -26,6 +27,7 @@ from .i18n import tr, trn
 from . import discord_link
 from . import gameart
 from . import sync as websync
+from . import webauth
 from .analysis import analysis_dir, coverage, load_frames
 from .analysis_jobs import speech_tracks
 
@@ -60,6 +62,7 @@ def file_url(path):
 
 class Api(QObject):
     notify = Signal(str, str)
+    _main_call = Signal(object)          # worker thread -> run a callable in the Qt main thread
 
     def __init__(self, store, settings, host):
         """host: object with play(media, offset), player_snapshot(path) -> (media, pos) | None,
@@ -70,7 +73,10 @@ class Api(QObject):
         self.host = host
         ATT_DIR.mkdir(parents=True, exist_ok=True)
         self._sync = {"thread": None, "running": False, "progress": "", "error": None, "pairing": False,
-                      "quiet": False, "cancel": threading.Event()}
+                      "quiet": False, "cancel": threading.Event(), "bg": None}
+        self._auth = {"state": "idle", "error": None, "user_code": None, "verification_uri": None, "url": None,
+                      "cancel": threading.Event()}
+        self._main_call.connect(self._run_main, Qt.QueuedConnection)
 
     # ------------------------------------------------------------ dispatch
     READ_ONLY = {"bootstrap", "media.list", "media.get", "media.reveal", "media.play", "player.action",
@@ -84,7 +90,9 @@ class Api(QObject):
                  "analysis.get", "analysis.queue", "analysis.stats", "analysis.models", "analysis.overview",
                  "analysis.char_mentions", "analysis.search", "analysis.open_timeline", "analysis.skip",
                  "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
-                 "analysis.char_looks", "ai.info", "ai.open", "lang.set"}
+                 "analysis.char_looks", "ai.info", "ai.open", "lang.set",
+                 "auth.status", "auth.start", "auth.cancel", "auth.open", "auth.sign_out",
+                 "share.get", "share.set", "share.rotate"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -104,6 +112,30 @@ class Api(QObject):
 
     def emit(self, kind, payload=None):
         self.notify.emit(kind, json.dumps(payload or {}, ensure_ascii=False, default=str))
+
+    @Slot(object)
+    def _run_main(self, fn):
+        try:
+            fn()
+        except Exception:
+            traceback.print_exc()
+
+    def _bg(self, fn):
+        """Runs fn() in a worker thread (network!). JS gets {_bg: id} now and the result later as the "bg" notification
+        ({id, ok} | {id, error}); core.js API.call turns that back into one promise."""
+        rid = uuid.uuid4().hex
+
+        def run():
+            try:
+                payload = {"id": rid, "ok": fn()}
+            except websync.SyncError as e:
+                payload = {"id": rid, "error": str(e)}
+            except Exception as e:
+                traceback.print_exc()
+                payload = {"id": rid, "error": f"{type(e).__name__}: {e}"}
+            self.emit("bg", payload)
+        threading.Thread(target=run, name="kosmas-bg", daemon=True).start()
+        return {"_bg": rid}
 
     # ------------------------------------------------------------ serializers
     def _media(self, m, linked=None, chars=None, bms=None):
@@ -1635,6 +1667,7 @@ class Api(QObject):
         if token and not token.startswith("krt_"):
             raise ValueError(tr("This isn't a Kosmas API token (it starts with krt_). Create one on the web in Settings."))
         self.settings["sync_token"] = token
+        self.settings.pop("sync_user", None)
         self.host.save_settings()
         return self.m_sync_status()
 
@@ -1655,7 +1688,7 @@ class Api(QObject):
         if self._sync["running"]:
             return self.m_sync_status()
         if not self.settings.get("sync_token"):
-            raise ValueError(tr("Paste your personal API token from the web first."))
+            raise ValueError(tr("Sign in with Discord first (Settings → Web chronicle)."))
         settings = dict(self.settings)
         cancel = threading.Event()
         prog = lambda msg: self._sync.__setitem__("progress", msg)
@@ -1679,6 +1712,8 @@ class Api(QObject):
     @Slot(dict)
     def _sync_done(self, res):
         self._sync.update(running=False, progress="", error=None)
+        if self._sync.get("bg"):
+            self.emit("bg", {"id": self._sync.pop("bg"), "ok": res.get("share")})
         self.emit("sync", {"method": "sync.run", "src": None})     # obnovit zobrazená data
         self.emit("web-sync", res)
         n = res.get("conflicts") or 0
@@ -1693,6 +1728,9 @@ class Api(QObject):
         pairing = msg.startswith("pairing:")
         msg = msg[len("pairing:"):] if pairing else msg
         self._sync.update(running=False, progress="", error=msg, pairing=pairing)
+        if self._sync.get("bg"):
+            self.emit("bg", {"id": self._sync.pop("bg"),
+                             "error": tr("Sync is waiting for your choice (Settings → Web chronicle)") if pairing else msg})
         self.emit("web-sync", {"error": msg, "need_pairing": pairing})
         self.emit("toast", {"msg": tr("Sync is waiting for your choice (Settings → Web chronicle)") if pairing else msg,
                             "type": "err"})
@@ -1716,6 +1754,136 @@ class Api(QObject):
 
     def m_sync_resolve(self, items):
         return self._sync_start(lambda s: s.resolve(items))
+
+    # ------------------------------------------------------------ sign in with Discord (webauth.py)
+    def _auth_pub(self):
+        a = self._auth
+        return {"state": a["state"], "error": a["error"], "user_code": a["user_code"],
+                "verification_uri": a["verification_uri"], "signed_in": bool(self.settings.get("sync_token")),
+                "user": self.settings.get("sync_user") or None}
+
+    def _open_url(self, url):
+        """Thread-safe: opens the system browser from the Qt main thread."""
+        self._main_call.emit(lambda: QDesktopServices.openUrl(QUrl(url)))
+
+    def m_auth_status(self):
+        return self._auth_pub()
+
+    def m_auth_start(self, mode="browser"):
+        """mode: browser (loopback + PKCE; falls back to a code when 127.0.0.1 can't listen) | device (code)."""
+        self._auth["cancel"].set()                    # a previous attempt stops
+        cancel = threading.Event()
+        server = self.settings.get("sync_url") or websync.DEFAULT_URL
+        websync.check_url(server)
+        a = self._auth = {"state": "device" if mode == "device" else "browser", "error": None, "user_code": None,
+                          "verification_uri": None, "url": None, "cancel": cancel}
+
+        def upd(**kw):
+            if self._auth is a:
+                a.update(kw)
+                self.emit("web-auth", self._auth_pub())
+
+        def work():
+            try:
+                res = None
+                if mode != "device":
+                    try:
+                        res = webauth.loopback_login(server, self._open_url, cancel, on_ready=lambda u: a.update(url=u))
+                    except OSError:
+                        res = None                    # loopback unavailable (firewall / no free port) -> code
+                if res is None:
+                    upd(state="device")
+                    d = webauth.device_start(server)
+                    upd(user_code=d["user_code"], verification_uri=d.get("verification_uri_complete") or d["verification_uri"])
+                    res = webauth.device_poll(server, d["device_code"], cancel, interval=int(d.get("interval") or 5),
+                                              expires_in=int(d.get("expires_in") or 600))
+                self._main_call.emit(lambda: self._auth_finish(a, res))
+            except webauth.Cancelled:
+                upd(state="idle")
+            except websync.SyncError as e:
+                upd(state="error", error=str(e))
+            except Exception as e:
+                traceback.print_exc()
+                upd(state="error", error=tr("Sign-in failed ({error}).", error=type(e).__name__))
+        threading.Thread(target=work, name="kosmas-signin", daemon=True).start()
+        return self._auth_pub()
+
+    def _auth_finish(self, a, res):
+        server = self.settings.get("sync_url") or websync.DEFAULT_URL
+        if self._auth is not a or a["cancel"].is_set():   # cancelled meanwhile -> don't keep a token nobody wanted
+            threading.Thread(target=webauth.revoke, args=(server, res["token"]), daemon=True).start()
+            return
+        old = self.settings.get("sync_token")
+        if old and old != res["token"]:
+            threading.Thread(target=webauth.revoke, args=(server, old), daemon=True).start()
+        name = (res.get("user") or {}).get("name") or ""
+        self.settings["sync_token"] = res["token"]
+        self.settings["sync_user"] = name
+        self.host.save_settings()
+        a.update(state="done", error=None)
+        self.emit("web-auth", self._auth_pub())
+        self.emit("web-sync", {})
+        self.emit("toast", {"msg": tr("Signed in as {name}", name=name or "?"), "type": "ok"})
+
+    def m_auth_cancel(self):
+        self._auth["cancel"].set()
+        self._auth.update(state="idle", error=None, user_code=None, verification_uri=None)
+        return self._auth_pub()
+
+    def m_auth_open(self, which="device"):
+        """Opens the page of the running sign-in again (only URLs this app built - nothing from the page)."""
+        url = self._auth.get("verification_uri") if which == "device" else self._auth.get("url")
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
+        return bool(url)
+
+    def m_auth_sign_out(self):
+        """Disconnect this device: the token is revoked on the server and forgotten here. The sync mapping stays."""
+        tok = self.settings.pop("sync_token", None)
+        self.settings.pop("sync_user", None)
+        self.host.save_settings()
+        if tok:
+            server = self.settings.get("sync_url") or websync.DEFAULT_URL
+            threading.Thread(target=webauth.revoke, args=(server, tok), daemon=True).start()
+        self._auth["cancel"].set()
+        self._auth.update(state="idle", error=None)
+        return self.m_sync_status()
+
+    # ------------------------------------------------------------ share button (share.js)
+    def _share_job(self, fn):
+        settings = dict(self.settings)
+
+        def run():
+            s = websync.Syncer(config.DB_PATH, settings, ATT_DIR)
+            try:
+                return fn(s)
+            finally:
+                s.close()
+        return self._bg(run)
+
+    def m_share_get(self, kind, id):
+        return self._share_job(lambda s: s.share_info(kind, int(id)))
+
+    def m_share_set(self, kind, id, visibility):
+        if visibility not in ("private", "link", "public"):
+            raise ValueError(tr("Unknown visibility"))
+        if not self.settings.get("sync_token"):
+            raise ValueError(tr("Sign in with Discord first (Settings → Web chronicle)."))
+        id = int(id)
+        if visibility == "private" or websync.is_published(config.DB_PATH, kind, id):
+            return self._share_job(lambda s: s.share_set(kind, id, visibility))
+        # not on the web yet -> a normal sync puts it there (progress in sync.status), then the visibility is set
+        if self._sync["running"]:
+            raise ValueError(tr("A sync is running – try again in a moment."))
+        rid = uuid.uuid4().hex
+        self._sync["bg"] = rid
+        self._sync_start(lambda s: s.share_publish(kind, id, visibility), quiet=True)
+        return {"_bg": rid}
+
+    def m_share_rotate(self, kind, id):
+        if not self.settings.get("sync_token"):
+            raise ValueError(tr("Sign in with Discord first (Settings → Web chronicle)."))
+        return self._share_job(lambda s: s.share_set(kind, int(id), rotate=True))
 
     def m_pick_folder(self):
         return QFileDialog.getExistingDirectory(self.host.dialog_parent, tr("Recordings folder")) or None
