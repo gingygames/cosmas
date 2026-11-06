@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from . import config
 from .i18n import tr
 from .medal_db import read_medal
+from .store import MEDIA_COLS
 
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm"}
 SKIP_DIRS = {"temp", "editor", "video-editor", "thumbnails", ".thumbnails", "databases", "screenshots"}
@@ -84,6 +85,45 @@ def make_thumb(video, duration):
     return str(dst) if dst.exists() and dst.stat().st_size > 0 else None
 
 
+# ffprobe results and failed thumbnails by file signature (size, mtime): a rescan (every few minutes) doesn't run
+# ffprobe / ffmpeg again on files that haven't changed (OBS recordings Medal doesn't know, broken files)
+CACHE_NAME = "scan_cache.json"
+
+
+def _sig(path):
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return [st.st_size, st.st_mtime_ns]
+
+
+def _load_cache(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            c = json.load(f)
+        if isinstance(c, dict) and c.get("v") == 1:
+            return {"v": 1, "probe": dict(c.get("probe") or {}), "thumb_failed": dict(c.get("thumb_failed") or {})}
+    except (OSError, ValueError, TypeError):
+        pass
+    return {"v": 1, "probe": {}, "thumb_failed": {}}
+
+
+def _save_cache(path, cache):
+    try:
+        tmp = str(path) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def _same(a, b):
+    """Stored value vs scanned one (SQLite gives TEXT columns back as str, e.g. a numeric Medal id)."""
+    return a == b or (a is not None and b is not None and str(a) == str(b))
+
+
 def _walk_videos(root):
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d.lower() not in SKIP_DIRS]
@@ -103,9 +143,12 @@ def _game_from_path(path, root):
     return None
 
 
-def scan(store, settings, progress=None):
-    """Scan all roots and update the store. Returns a summary dict."""
+def scan(store, settings, progress=None, cache_path=None):
+    """Scan all roots and update the store. Returns a summary dict; `changed` = rows added, updated or gone
+    (0 = the catalogue is exactly as before and the UI needs no reload)."""
     roots = [r for r in settings["roots"] if os.path.isdir(r)]
+    cache_path = cache_path or (config.DATA_DIR / CACHE_NAME)
+    cache = _load_cache(cache_path)
     medal = read_medal(roots)
     aliases = settings.get("game_aliases", {})
     clip_max = settings.get("clip_max_seconds", 300)
@@ -133,11 +176,21 @@ def scan(store, settings, progress=None):
             del files[key]
 
     need_probe = [k for k in files if k not in medal or not medal[k].get("duration")]
-    probes = {}
-    if need_probe:
+    sigs = {k: _sig(files[k][0]) for k in need_probe}
+    probes, old_probe, new_probe = {}, cache["probe"], {}
+    for k in need_probe:
+        c = old_probe.get(k)
+        if sigs[k] is not None and isinstance(c, dict) and c.get("sig") == sigs[k]:
+            probes[k] = c.get("res") or {}
+    todo_probe = [k for k in need_probe if k not in probes]
+    if todo_probe and config.find_tool("ffprobe"):
         with ThreadPoolExecutor(max_workers=6) as ex:
-            for k, res in zip(need_probe, ex.map(lambda k: ffprobe(files[k][0]), need_probe)):
+            for k, res in zip(todo_probe, ex.map(lambda k: ffprobe(files[k][0]), todo_probe)):
                 probes[k] = res or {}
+    for k in need_probe:
+        if k in probes and sigs[k] is not None:
+            new_probe[k] = {"sig": sigs[k], "res": probes[k]}
+    cache["probe"] = new_probe          # only files that still exist
 
     records = []
     for i, (key, (path, root)) in enumerate(sorted(files.items())):
@@ -201,24 +254,46 @@ def scan(store, settings, progress=None):
                 r["thumb"] = None
         except OSError:
             r["thumb"] = None
-    todo = [r for r in records if not r["thumb"]]
-    if todo:
+    failed_old, failed = cache["thumb_failed"], {}
+    todo = []
+    for r in records:
+        if r["thumb"]:
+            continue
+        k, sig = os.path.normcase(r["path"]), _sig(r["path"])
+        if sig is not None and failed_old.get(k) == sig:
+            failed[k] = sig                 # ffmpeg couldn't make one last time and the file is the same
+        else:
+            todo.append((r, k, sig))
+    if todo and config.find_tool("ffmpeg"):
         with ThreadPoolExecutor(max_workers=4) as ex:
-            for n, (r, t) in enumerate(zip(todo, ex.map(lambda r: make_thumb(r["path"], r["duration"]), todo))):
+            for n, ((r, k, sig), t) in enumerate(zip(todo, ex.map(lambda x: make_thumb(x[0]["path"], x[0]["duration"]), todo))):
                 r["thumb"] = t
+                if not t and sig is not None:
+                    failed[k] = sig
                 if progress:
                     progress(tr("Thumbnails {n}/{total}", n=n + 1, total=len(todo)))
+    cache["thumb_failed"] = failed
+    _save_cache(cache_path, cache)
 
-    keep_override = {r["id"]: r for r in store.db.execute("SELECT id, path, kind_override, game FROM media")}
-    by_path = {r["path"]: r for r in keep_override.values()}
+    cols = ", ".join(c for c in MEDIA_COLS if c != "path")
+    by_path = {r["path"]: r for r in store.db.execute(f"SELECT id, path, missing, game_user, {cols} FROM media")}
     seen = set()
+    added = updated = 0
     for r in records:
         old = by_path.get(r["path"])
+        seen.add(r["path"])
         if old is not None:
             r["kind_override"] = old["kind_override"]
+            same = not old["missing"] and all(
+                _same(old[c], r.get(c)) or (c == "game" and old["game_user"] and old["game"]) for c in MEDIA_COLS if c != "path")
+            if same:
+                continue                    # nothing new: no write, and the UI isn't told to reload
+            updated += 1
+        else:
+            added += 1
         store.upsert_media(r)
-        seen.add(r["path"])
     missing = store.mark_missing_except(seen, roots)
     store.commit()
     return {"files": len(records), "medal": sum(1 for r in records if r["medal_id"]),
-            "missing": missing, "roots": roots}
+            "missing": missing, "roots": roots, "added": added, "updated": updated,
+            "changed": added + updated + missing}

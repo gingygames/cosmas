@@ -484,6 +484,8 @@ class Store:
             self.db.execute("ALTER TABLE media ADD COLUMN watched_at REAL")
         if "youtube" not in mcols:   # ID videa na YouTube (jen taková videa jdou na web)
             self.db.execute("ALTER TABLE media ADD COLUMN youtube TEXT")
+        if "game_user" not in mcols:  # 1 = the user set the game; a rescan keeps it (upsert_media)
+            self.db.execute("ALTER TABLE media ADD COLUMN game_user INTEGER DEFAULT 0")
         for table in TEST_TABLES:     # test records: hidden unless "Show test data", never synced
             if "is_test" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN is_test INTEGER DEFAULT 0")
@@ -541,7 +543,9 @@ class Store:
         row = self.db.execute("SELECT id FROM media WHERE path=?", (rec["path"],)).fetchone()
         vals = [rec.get(c) for c in MEDIA_COLS]
         if row:
-            sets = ", ".join(f"{c}=?" for c in MEDIA_COLS)
+            # a game the user chose stays; the scanned one only fills a row without a user choice
+            sets = ", ".join("game=CASE WHEN game_user=1 AND COALESCE(game,'')<>'' THEN game ELSE ? END"
+                             if c == "game" else f"{c}=?" for c in MEDIA_COLS)
             self.db.execute(f"UPDATE media SET {sets}, missing=0, scanned_at=? WHERE id=?",
                             vals + [now, row["id"]])
             self.sync_medal_bookmarks(row["id"], json.loads(rec.get("bookmarks") or "[]"), commit=False)
@@ -599,6 +603,11 @@ class Store:
         fields = {k: v for k, v in fields.items() if k in allowed}
         if not fields:
             return
+        if "game" in fields:
+            cur = self.db.execute("SELECT game FROM media WHERE id=?", (media_id,)).fetchone()
+            if cur is not None and (cur[0] or "") != (fields["game"] or ""):
+                # an edited game survives rescans; clearing it lets the scanner fill it in again
+                fields["game_user"] = 1 if (fields["game"] or "").strip() else 0
         sets = ", ".join(f"{k}=?" for k in fields)
         self.db.execute(f"UPDATE media SET {sets} WHERE id=?", list(fields.values()) + [media_id])
         self.db.commit()
