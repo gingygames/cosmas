@@ -50,4 +50,4 @@ previews.
 **Download:** `Cosmas-Setup-1.2.1.exe` below (Windows 10 1809+ / 11, 64-bit). Installed copies update themselves
 (Settings → General → Updates). Windows may show *Windows protected your PC*: click **More info → Run anyway**.
 
-SHA-256: `{sha}`
+SHA-256: `29abdc6a43b404945c484f219f41c411889aad87c66d2085a203c6146d998e85`
