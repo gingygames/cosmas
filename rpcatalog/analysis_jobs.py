@@ -10,13 +10,14 @@ import uuid
 
 from PySide6.QtCore import QObject, Signal
 
-from . import config
+from . import config, i18n
 from .i18n import tr
 
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 PRIORITY = {"idle": 0x00000040, "below": 0x00004000, "normal": 0x00000020}
 SPEAKERS = {"mic": "Já", "game": "Hra", "discord": "Discord"}
 WORK_DIR = config.DATA_DIR / "analysis"
+LOG_MAX = 5 * 2**20          # worker.log is moved to worker.log.1 when it grows past this
 
 
 def speech_tracks(media, enabled=None):
@@ -61,7 +62,9 @@ def worker_config(s, queue_file, world=None):
         "vision_provider": eff["vision"]["provider"], "text_provider": eff["text"]["provider"],
         "whisper_device": eff["whisper"]["device"], "whisper_compute": eff["whisper"]["compute"],
         "queue_file": str(queue_file), "ffmpeg": config.find_tool("ffmpeg"),
-        "whisper": eff["speech"]["model"] if eff["speech"]["provider"] == "local" else "", "language": g("ai_language", "cs"),
+        "whisper": eff["speech"]["model"] if eff["speech"]["provider"] == "local" else "", "language": g("ai_language", ""),
+        # language of descriptions, chapters and summaries: the speech language when one is set, else the UI's
+        "out_lang": g("ai_language", "") or i18n.lang(),
         "batch_size": eff["whisper"]["batch"], "beam_size": g("ai_beam_size", 5),
         "vad_threshold": g("ai_vad_threshold", 0.5), "junk_filter": g("ai_junk_filter", True),
         "vision_model": eff["vision"]["model"], "vision_width": g("ai_vision_width", 768),
@@ -93,6 +96,7 @@ class AnalysisJobs(QObject):
         self.detected_games = []  # game executables seen in recordings (set by the app)
         self._proc = None
         self._lock = threading.Lock()
+        self._fails = 0           # worker starts in a row that ended before reporting anything (see _read)
         WORK_DIR.mkdir(parents=True, exist_ok=True)
         for f in ("pause.flag", "skip.flag"):
             (WORK_DIR / f).unlink(missing_ok=True)
@@ -266,7 +270,14 @@ class AnalysisJobs(QObject):
             self.event.emit({"phase": "queue"})
 
     def _read(self, proc):
-        with (WORK_DIR / "worker.log").open("a", encoding="utf-8") as log:
+        log_path = WORK_DIR / "worker.log"
+        try:      # keep the worker's log small: the current one and one older
+            if log_path.stat().st_size > LOG_MAX:
+                os.replace(log_path, log_path.with_name("worker.log.1"))
+        except OSError:
+            pass
+        heard = False
+        with log_path.open("a", encoding="utf-8") as log:
             for line in proc.stdout:
                 log.write(line)
                 log.flush()
@@ -275,6 +286,7 @@ class AnalysisJobs(QObject):
                 except ValueError:
                     continue          # library warnings and the like: only in the log
                 if isinstance(ev, dict) and "phase" in ev:
+                    heard = True
                     self._on_event(ev)
             proc.wait()
         with self._lock:
@@ -282,6 +294,18 @@ class AnalysisJobs(QObject):
         if cur:     # killed or crashed in the middle of a video
             self._on_event_end(cur, proc.returncode)
         self.event.emit({"phase": "queue"})
+        # A worker that dies before its first event (broken install, missing library) would be started again at
+        # once, forever: wait longer after each such failure (2 s, 4 s … 5 min).
+        with self._lock:
+            waiting = bool(self.queue)
+        self._fails = 0 if heard or not waiting else self._fails + 1
+        if self._fails:
+            delay = min(300, 2 ** self._fails)
+            print(f"[analysis] worker ended without a result (exit {proc.returncode}); next try in {delay} s")
+            t = threading.Timer(delay, self._start)
+            t.daemon = True
+            t.start()
+            return
         self._start()     # anything queued after the worker decided to stop
 
     def _on_event_end(self, cur, code):
