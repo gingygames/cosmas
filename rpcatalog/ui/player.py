@@ -658,7 +658,7 @@ class PlayerWidget(QWidget):
         self.mute_btn = ibutton("volume-2", tr("Mute (M)"), checkable=True)
         self.mute_btn.toggled.connect(self._set_mute)
         self.vol = QSlider(Qt.Horizontal)
-        self.vol.setRange(0, 130)
+        self.vol.setRange(0, max(100, min(200, int(settings.get("player_volume_max", 130) or 130))))
         self.vol.setFixedWidth(90)
         self.vol.setValue(int(settings.get("volume", 100)))
         self.vol.valueChanged.connect(self._set_volume)
@@ -744,7 +744,8 @@ class PlayerWidget(QWidget):
 
         self.player = mpv.MPV(
             wid=str(int(self.surface.winId())),
-            vo="gpu-next", hwdec="auto-safe", keep_open="yes", idle="yes",
+            vo="gpu-next", hwdec="no" if settings.get("player_hwdec") == "no" else "auto-safe", keep_open="yes", idle="yes",
+            volume_max=self.vol.maximum(),
             osc=False, osd_level=1, osd_font_size=28, osd_bar=False,
             input_default_bindings=False, input_vo_keyboard=True, cursor_autohide=1200,
             volume=self.vol.value(), screenshot_format="jpg", screenshot_jpeg_quality=92,
@@ -757,7 +758,8 @@ class PlayerWidget(QWidget):
         self._mpv_key.connect(self.handle_action)
         keymap = {"SPACE": "pause", "MBTN_LEFT": "pause", "MBTN_LEFT_DBL": "fs", "f": "fs", "ESC": "esc",
                   "LEFT": "-5", "RIGHT": "+5", "Shift+LEFT": "-30", "Shift+RIGHT": "+30", "m": "mute",
-                  "p": "pin", "s": "snap", "b": "bm", "B": "range", "c": "tagchar", "i": "clip_in", "o": "clip_out", "t": "thumb", "WHEEL_UP": "vol+", "WHEEL_DOWN": "vol-"}
+                  "p": "pin", "s": "snap", "b": "bm", "B": "range", "c": "tagchar", "i": "clip_in", "o": "clip_out", "t": "thumb", "WHEEL_UP": "vol+", "WHEEL_DOWN": "vol-",
+                  ".": "frame+", ",": "frame-"}
         for i in range(1, 10):
             keymap[f"Ctrl+{i}"] = f"t{i}"
             keymap[f"Ctrl+Shift+{i}"] = f"preset{i}"
@@ -798,7 +800,15 @@ class PlayerWidget(QWidget):
             elif self.window().isFullScreen():
                 self.fullscreen_requested.emit()
         elif act in ("-5", "+5", "-30", "+30"):
-            self.seek_relative(float(act))
+            # the actions keep their names; how far they jump is set in Settings → Player
+            small = float(self.settings.get("player_seek_small", 5) or 5)
+            large = float(self.settings.get("player_seek_large", 30) or 30)
+            self.seek_relative((small if act[1:] == "5" else large) * (-1 if act[0] == "-" else 1))
+        elif act in ("frame+", "frame-") and self.media:
+            try:
+                self.player.command("frame-step" if act == "frame+" else "frame-back-step")
+            except Exception:
+                pass
         elif act == "mute":
             self.mute_btn.toggle()
         elif act == "pin" and self.media:
@@ -893,7 +903,7 @@ class PlayerWidget(QWidget):
     def keyPressEvent(self, e):
         k, mods = e.key(), e.modifiers()
         acts = {Qt.Key_Space: "pause", Qt.Key_F: "fs", Qt.Key_M: "mute", Qt.Key_P: "pin", Qt.Key_S: "snap", Qt.Key_C: "tagchar", Qt.Key_I: "clip_in", Qt.Key_O: "clip_out", Qt.Key_T: "thumb",
-                Qt.Key_V: "subs", Qt.Key_Escape: "esc"}
+                Qt.Key_V: "subs", Qt.Key_Escape: "esc", Qt.Key_Period: "frame+", Qt.Key_Comma: "frame-"}
         if k in (Qt.Key_Left, Qt.Key_Right):
             n = 30 if mods & Qt.ShiftModifier else 5
             self.handle_action(f"{'-' if k == Qt.Key_Left else '+'}{n}")

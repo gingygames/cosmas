@@ -11,21 +11,24 @@ from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (QApplication, QMainWindow, QSplitter, QMessageBox, QWidget, QHBoxLayout,
-                               QVBoxLayout, QLabel, QToolButton)
+                               QVBoxLayout, QLabel, QToolButton, QMenu, QSystemTrayIcon)
 
 from . import config, scanner
+from . import applog, backup, feedback, updater
+from .update_ctl import UpdateController
 from . import appearance, chronicle, mentions
 from .analysis import analysis_dir, load_frames, load_results, _read_json
 from .analysis_jobs import AnalysisJobs
 from .api import Api
 from . import i18n
-from .i18n import tr
+from .i18n import tr, trn
 from .previews import PreviewWorker
 from .store import Store
 
 WEB_DIR = config.APP_DIR / "rpcatalog" / "web"
 ICON_PATH = config.APP_DIR / "rpcatalog" / "assets" / "kronikar.ico"
 APP_ID = "Gingygames.Kronikar"
+SITE_URL = "https://cosmas.gingygames.com"
 
 
 
@@ -90,6 +93,22 @@ class TitleBar(QWidget):
         lay.addWidget(self.logo)
         lay.addWidget(self.title)
         lay.addStretch(1)
+        # "Update 1.2.0" – shown when a newer version is out; opens the update notice in the web UI
+        self.update_btn = QToolButton(self)
+        self.update_btn.setObjectName("tb_update")
+        self.update_btn.setCursor(Qt.PointingHandCursor)
+        self.update_btn.setFixedHeight(22)
+        self.update_btn.hide()
+        self.update_btn.clicked.connect(lambda: win.api.emit("update-open", {}))
+        lay.addWidget(self.update_btn)
+        self.help_btn = QToolButton(self)
+        self.help_btn.setText(glyph("circle-help"))
+        self.help_btn.setFont(icon_font(15))
+        self.help_btn.setToolTip(tr("Help and feedback"))
+        self.help_btn.setFixedSize(40, 32)
+        self.help_btn.setObjectName("tb_btn")
+        self.help_btn.clicked.connect(self.help_menu)
+        lay.addWidget(self.help_btn)
         self.btns = []
         for name, tip, fn in (("minus", tr("Minimize"), win.showMinimized), ("square", tr("Maximize"), self.toggle_max),
                               ("x", tr("Close"), win.close)):
@@ -110,8 +129,35 @@ class TitleBar(QWidget):
             QLabel {{ color: {fg}; font: 600 12px 'Segoe UI Variable Text','Segoe UI'; }}
             QToolButton {{ border: 0; background: transparent; color: {fg}; }}
             QToolButton#tb_btn:hover {{ background: rgba(128,128,128,.22); }}
-            QToolButton#tb_close:hover {{ background: #e81123; color: white; }}""")
+            QToolButton#tb_close:hover {{ background: #e81123; color: white; }}
+            QToolButton#tb_update {{ background: {accent}; color: #111; border-radius: 11px; padding: 0 12px;
+                                     font: 600 11px 'Segoe UI Variable Text','Segoe UI'; margin-right: 6px; }}
+            QToolButton#tb_update:hover {{ background: {fg}; }}""")
         self.logo.setStyleSheet("background: transparent;")
+
+    def set_update(self, version):
+        """Title-bar badge: version of an available update, or None to hide it."""
+        if version:
+            self.update_btn.setText("↓ " + tr("Update {version}", version=version))
+            self.update_btn.setToolTip(tr("{app} {version} is available – click for details", app=i18n.app_name(), version=version))
+            self.update_btn.show()
+        else:
+            self.update_btn.hide()
+
+    def help_menu(self):
+        import webbrowser
+        api = self.win.api
+        m = QMenu(self)
+        m.addAction(tr("Send feedback / Report a bug…"), lambda: api.emit("feedback-open", {}))
+        m.addAction(tr("Check for updates"), lambda: (self.win.updates.check(manual=True), api.emit("update-open", {})))
+        m.addSeparator()
+        m.addAction(tr("Keyboard shortcuts"), lambda: api.emit("navigate", {"view": "settings", "params": {"section": "shortcuts"}}))
+        m.addAction(tr("Open the log folder"), lambda: os.startfile(str(applog.LOG_DIR)) if applog.LOG_DIR.exists() else None)
+        m.addAction(tr("Website"), lambda: webbrowser.open(SITE_URL))
+        m.addSeparator()
+        m.addAction(tr("About {app}", app=i18n.app_name()),
+                    lambda: api.emit("navigate", {"view": "settings", "params": {"section": "about"}}))
+        m.exec(self.help_btn.mapToGlobal(self.help_btn.rect().bottomLeft()))
 
     def toggle_max(self):
         self.win.showNormal() if self.win.isMaximized() else self.win.showMaximized()
@@ -126,9 +172,14 @@ class TitleBar(QWidget):
 
 class MainWindow(QMainWindow):
     _clip_done = Signal(int, str, float, float, bool, str)
+    _crash = Signal(str)
+    _bg_done = Signal(object)
 
-    def __init__(self):
+    def __init__(self, started=None):
         super().__init__()
+        self._quitting = False
+        self._after_quit = None
+        self._started = started or {}
         # The video surface is a native window. Without this Qt makes its siblings (player header,
         # controls) native too, and those stayed on screen after the player was closed.
         QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
@@ -235,16 +286,35 @@ class MainWindow(QMainWindow):
         if geo:
             self.restoreGeometry(QByteArray.fromBase64(geo.encode()))
         self.fit_to_screen()
-        QTimer.singleShot(400, self.rescan)
+        if self.settings.get("scan_on_start", True):
+            QTimer.singleShot(400, self.rescan)
         if self.settings.get("sync_auto") and self.settings.get("sync_token"):
             # automatická synchronizace s webovou Kronikou po startu
             QTimer.singleShot(8000, lambda: self.api.m_sync_run(quiet=True))
-        self.auto = QTimer(self, interval=5 * 60 * 1000)
+        self.auto = QTimer(self)
         self.auto.timeout.connect(self.rescan)
-        self.auto.start()
+        self.apply_rescan_interval()
         self._state_timer = QTimer(self, interval=1000)
         self._state_timer.timeout.connect(self._push_state)
         self._state_timer.start()
+        self._bg_done.connect(lambda fn: fn(), Qt.QueuedConnection)
+
+        # updates: first check ~20 s after the start, then every 12 h (update_ctl.py)
+        self.updates = UpdateController(self.settings, self.api.emit, self.save_settings, self.restart_app,
+                                        badge=self.titlebar.set_update)
+        if not os.environ.get("KOSMAS_NO_UPDATE_CHECK"):
+            self.updates.start(int(os.environ.get("KOSMAS_UPDATE_DELAY_MS") or 20000))
+        # automatic catalogue backup (daily by default) and reports waiting to be sent
+        QTimer.singleShot(60 * 1000, self._housekeeping)
+        self._house_timer = QTimer(self, interval=60 * 60 * 1000)
+        self._house_timer.timeout.connect(self._housekeeping)
+        self._house_timer.start()
+        # unhandled errors: "Something went wrong – send a report?"
+        self._crash.connect(self._on_crash, Qt.QueuedConnection)
+        applog.on_crash(self._crash.emit)
+        self.tray = None
+        self._setup_tray()
+        QTimer.singleShot(3000, self._announce_start)
 
     # ---------------------------------------------------------------- player plumbing
     def _wire_player(self, p):
@@ -435,7 +505,8 @@ class MainWindow(QMainWindow):
         self._save_resume(p)
         resumed = None
         rp = media.get("resume_pos")
-        if offset is None and end is None and rp and (not media.duration or rp < media.duration - 20):
+        if (offset is None and end is None and rp and self.settings.get("remember_position", True)
+                and (not media.duration or rp < media.duration - 20)):
             offset = resumed = rp
         if p is self.player and not self.dock.isVisible():
             self._show_dock()
@@ -694,7 +765,134 @@ class MainWindow(QMainWindow):
             m = 0 if self.isMaximized() else 4
             self.frame.layout().setContentsMargins(m, 0, m, m)
 
+    # ---------------------------------------------------------------- tray, restart, housekeeping
+    def apply_rescan_interval(self):
+        mins = int(self.settings.get("rescan_minutes", 5) or 0)
+        if mins > 0:
+            self.auto.start(mins * 60 * 1000)
+        else:
+            self.auto.stop()
+
+    def _setup_tray(self):
+        """Tray icon while "close to tray" is on (closing the window keeps the app running)."""
+        want = bool(self.settings.get("close_to_tray")) and QSystemTrayIcon.isSystemTrayAvailable()
+        if want and not self.tray:
+            self.tray = QSystemTrayIcon(QIcon(str(ICON_PATH)), self)
+            self.tray.setToolTip(window_title())
+            m = QMenu()
+            m.addAction(tr("Open {app}", app=i18n.app_name()), self.show_from_tray)
+            m.addAction(tr("Check for updates"), lambda: (self.show_from_tray(), self.updates.check(manual=True),
+                                                         self.api.emit("update-open", {})))
+            m.addSeparator()
+            m.addAction(tr("Quit"), self.quit_app)
+            self._tray_menu = m
+            self.tray.setContextMenu(m)
+            self.tray.activated.connect(lambda r: self.show_from_tray()
+                                        if r in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick) else None)
+            self.tray.show()
+        elif not want and self.tray:
+            self.tray.hide()
+            self.tray.deleteLater()
+            self.tray = None
+
+    def show_from_tray(self):
+        self.show()
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def quit_app(self):
+        self._quitting = True
+        self.close()
+
+    def restart_app(self, after=None):
+        """Closes the app the normal way (player positions, settings, sync), then runs `after` (e.g. the
+        installer) – or starts the app again."""
+        self._after_quit = after or relaunch
+        self._quitting = True
+        QTimer.singleShot(0, self.close)
+
+    def run_bg(self, work, done=None):
+        """work() in a thread, done(result) back in the GUI thread."""
+        import threading
+
+        def run():
+            try:
+                r = work()
+            except Exception:
+                traceback.print_exc()
+                r = None
+            if done:
+                self._bg_done.emit(lambda: done(r))
+        threading.Thread(target=run, daemon=True).start()
+
+    def _housekeeping(self):
+        settings = dict(self.settings)
+
+        def work():
+            out = {}
+            try:
+                out["backup"] = backup.auto(settings)
+            except Exception:
+                traceback.print_exc()
+            if feedback.queued():
+                out["feedback"] = feedback.flush_queue(settings)
+            return out
+
+        def done(r):
+            if r and r.get("backup"):
+                print(f"[backup] automatic backup {r['backup'].name}")
+            if r and r.get("feedback") and r["feedback"]["sent"]:
+                n = len(r["feedback"]["sent"])
+                self.api.emit("toast", {"msg": trn(n, "A waiting report was sent", "{n} waiting reports were sent")})
+        self.run_bg(work, done)
+
+    def _on_crash(self, text):
+        if self.settings.get("crash_prompt", True) and not self._quitting:
+            self.api.emit("crash", {"traceback": feedback.redact(text, feedback.secrets_of(self.settings))})
+
+    def _announce_start(self):
+        st = self._started
+        if st.get("updated"):
+            self.api.emit("toast", {"msg": tr("Updated to {version}", version=st["updated"])})
+        elif st.get("update_failed"):
+            self.api.emit("toast", {"msg": tr("The update to {version} did not finish. You can try again in Settings → General.",
+                                              version=st["update_failed"]), "type": "err"})
+        if st.get("restored"):
+            self.api.emit("toast", {"msg": tr("Catalogue restored from {name}", name=st["restored"])})
+        if st.get("restore_error"):
+            self.api.emit("toast", {"msg": tr("Restoring the backup failed: {error}", error=st["restore_error"]),
+                                    "type": "err"})
+
+    def grab_screenshot(self):
+        """The app window as a JPEG data URL (for a bug report); at most 1600 px wide."""
+        from PySide6.QtCore import QBuffer, QIODevice
+        import base64
+        pm = self.grab()
+        if pm.width() > 1600:
+            pm = pm.scaledToWidth(1600, Qt.SmoothTransformation)
+        buf = QBuffer()
+        buf.open(QIODevice.WriteOnly)
+        pm.save(buf, "JPG", 80)
+        return "data:image/jpeg;base64," + base64.b64encode(bytes(buf.data())).decode()
+
     def closeEvent(self, e):
+        if self.tray and self.settings.get("close_to_tray") and not self._quitting:
+            e.ignore()                       # keeps running in the tray
+            for pl in self._players():
+                self._save_resume(pl)
+                if pl.media and not pl.paused():
+                    pl.toggle_pause()
+            config.save_settings(self.settings)
+            self.hide()
+            if not self.settings.get("tray_hint_shown"):
+                self.settings["tray_hint_shown"] = True
+                self.tray.showMessage(i18n.app_name(), tr("{app} keeps running here. Right-click the icon to quit.",
+                                                          app=i18n.app_name()), QSystemTrayIcon.Information, 4000)
+            return
+        if self.tray:
+            self.tray.hide()
         self.settings["geometry"] = bytes(self.saveGeometry().toBase64()).decode()
         for pl in self._players():
             self._save_resume(pl)
@@ -774,6 +972,25 @@ def main():
             pass
     config.prepare_data_dir()
     config.ensure_dirs()
+    applog.setup(config.load_settings().get("log_level", "info"))
+    started = {}
+    try:          # a backup chosen in Settings → Data & backups replaces the catalogue before anything opens it
+        r = backup.apply_pending_restore()
+        if r:
+            started["restored"] = r["restored"]
+            print(f"[backup] restored {r['restored']} (the previous catalogue was saved as {r['saved']})")
+    except Exception as e:
+        traceback.print_exc()
+        started["restore_error"] = str(e)
+    try:
+        r = updater.after_update()
+        if r and r.get("updated"):
+            started["updated"] = r["updated"]
+            print(f"[update] updated from {r.get('from')} to {r['updated']}")
+        elif r and r.get("failed"):
+            started["update_failed"] = r["failed"]
+    except Exception:
+        traceback.print_exc()
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-driver-bug-workarounds")
     app = QApplication(sys.argv)
     app.setApplicationName("Kronikář")          # internal id (Qt storage paths) – product name is Cosmas
@@ -783,6 +1000,27 @@ def main():
     offer_import()
     import locale
     locale.setlocale(locale.LC_NUMERIC, "C")  # mpv requires C numeric locale
-    w = MainWindow()
-    w.show()
-    sys.exit(app.exec())
+    w = MainWindow(started)
+    if w.settings.get("start_minimized"):
+        if w.tray:
+            w.hide()                       # straight to the tray
+        else:
+            w.showMinimized()
+    else:
+        w.show()
+    code = app.exec()
+    if w._after_quit:                      # update installer / restart after restoring a backup
+        try:
+            w._after_quit()
+        except Exception:
+            traceback.print_exc()
+    sys.exit(code)
+
+
+def relaunch():
+    """Starts this app again (same Python, same arguments, same environment) once this process is ending."""
+    import subprocess
+    args = [a for a in sys.argv[1:] if a != "--updated"]
+    flags = (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
+    subprocess.Popen([sys.executable, "-m", "rpcatalog", *args], cwd=str(config.APP_DIR), creationflags=flags,
+                     close_fds=True)

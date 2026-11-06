@@ -199,7 +199,56 @@ DEFAULTS = {
     "ai_pause_any_game": True,       # also any game from Steam, Epic, Xbox, GOG… folders
     "ai_pause_processes": [],        # empty = the games found in recordings
     "ai_priority": "below",          # idle | below | normal
+    # General
+    "start_minimized": False,
+    "close_to_tray": False,          # closing the window keeps the app in the notification area
+    "crash_prompt": True,            # offer to send a report after an unexpected error
+    "log_level": "info",             # info | debug (logs/cosmas.log in the data folder)
+    # Library
+    "scan_on_start": True,
+    "rescan_minutes": 5,             # look for new recordings every N minutes (0 = only on start / F5)
+    # Player
+    "remember_position": True,       # continue a video where it was left
+    "player_seek_small": 5,          # ←/→ (s)
+    "player_seek_large": 30,         # Shift+←/→ (s)
+    "player_volume_max": 130,        # volume slider maximum in % (100–200)
+    "player_hwdec": "auto",          # auto | no – hardware video decoding (applies to newly opened players)
+    # Updates (updater.py, update_ctl.py)
+    "update_auto_check": True,
+    "update_auto_download": False,
+    "update_channel": "stable",      # stable | beta
+    "update_skip": "",               # version the user chose to skip
+    # Automatic backups of catalog.db (backup.py)
+    "backup_auto": True,
+    "backup_every_hours": 24,
+    "backup_keep": 7,
 }
+
+# Settings the Settings page may change, with their type / allowed values (api.m_settings_set)
+SETTING_RULES = {
+    "start_minimized": bool, "close_to_tray": bool, "crash_prompt": bool, "log_level": ("info", "debug"),
+    "scan_on_start": bool, "rescan_minutes": (0, 240), "hide_short_sessions": bool,
+    "remember_position": bool, "player_seek_small": (1, 120), "player_seek_large": (2, 600),
+    "player_volume_max": (100, 200), "player_hwdec": ("auto", "no"),
+    "update_auto_check": bool, "update_auto_download": bool, "update_channel": ("stable", "beta"),
+    "backup_auto": bool, "backup_every_hours": (1, 24 * 14), "backup_keep": (1, 100),
+}
+
+
+def check_setting(key, value):
+    """Validated value for a key of SETTING_RULES; ValueError when it doesn't fit."""
+    rule = SETTING_RULES[key]
+    if rule is bool:
+        return bool(value)
+    if isinstance(rule, tuple) and isinstance(rule[0], str):
+        if value not in rule:
+            raise ValueError(f"{key}: {value!r}")
+        return value
+    lo, hi = rule
+    v = int(float(value))
+    if not lo <= v <= hi:
+        raise ValueError(f"{key}: {value!r} (allowed {lo}–{hi})")
+    return v
 
 
 def ensure_dirs():
