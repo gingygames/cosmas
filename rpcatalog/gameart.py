@@ -132,6 +132,10 @@ def medal_icons():
 
 
 def fetch(url):
+    # only web images: urllib would also open file:// (any local file) for a URL the page passes in
+    if urllib.parse.urlsplit(str(url or "")).scheme.lower() not in ("http", "https"):
+        from .i18n import tr
+        raise ValueError(tr("Only images from the web (http, https) can be loaded here."))
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=20) as r:
         return r.read()
