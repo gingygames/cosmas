@@ -1703,7 +1703,7 @@ class Api(QObject):
     def m_sync_set_token(self, token=""):
         token = (token or "").strip()
         if token and not token.startswith("krt_"):
-            raise ValueError(tr("This isn't a Kosmas API token (it starts with krt_). Create one on the web in Settings."))
+            raise ValueError(tr("This isn't a Cosmas API token (it starts with krt_). Create one on the web in Settings."))
         self.settings["sync_token"] = token
         self.settings.pop("sync_user", None)
         self.host.save_settings()

@@ -1,4 +1,4 @@
-"""Kosmas AI results -> the catalog: mentions of known characters / places / factions are stored
+"""Cosmas AI results -> the catalog: mentions of known characters / places / factions are stored
 right away, new events and new characters / places / factions become proposals the user accepts or rejects."""
 import html
 import json

@@ -44,7 +44,7 @@ def set(provider, secret):     # noqa: A001 - mirrors get()
     buf = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
     c = CREDENTIAL(Type=CRED_TYPE_GENERIC, TargetName=PREFIX + provider, CredentialBlobSize=len(blob),
                    CredentialBlob=ctypes.cast(buf, ctypes.POINTER(ctypes.c_ubyte)), Persist=CRED_PERSIST_LOCAL_MACHINE,
-                   UserName="Kronikar", Comment=tr("Kosmas – AI service key"))
+                   UserName="Kronikar", Comment=tr("Cosmas – AI service key"))
     if not _adv.CredWriteW(ctypes.byref(c), 0):
         raise OSError(ctypes.get_last_error(), tr("Could not save the key to the Credential Manager"))
 

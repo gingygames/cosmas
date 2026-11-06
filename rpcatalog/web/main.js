@@ -4,6 +4,7 @@
 'use strict';
 
 window.PANE = new URLSearchParams(location.search).get('pane');
+document.title = tr('Cosmas');   // Cosmas in English, Kosmas in Czech
 
 /* refresh after the other page (main window / pane under the player) changed something */
 const syncRefresh = debounce(async (methods) => {

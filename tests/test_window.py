@@ -87,7 +87,8 @@ class WindowSizeTest(unittest.TestCase):
         self.assertTrue(sx <= x and sy <= y and x + w <= sx + sw and y + h <= sy + sh, self.r)
 
     def test_title_names_a_test_run_and_its_data_folder(self):
-        self.assertEqual(self.r["title"], f"Kosmas – TEST – {self.r['data']}")
+        self.assertRegex(self.r["title"], r"^(Cosmas|Kosmas) – TEST – ")
+        self.assertTrue(self.r["title"].endswith(self.r["data"]), self.r)
 
 
 if __name__ == "__main__":

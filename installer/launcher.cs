@@ -7,9 +7,9 @@ using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("Kosmas")]
-[assembly: AssemblyDescription("Kosmas – catalogue of game recordings")]
-[assembly: AssemblyProduct("Kosmas")]
+[assembly: AssemblyTitle("Cosmas")]
+[assembly: AssemblyDescription("Cosmas – catalogue of game recordings")]
+[assembly: AssemblyProduct("Cosmas")]
 [assembly: AssemblyCompany("gingygames")]
 [assembly: AssemblyCopyright("gingygames")]
 [assembly: AssemblyVersion("@VERSION@.0")]
@@ -44,8 +44,8 @@ static class Launcher
             string lang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
             bool cs = lang == "cs" || lang == "sk";
             MessageBox.Show(cs ? "Instalace Kosmase je poškozená (chybí " + py + ").\nNainstaluj aplikaci znovu."
-                               : "The Kosmas installation is damaged (" + py + " is missing).\nPlease install the app again.",
-                            "Kosmas", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                               : "The Cosmas installation is damaged (" + py + " is missing).\nPlease install the app again.",
+                            cs ? "Kosmas" : "Cosmas", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
         var sb = new StringBuilder("-m rpcatalog");

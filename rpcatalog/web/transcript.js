@@ -113,7 +113,7 @@ async function reviewProposals(mediaId) {
   const order = { event: 0, character: 1, place: 2, faction: 3 };
   props.sort((a, b) => (order[a.kind] - order[b.kind]) || (a.data.t - b.data.t)).forEach(p => body.appendChild(proposalCard(p, { onDone: count })));
   count();
-  modal({ title: tr('Kosmas AI suggestions'), icon: 'sparkles', xwide: true,
+  modal({ title: tr('Cosmas AI suggestions'), icon: 'sparkles', xwide: true,
     body: h('div', h('.small.muted', { style: { marginBottom: '10px' } },
       tr('From the transcript of this recording. Accepting creates an event linked to the video (with time, place and characters) or a new character, place or faction. You can edit the text and name before accepting.'), ' ', left), body) });
 }
@@ -168,7 +168,7 @@ function transcriptSection(m) {
     menu(e, [
       { label: tr('Transcribe speech'), icon: 'audio-lines', onClick: () => start({ speech: true, chapters: false }) },
       { label: tr('Describe the picture in conversations'), icon: 'scan-eye', onClick: () => start({ speech: true, vision: true, chapters: false }) },
-      { label: tr('Kosmas AI – chapters, events, suggestions'), icon: 'sparkles', onClick: () => start({ speech: true, chapters: true }) },
+      { label: tr('Cosmas AI – chapters, events, suggestions'), icon: 'sparkles', onClick: () => start({ speech: true, chapters: true }) },
       { label: tr('Everything (speech, picture, chronicle)'), icon: 'wand-sparkles', onClick: () => start({ speech: true, vision: true, chapters: true }) },
       { sep: true },
       { label: tr('Full transcript as text'), icon: 'file-text', disabled: !d.timeline, onClick: () => API.call('analysis.open_timeline', { id: m.id }) },
@@ -200,7 +200,7 @@ function transcriptSection(m) {
       nSpeech ? pill('audio-lines', nSpeech, 'ok', trn(nSpeech, '{n} utterance', '{n} utterances')) : null,
       nImg ? pill('scan-eye', nImg, 'vio', trn(nImg, '{n} described frame', '{n} described frames')) : null,
       d.coverage.chapters.length ? pill('book-open', d.coverage.chapters.length, 'acc', trn(d.coverage.chapters.length, '{n} chapter', '{n} chapters')) : null,
-      d.proposals ? h('span.trs-pill.hot', { title: tr('Kosmas AI suggestions'), onclick: () => reviewProposals(m.id).then(load) }, icon('sparkles'), d.proposals) : null);
+      d.proposals ? h('span.trs-pill.hot', { title: tr('Cosmas AI suggestions'), onclick: () => reviewProposals(m.id).then(load) }, icon('sparkles'), d.proposals) : null);
   }
 
   function renderEmpty() {
@@ -209,7 +209,7 @@ function transcriptSection(m) {
     empty.classList.toggle('hidden', !nothing);
     if (!nothing) return;
     clear(empty).append(
-      h('.small.muted', d.available ? tr('Speech transcription (microphone, game, Discord), picture descriptions in conversations and Kosmas AI, which turns it into chapters, events and suggestions for the database. Runs on your PC or through a paid service (Transcripts → Where AI runs).')
+      h('.small.muted', d.available ? tr('Speech transcription (microphone, game, Discord), picture descriptions in conversations and Cosmas AI, which turns it into chapters, events and suggestions for the database. Runs on your PC or through a paid service (Transcripts → Where AI runs).')
         : tr('Speech transcription on this PC is not available here – choose a paid service for speech in Transcripts → Where AI runs.')),
       d.available ? h('.row.wrap',
         h('button.btn.sm.primary', { onclick: () => start({ speech: true }) }, icon('audio-lines'), tr('Transcribe speech')),
@@ -359,7 +359,7 @@ function transcriptSection(m) {
     const d = st.data, cv = d.coverage;
     clear(meta);
     if (d.proposals) meta.appendChild(h('.trs-banner', icon('sparkles'),
-      h('.grow', h('b', trn(d.proposals, 'Kosmas AI suggests {n} entry', 'Kosmas AI suggests {n} entries')),
+      h('.grow', h('b', trn(d.proposals, 'Cosmas AI suggests {n} entry', 'Cosmas AI suggests {n} entries')),
         h('.tiny.faint', tr('events, new characters, places and factions from this recording'))),
       h('button.btn.sm.primary', { onclick: () => reviewProposals(m.id).then(load) }, tr('Review suggestions'))));
     if (cv.summary && cv.summary.text) {

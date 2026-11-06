@@ -30,9 +30,9 @@ APP_ID = "Gingygames.Kronikar"
 
 
 def window_title():
-    """'Kosmas', plus the data folder when KRONIKAR_DATA points elsewhere and KOSMAS_TITLE_SUFFIX for test runs,
+    """'Cosmas' (Czech UI: 'Kosmas'), plus the data folder when KRONIKAR_DATA points elsewhere and KOSMAS_TITLE_SUFFIX for test runs,
     so a test or second copy can't be mistaken for the real catalogue."""
-    t = "Kosmas"
+    t = i18n.app_name()
     if os.environ.get("KOSMAS_TITLE_SUFFIX"):
         t += " – " + os.environ["KOSMAS_TITLE_SUFFIX"]
     if os.environ.get("KRONIKAR_DATA"):
@@ -739,7 +739,7 @@ def offer_import():
     for src in config.import_candidates():
         info = _catalog_summary(src)
         box = QMessageBox(QMessageBox.Icon.Question, tr("Existing catalogue found"),
-                          tr("Kosmas found a catalogue from an earlier copy of the app:\n{path}\n{info}\n\n"
+                          tr("Cosmas found a catalogue from an earlier copy of the app:\n{path}\n{info}\n\n"
                              "Copy it into this installation? The original folder stays exactly as it is.",
                              path=src, info=info))
         yes = box.addButton(tr("Copy the catalogue"), QMessageBox.ButtonRole.AcceptRole)
@@ -754,7 +754,7 @@ def offer_import():
         except Exception as e:
             traceback.print_exc()
             QMessageBox.warning(None, tr("Existing catalogue found"),
-                                tr("The catalogue could not be copied ({error}). Kosmas starts with an empty catalogue; "
+                                tr("The catalogue could not be copied ({error}). Cosmas starts with an empty catalogue; "
                                    "the original folder was not changed.", error=e))
             return
     if not config.DB_PATH.exists() and config.import_candidates():
@@ -776,7 +776,7 @@ def main():
     config.ensure_dirs()
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-driver-bug-workarounds")
     app = QApplication(sys.argv)
-    app.setApplicationName("Kronikář")          # internal id (Qt storage paths) – product name is Kosmas
+    app.setApplicationName("Kronikář")          # internal id (Qt storage paths) – product name is Cosmas
     app.setApplicationDisplayName(window_title())
     app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyle("Fusion")

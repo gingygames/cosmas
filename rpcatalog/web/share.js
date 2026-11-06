@@ -103,7 +103,7 @@ function openShare(kind, id) {
         h('.url', h('input.input', { readonly: true, value: info.share_url, onfocus: e => e.target.select(), onkeydown: e => e.stopPropagation() }),
           h('button.btn.primary', { onclick: () => copy() }, icon('copy'), tr('Copy link'))),
         h('.acts',
-          navigator.share ? h('button.btn.sm', { onclick: () => navigator.share({ title: info.title || 'Kosmas', url: info.share_url }).catch(() => null) }, icon('share'), tr('Share…')) : null,
+          navigator.share ? h('button.btn.sm', { onclick: () => navigator.share({ title: info.title || tr('Cosmas'), url: info.share_url }).catch(() => null) }, icon('share'), tr('Share…')) : null,
           h('button.btn.sm', { title: tr('Copies the link – paste it into Discord, it shows a preview card'), onclick: () => copy(tr('Link copied – paste it into Discord, it shows a preview card.')) }, icon('message-circle'), tr('Share to Discord')),
           vis === 'link' ? h('button.btn.sm.ghost', { disabled: !!busy, title: tr('The old link will stop working'), onclick: async () => {
             if (await confirmDialog(tr('Revoke link'), tr('Create a new link? The old one will stop working.'), { okLabel: tr('Revoke') })) {

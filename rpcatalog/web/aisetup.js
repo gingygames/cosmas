@@ -43,7 +43,7 @@ document.head.appendChild(h('style', `
 const TASKS = [
   ['speech', 'audio-lines', tr('Speech'), tr('Transcript of what was said')],
   ['vision', 'scan-eye', tr('Vision'), tr('Screenshot descriptions, name tags, characters')],
-  ['text', 'sparkles', tr('Kosmas AI'), tr('Chapters, events, summaries')],
+  ['text', 'sparkles', tr('Cosmas AI'), tr('Chapters, events, summaries')],
 ];
 const WHISPER = [['large-v3', tr('Whisper large-v3 – most accurate')], ['large-v3-turbo', tr('Whisper large-v3 turbo – faster')],
   ['medium', tr('Whisper medium – for the CPU')], ['small', tr('Whisper small – weaker PC')]];
@@ -244,7 +244,7 @@ function render(box, { intro = false } = {}) {
         h('.tiny.faint', { style: { marginTop: '6px' } }, tr('Estimate based on current price lists (November 2026, rate {rate} CZK/$) and your settings: roughly {frames} screenshots and {speech} audio tracks per hour. The actual price may differ.', { rate: info.usd_czk, frames: info.per_hour.frames, speech: info.per_hour.speech_h }))),
       h('.card.trp-set',
         h('h3', icon('key-round'), tr('Paid service accounts')),
-        h('.small.faint', tr('Keys are stored encrypted in Windows Credential Manager, for your account only. Kosmas sends them only to the given service.')),
+        h('.small.faint', tr('Keys are stored encrypted in Windows Credential Manager, for your account only. Cosmas sends them only to the given service.')),
         h('.ais-accts', accts.map(accountCard)))));
   };
   mounted.add(draw);

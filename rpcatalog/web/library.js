@@ -456,8 +456,8 @@ function cardMenu(e) {
     { label: tr('Add tags…'), icon: 'tag', onClick: () => addTags(ms) },
     { label: tr('Transcript'), icon: 'captions', submenu: [
       { label: tr('Transcribe speech'), icon: 'audio-lines', onClick: () => transcribe(ms, { chapters: false }) },
-      { label: tr('Speech + Kosmas AI'), icon: 'sparkles', onClick: () => transcribe(ms, { chapters: true }) },
-      { label: tr('Speech + picture in conversations + Kosmas AI'), icon: 'wand-sparkles', onClick: () => transcribe(ms, { vision: true, chapters: true }) },
+      { label: tr('Speech + Cosmas AI'), icon: 'sparkles', onClick: () => transcribe(ms, { chapters: true }) },
+      { label: tr('Speech + picture in conversations + Cosmas AI'), icon: 'wand-sparkles', onClick: () => transcribe(ms, { vision: true, chapters: true }) },
       { sep: true },
       { label: tr('Transcription queue'), icon: 'list-ordered', onClick: () => App.go('transcripts') },
     ] },

@@ -1,4 +1,4 @@
-"""Build the Windows installer: build/Kosmas-Setup-<version>.exe
+"""Build the Windows installer: build/Cosmas-Setup-<version>.exe (+ .sha256)
 
 One command (from the repository root):
 
@@ -13,6 +13,11 @@ What it does:
 
 Options:  --skip-pip  reuse build/dist/python as it is (faster when only the app code changed)
           --no-setup  stop after build/dist (no Inno Setup)
+          --test      separate test app (own AppId and folder, no shortcuts): build/Cosmas-Setup-<ver>-test.exe,
+                      for trying the updater without touching a real install
+          --version X build as version X (the bundled app reports it too), e.g. an older test build
+The installer is followed by <installer>.sha256 ("<hex>  <file name>", the sha256sum format) – upload both to the
+GitHub release (installer/release.py prints the command).
 The result needs nothing on the target PC: no Python, no admin rights, Windows 10 1809+ / 11, x64.
 """
 import argparse
@@ -138,10 +143,13 @@ def dir_size(p):
     return sum(f.stat().st_size for f in Path(p).rglob("*") if f.is_file())
 
 
-def build_app():
+def build_app(ver=None):
     app = DIST / "app"
     shutil.rmtree(app, ignore_errors=True)
     shutil.copytree(ROOT / "rpcatalog", app / "rpcatalog", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    if ver and ver != version():           # --version: the bundled app reports the version it was built as
+        init = app / "rpcatalog" / "__init__.py"
+        init.write_text(re.sub(r'__version__\s*=\s*"[^"]+"', f'__version__ = "{ver}"', init.read_text("utf-8"), count=1), "utf-8")
     if (ROOT / "extras").is_dir():
         shutil.copytree(ROOT / "extras", app / "extras")
     vendor = app / "vendor"
@@ -165,7 +173,7 @@ def build_launcher(ver):
     if not CSC.exists():
         raise SystemExit(f"C# compiler not found: {CSC}")
     src = BUILD / "launcher.cs"
-    src.write_text((HERE / "launcher.cs").read_text("utf-8-sig").replace("@VERSION@", ver), "utf-8-sig")
+    src.write_text((HERE / "launcher.cs").read_text("utf-8-sig").replace("@VERSION@", num_version(ver)), "utf-8-sig")
     out = DIST / "Kronikar.exe"
     subprocess.check_call([str(CSC), "/nologo", "/target:winexe", "/optimize+", "/platform:anycpu",
                            f"/win32icon:{ROOT / 'rpcatalog' / 'assets' / 'kronikar.ico'}",
@@ -206,24 +214,57 @@ def ensure_iscc():
     return iscc
 
 
+def num_version(ver):
+    """1.2.0-beta.1 -> 1.2.0 (Windows file versions are numbers only)"""
+    m = re.match(r"\d+(\.\d+){0,2}", ver)
+    return m.group(0) if m else "0.0.0"
+
+
+def sha256_of(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def write_sha256(path):
+    """<installer>.sha256 next to the installer, in the format of sha256sum: "<hex>  <file name>"."""
+    digest = sha256_of(path)
+    out = Path(str(path) + ".sha256")
+    out.write_text(f"{digest}  {Path(path).name}
+", "ascii")
+    return digest, out
+
+
+def installer_path(ver, test=False):
+    return BUILD / f"Cosmas-Setup-{ver}{'-test' if test else ''}.exe"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-pip", action="store_true")
     ap.add_argument("--no-setup", action="store_true")
+    ap.add_argument("--test", action="store_true", help="separate test app (own AppId/folder, no shortcuts)")
+    ap.add_argument("--version", help="build as this version (default: rpcatalog/__init__.py)")
     args = ap.parse_args()
-    ver = version()
+    ver = args.version or version()
     DIST.mkdir(parents=True, exist_ok=True)
     pydir = build_python(args.skip_pip)
-    build_app()
+    build_app(ver)
     build_launcher(ver)
     precompile(pydir)
     log(f"dist ready: {dir_size(DIST) / 2**20:.0f} MB")
     if args.no_setup:
         return
     iscc = ensure_iscc()
-    subprocess.check_call([str(iscc), "/Q", f"/DAppVer={ver}", str(HERE / "kronikar.iss")])
-    out = BUILD / f"Kosmas-Setup-{ver}.exe"
+    defines = [f"/DAppVer={ver}", f"/DAppNumVer={num_version(ver)}"] + (["/DTestBuild=1"] if args.test else [])
+    subprocess.check_call([str(iscc), "/Q", *defines, str(HERE / "kronikar.iss")])
+    out = installer_path(ver, args.test)
+    digest, sha_file = write_sha256(out)
     log(f"installer: {out} ({out.stat().st_size / 2**20:.0f} MB)")
+    log(f"sha256:    {digest}  ({sha_file.name})")
 
 
 if __name__ == "__main__":

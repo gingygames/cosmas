@@ -114,7 +114,7 @@ def _import_data(src):
     a, db = sqlite3.connect(raw / "catalog.db"), sqlite3.connect(tmp)
     try:
         if a.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-            raise sqlite3.DatabaseError("the copied catalogue is damaged – close the other copy of Kosmas and try again")
+            raise sqlite3.DatabaseError("the copied catalogue is damaged – close the other copy of Cosmas and try again")
         a.backup(db)
     finally:
         a.close()

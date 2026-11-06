@@ -34,7 +34,7 @@ const SYNC_TYPES = { servers: tr('Server'), players: tr('Player'), factions: tr(
   entries: tr('Entry'), letters: tr('Letter'), media: tr('Video'), bookmarks: tr('Moment'), attachments: tr('Image') };
 const SYNC_KINDS = { both: tr('changed here and on the web'), deleted_remote: tr('deleted on the web, changed here'), deleted_local: tr('deleted here, changed on the web') };
 
-/* Sign in with Discord: the browser opens the web, the user allows Kosmas and the browser comes back to a one-shot
+/* Sign in with Discord: the browser opens the web, the user allows Cosmas and the browser comes back to a one-shot
    local address (loopback + PKCE). When that can't work, a short code is shown instead. Resolves true once signed in. */
 function webSignIn() {
   return new Promise(resolve => {
@@ -49,14 +49,14 @@ function webSignIn() {
       clear(body);
       if (st.state === 'browser') body.append(
         h('.row', { style: { gap: '10px', alignItems: 'center' } }, icon('loader'), h('div', tr('Finish signing in in your browser: sign in with Discord and click Allow.'))),
-        h('.tiny.faint', tr('Kosmas is waiting for the browser to come back (up to 5 minutes).')),
+        h('.tiny.faint', tr('Cosmas is waiting for the browser to come back (up to 5 minutes).')),
         h('.row.wrap', h('button.btn.sm', { onclick: () => API.call('auth.open', { which: 'browser' }) }, icon('external-link'), tr('Open the page again')), useCode));
       else if (st.state === 'device') body.append(
         st.user_code ? [
           h('div', tr('Open the page, check that it shows this code and click Allow:')),
           h('div', { style: { font: '700 28px ui-monospace, monospace', letterSpacing: '.12em', textAlign: 'center', padding: '8px', borderRadius: '8px', background: 'var(--input)', userSelect: 'all' } }, st.user_code),
           h('.row.wrap', h('button.btn.primary', { onclick: () => API.call('auth.open', { which: 'device' }) }, icon('external-link'), tr('Open page'))),
-          h('.tiny.faint', tr('Kosmas finishes signing in by itself a few seconds after you allow it.')),
+          h('.tiny.faint', tr('Cosmas finishes signing in by itself a few seconds after you allow it.')),
         ] : h('.row', { style: { gap: '10px' } }, icon('loader'), tr('Getting a code…')));
       else if (st.state === 'error') body.append(
         h('.small', { style: { color: 'var(--danger)' } }, st.error || tr('Sign-in failed.')),
@@ -88,7 +88,7 @@ function webSyncCard() {
     const stats = st.last_sync ? [tr('sent {n}', { n: r.sent || 0 }), tr('images uploaded {n}', { n: r.uploaded || 0 }), tr('deleted on the web {n}', { n: r.deleted_remote || 0 }),
       tr('received {n}', { n: r.received || 0 }), tr('new from the web {n}', { n: r.created_local || 0 }), tr('deleted here {n}', { n: r.deleted_local || 0 })].join(' · ') : '';
     const signOut = async () => {
-      if (await confirmDialog(tr('Disconnect this device'), tr('Kosmas forgets the sign-in on this computer and the web revokes it. Your records stay linked – after you sign in again, syncing continues where it left off.'), { okLabel: tr('Disconnect') }))
+      if (await confirmDialog(tr('Disconnect this device'), tr('Cosmas forgets the sign-in on this computer and the web revokes it. Your records stay linked – after you sign in again, syncing continues where it left off.'), { okLabel: tr('Disconnect') }))
         run('auth.sign_out');
     };
     clear(box).append(
@@ -98,7 +98,7 @@ function webSyncCard() {
           h('button.btn.sm.ghost', { disabled: st.running, onclick: signOut }, icon('log-out'), tr('Sign out / disconnect this device')))
         : h('.col', { style: { gap: '6px' } },
           h('div', h('button.btn.primary', { onclick: async () => { if (await webSignIn()) render(); } }, icon('log-in'), tr('Sign in with Discord'))),
-          h('.tiny.faint', tr('Opens your browser – sign in with the community Discord and allow Kosmas. Nothing to copy.'))),
+          h('.tiny.faint', tr('Opens your browser – sign in with the community Discord and allow Cosmas. Nothing to copy.'))),
       h('.row.wrap', { style: { gap: '18px' } },
         check('letters', tr('Also send pigeon post (private only)')),
         check('auto', tr('Sync after the app starts'))),

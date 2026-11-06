@@ -72,7 +72,7 @@ class CallbackServerTest(unittest.TestCase):
         self.assertFalse(srv.done.is_set())
         st, body = _get(base + "/callback?state=good-state&code=abc123")
         self.assertEqual(st, 200)
-        self.assertIn("Kosmas", body)
+        self.assertRegex(body, "Cosmas|Kosmas")
         self.assertEqual(srv.wait(5), "abc123")
         with self.assertRaises(OSError):                 # one-shot: the port is closed afterwards
             urllib.request.urlopen(base + "/callback?state=good-state&code=again", timeout=2)

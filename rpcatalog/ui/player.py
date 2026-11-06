@@ -1332,7 +1332,7 @@ class PlayerWindow(QWidget):
 
     def __init__(self, settings, temporary_fullscreen=False):
         super().__init__(None, Qt.Window)
-        self.setWindowTitle(tr("Kosmas – player"))
+        self.setWindowTitle(tr("Cosmas – player"))
         self.setStyleSheet("background:#0b0d11;")
         self.resize(1280, 800)
         self.temporary = temporary_fullscreen
