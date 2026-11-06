@@ -186,13 +186,16 @@ Views.register('settings', {
 
     /* every control saves at once; folders, splitting and game names reload the library */
     const set = async (key, value, { rescan = false, quiet = false } = {}) => {
+      const old = s[key];
       s[key] = value;
-      await API.call('settings.set', { values: { [key]: value, _rescan: rescan } }).catch(() => null);
+      try { await API.call('settings.set', { values: { [key]: value, _rescan: rescan } }, { quiet: true }); }
+      catch (e) { s[key] = old; toast(tr('Not saved: {error}', { error: String(e) }), 'err'); return false; }
       if (key in App.settings || ['short_session_seconds', 'event_gap_minutes', 'hide_short_sessions'].includes(key)) App.settings[key] = value;
       if (!quiet) toast(rescan ? tr('Saved – reloading the library') : tr('Saved'));
+      return true;
     };
     const tog = (key, label, hint, opts) => h('.col', { style: { gap: '2px' } },
-      h('label.check', h('input', { type: 'checkbox', checked: !!s[key], onchange: e => set(key, e.target.checked, opts) }), label),
+      h('label.check', h('input', { type: 'checkbox', checked: !!s[key], onchange: async e => { if (await set(key, e.target.checked, opts) === false) e.target.checked = !!s[key]; } }), label),
       hint ? h('.set-hint', hint) : null);
     const num = (key, label, min, max, opts = {}) => h('label.field', label, h('input.input', {
       type: 'number', min, max, value: s[key], style: { width: '110px' }, onkeydown: stop,
@@ -350,7 +353,7 @@ Views.register('settings', {
             h('span', tr('Backups')), h('span', fmtBytes(d.backups))),
           h('.row.wrap', { style: { gap: '8px' } },
             h('button.btn', { onclick: () => API.call('open_data_dir') }, icon('folder-open'), tr('Open data folder')),
-            h('button.btn', { onclick: async () => { const r = await API.call('data.export_json').catch(() => null); if (r) toast(tr('Exported {n} records to {path}', { n: r.rows, path: r.path })); } }, icon('file-json'), tr('Export as JSON…')))),
+            h('button.btn', { onclick: async () => { const r = await API.call('data.export_json').catch(() => null); if (r) toast(trn(r.rows, 'Exported {n} record to {path}', 'Exported {n} records to {path}', { path: r.path })); } }, icon('file-json'), tr('Export as JSON…')))),
         card(tr('Automatic backups'), tr('A copy of the catalogue (catalog.db – events, characters, moments, transcripts…) in the backups folder. Attachments and thumbnails are separate files and are not part of it.'),
           tog('backup_auto', tr('Back up the catalogue automatically')),
           h('.set-row', num('backup_every_hours', tr('Every (hours)'), 1, 336), num('backup_keep', tr('Keep the newest (automatic backups)'), 1, 100)),

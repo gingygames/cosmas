@@ -347,15 +347,15 @@ function renderGrid() {
       S.q ? tr('Try a different search or turn on more recording types.') : tr('No videos in this filter yet.'))));
   }
   let lastDay = null;
-  const dayTotals = {};
-  if (S.group && S.sort in { new: 1, old: 1 }) items.forEach(m => { const k = m.start ? new Date(m.start * 1000).toDateString() : '?'; dayTotals[k] = (dayTotals[k] || 0) + (m.duration || 0); });
+  const dayTotals = {}, dayCounts = {};      // one pass over the videos (not one per day)
+  if (S.group && S.sort in { new: 1, old: 1 }) items.forEach(m => { const k = m.start ? new Date(m.start * 1000).toDateString() : '?'; dayTotals[k] = (dayTotals[k] || 0) + (m.duration || 0); if (m.start) dayCounts[k] = (dayCounts[k] || 0) + 1; });
   const frag = document.createDocumentFragment();
   for (const m of items) {
     if (S.group && S.sort in { new: 1, old: 1 }) {
       const k = m.start ? new Date(m.start * 1000).toDateString() : '?';
       if (k !== lastDay) {
         lastDay = k;
-        const n = items.filter(x => x.start && new Date(x.start * 1000).toDateString() === k).length;
+        const n = dayCounts[k] || 0;
         frag.appendChild(h('.lib-day', h('h3', m.start ? fmt.dateLong(m.start) : tr('No date')),
           h('span.faint', `${trn(n, '{n} video', '{n} videos')} · ${fmt.durHuman(dayTotals[k])}`), h('.line')));
       }
@@ -492,12 +492,12 @@ function renderBulk() {
   if (n < 2) return;
   const ms = selected();
   clear(bulk).append(
-    h('b', tr('{n} selected', { n })), h('span.faint.small', fmt.durHuman(ms.reduce((s, m) => s + (m.duration || 0), 0))), h('.vsep'),
+    h('b', trn(n, '{n} selected', '{n} selected')), h('span.faint.small', fmt.durHuman(ms.reduce((s, m) => s + (m.duration || 0), 0))), h('.vsep'),
     h('button.btn.sm', { onclick: () => linkToEvent(ms) }, icon('link'), tr('To event')),
     h('button.btn.sm', { onclick: () => eventFromSelection(ms) }, icon('calendar-plus'), tr('New event')),
     h('button.btn.sm', { onclick: () => addChars(ms) }, icon('users'), tr('Characters')),
     h('button.btn.sm', { onclick: () => addTags(ms) }, icon('tag'), tr('Tags')),
-    h('button.btn.sm', { onclick: e => cardMenu(e) }, icon('ellipsis')),
+    h('button.btn.sm', { title: tr('More actions'), 'aria-label': tr('More actions'), onclick: e => cardMenu(e) }, icon('ellipsis')),
     h('button.btn.sm.ghost.icon', { title: tr('Clear selection'), onclick: () => { S.sel.clear(); refreshSel(); } }, icon('x')));
 }
 
@@ -528,7 +528,7 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
   const desc = h('textarea.input', { rows: 3, placeholder: tr('Notes, what happened, who was there…'), onchange: e => save({ description: e.target.value }) }, m.description || '');
 
   const gameIn = h('input.input', { value: m.game || '', list: 'lib-games', onchange: e => e.target.value.trim() && save({ game: e.target.value.trim() }) });
-  const kindSeg = h('.seg', [['', 'Auto'], ...Object.entries(KIND).map(([k, v]) => [k, v.label])].map(([k, label]) =>
+  const kindSeg = h('.seg', [['', tr('Auto')], ...Object.entries(KIND).map(([k, v]) => [k, v.label])].map(([k, label]) =>
     h('button' + ((m.kind_override || '') === k ? '.on' : ''), { onclick: () => save({ kind_override: k || null }) }, label)));
 
   box.append(
@@ -582,7 +582,7 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
           m.custom_thumb ? { label: tr('Restore original thumbnail'), icon: 'rotate-ccw', onClick: async () => { await API.call('media.thumb_reset', { id: m.id }); await App.refresh('media'); rerender(); } } : null,
         ]) }, icon('image'), tr('Thumbnail')),
         h('.grow'),
-        h('button.btn.danger', { onclick: () => deleteMedia([m]) }, icon('trash-2')))));
+        h('button.btn.danger', { title: tr('Delete to Recycle Bin'), 'aria-label': tr('Delete to Recycle Bin'), onclick: () => deleteMedia([m]) }, icon('trash-2')))));
 }
 
 window.mediaPanel = mediaPanel;

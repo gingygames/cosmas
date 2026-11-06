@@ -338,7 +338,7 @@ function makeView(kind) {
     const parent = g.parent_id && list.find(p => p.id === g.parent_id);
     return h('.row', h('span.chip' + (parent ? '.on' : ''), parent ? parent.name : '—'),
       h('button.btn.sm', { onclick: async () => { const id = await pickPlace(tr('Where is the place?')); if (id && id !== g.id) { g.parent_id = id; save({ parent_id: id }); setTimeout(renderDetail, 350); } } }, tr('Select')),
-      parent ? h('button.btn.sm.ghost.icon', { onclick: () => { g.parent_id = null; save({ parent_id: null }); renderDetail(); } }, icon('x')) : null);
+      parent ? h('button.btn.sm.ghost.icon', { title: tr('Remove'), 'aria-label': tr('Remove'), onclick: () => { g.parent_id = null; save({ parent_id: null }); renderDetail(); } }, icon('x')) : null);
   }
 
   function editForm(g) {

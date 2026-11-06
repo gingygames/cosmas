@@ -482,7 +482,7 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
           h('label.field', tr('Event'), h('.row',
             ev ? h('span.chip.on', { onclick: () => App.go('events', { id: ev.id }) }, h('span.dot', { style: { background: ev.color } }), ev.title) : h('span.faint.small', tr('not linked')),
             h('button.btn.sm', { onclick: async () => { const r = await pickEvent({ title: tr('In which event?'), moment: c.status_date, withNote: false }); if (r) { update({ status_event_id: r.id }); c.status_event_id = r.id; renderFate(); } } }, icon('link'), ev ? tr('Change') : tr('Select')),
-            ev ? h('button.btn.sm.ghost.icon', { onclick: () => { update({ status_event_id: null }); c.status_event_id = null; renderFate(); } }, icon('x')) : null))),
+            ev ? h('button.btn.sm.ghost.icon', { title: tr('Remove'), 'aria-label': tr('Remove'), onclick: () => { update({ status_event_id: null }); c.status_event_id = null; renderFate(); } }, icon('x')) : null))),
           h('input.input', { value: c.status_note || '', placeholder: tr('How it happened (optional)'), style: { marginTop: '8px' }, onkeydown: e => e.stopPropagation(), oninput: e => update({ status_note: e.target.value }) }));
       };
       renderFate();

@@ -30,7 +30,11 @@ function mdSafe(md) {
 }
 window.mdSafe = mdSafe;
 
-const fmtBytes = n => n == null ? '' : n === 0 ? '0 kB' : n >= 2 ** 30 ? (n / 2 ** 30).toFixed(1) + ' GB' : n >= 2 ** 20 ? (n / 2 ** 20).toFixed(0) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' kB';
+const fmtBytes = n => {
+  if (n == null) return '';
+  const num = (v, d) => v.toLocaleString(I18N.locale, { minimumFractionDigits: d, maximumFractionDigits: d });   // 1,5 GB in Czech
+  return n === 0 ? '0 kB' : n >= 2 ** 30 ? num(n / 2 ** 30, 1) + ' GB' : n >= 2 ** 20 ? num(n / 2 ** 20, 0) + ' MB' : num(Math.max(1, Math.round(n / 1024)), 0) + ' kB';
+};
 window.fmtBytes = fmtBytes;
 
 /* ---------------- updates ---------------- */
@@ -128,17 +132,27 @@ async function feedbackDialog({ kind = 'bug', message = '', traceback = null } =
   let cur = kind;
   const stop = e => e.stopPropagation();
   const kindRow = h('.row.wrap', { style: { gap: '6px' } });
-  const renderKinds = () => clear(kindRow).append(kinds.map(([k, ic, label]) => h('span.chip' + (cur === k ? '.on' : ''), { onclick: () => { cur = k; renderKinds(); } }, icon(ic), label)));
+  const renderKinds = () => clear(kindRow).append(kinds.map(([k, ic, label]) => h('span.chip' + (cur === k ? '.on' : ''), { role: 'button', tabindex: '0', 'aria-pressed': String(cur === k),
+    onclick: () => { cur = k; renderKinds(); refreshPreview(); }, onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } } }, icon(ic), label)));
+  // an open preview follows every change of the options and the text
+  let preview = null;
+  const refreshPreview = debounce(async () => {
+    if (!preview || preview.style.display === 'none') return;
+    const p = await API.call('feedback.preview', args()).catch(() => null);
+    if (p && preview.style.display !== 'none') preview.textContent = p.json;
+  }, 300);
   renderKinds();
-  const msg = h('textarea.input', { rows: 6, onkeydown: stop, placeholder: tr('What happened, what did you expect, how can it be reproduced? Or your idea…') }, message);
-  const email = h('input.input', { type: 'email', onkeydown: stop, placeholder: tr('optional – only if you want an answer') });
+  const msg = h('textarea.input', { rows: 6, onkeydown: stop, oninput: () => refreshPreview(), placeholder: tr('What happened, what did you expect, how can it be reproduced? Or your idea…') }, message);
+  const email = h('input.input', { type: 'email', onkeydown: stop, oninput: () => refreshPreview(), placeholder: tr('optional – only if you want an answer') });
   const chk = (label, on, extra) => { const i = h('input', { type: 'checkbox', checked: on }); return [i, h('label.check', i, label, extra || null)]; };
-  const [logC, logL] = chk(tr('Attach the log (last 2000 lines; tokens, e-mails and your user folder are removed)'), kind === 'bug' || !!traceback);
+  // the log is opt-in: it can contain names and paths of recordings
+  const [logC, logL] = chk(tr('Attach the log (last 2000 lines). It can contain file names and paths of your recordings; tokens, e-mails and your user folder are removed.'), false);
   const [shotC, shotL] = chk(tr('Attach a screenshot of the app window'), false,
     shot && shot.data ? h('img', { src: shot.data, style: { height: '38px', borderRadius: '4px', marginLeft: '6px', border: '1px solid var(--border)' } }) : null);
   const [sysC, sysL] = chk(tr('Include system info (Windows version, app version, GPU, RAM)'), true);
   if (!shot || !shot.data) { shotC.disabled = true; }
-  const preview = h('pre.fb-preview', { style: { display: 'none' } });
+  [logC, shotC, sysC].forEach(c => c.addEventListener('change', () => refreshPreview()));
+  preview = h('pre.fb-preview', { style: { display: 'none' } });
   const args = () => ({ kind: cur, message: msg.value, email: email.value.trim(), attach_log: logC.checked, attach_screenshot: shotC.checked,
     include_system: sysC.checked, view: Views.activeName || null, traceback_text: traceback });
   const status = h('.small.muted');
