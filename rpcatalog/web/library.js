@@ -148,13 +148,40 @@ function filtered() {
     items = items.filter(m => {
       const hay = [m.name, m.medal_title, m.description, m.game, ...(m.tags || []).map(t => '#' + t),
         ...(m.chars || []).map(id => App.charsById.get(id)?.name || '')].join(' ').toLowerCase();
-      return words.every(w => hay.includes(w));
+      return words.every(w => hay.includes(w)) || (S.trHits && S.trHits.has(m.id));
     });
   }
   if (f.type === 'album' && S.sort === 'new' && S.albumOrder) {
     return [...items].sort((a, b) => (S.albumOrder.get(a.id) ?? 0) - (S.albumOrder.get(b.id) ?? 0));
   }
   return [...items].sort(SORTS[S.sort].fn);
+}
+
+async function transcribe(ms, opts) {
+  if (!await AISetup.ensure()) return;
+  await API.call('analysis.start', { ids: ms.map(m => m.id), speech: true, ...opts });
+  TR.refreshQueue();
+  toast(ms.length > 1 ? `${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')} ve frontě na přepis` : 'Přepis spuštěn – průběh je v panelu videa');
+}
+
+/** Library search also looks into what was said (and seen) in transcribed videos. */
+async function searchTranscripts() {
+  S.trHits = null;
+  renderGrid();
+  const q = S.q.trim();
+  if (q.length < 3) return;
+  const hits = await API.call('analysis.search', { q }).catch(() => []);
+  if (q !== S.q.trim()) return;
+  S.trHits = new Map();
+  for (const x of hits) if (!S.trHits.has(x.media_id)) S.trHits.set(x.media_id, x);   // best hit per video
+  renderGrid();
+}
+
+function trHit(m) {
+  const x = S.q.trim() && S.trHits && S.trHits.get(m.id);
+  if (!x) return null;
+  return h('.tr-hit', { title: 'Přehrát od tohoto místa', onclick: e => { e.stopPropagation(); play(m, Math.max(0, x.t - 1)); } },
+    h('span.kbd', fmt.clock(x.t)), h('span.ellipsis', `${x.speaker}: `, x.snippet.split(/[[\]]/).map((p, i) => i % 2 ? h('mark', p) : p)));
 }
 
 /* ---------------- sidebar ---------------- */
@@ -290,7 +317,9 @@ function card(m) {
     h('span.badge.' + m.type, KIND[m.type]?.label),
     h('.flags', m.favorite ? h('span', { title: 'Oblíbené' }, icon('star')) : null,
       m.linked ? h('span', { title: 'Je v události' }, icon('link')) : null,
-      m.sidecars ? h('span', { title: 'Samostatné zvukové stopy' }, icon('audio-lines')) : null),
+      m.sidecars ? h('span', { title: 'Samostatné zvukové stopy' }, icon('audio-lines')) : null,
+      m.tr && m.tr.speech ? h('span.tr-flag', { title: 'Má přepis řeči' }, icon('captions')) : null,
+      m.tr && m.tr.vision ? h('span.tr-flag.vis', { title: 'Má popis obrazu' }, icon('scan-eye')) : null),
     h('span.dur', fmt.dur(m.duration)),
     m.duration ? h('.bm', (m.bookmarks || []).filter(b => b.source !== 'auto' || b.event_id).map(b => h('b', {
       style: { left: (b.t / m.duration * 100) + '%', width: b.t_end ? Math.max(0.6, (b.t_end - b.t) / m.duration * 100) + '%' : null, background: b.color || null },
@@ -302,7 +331,8 @@ function card(m) {
     h('.s', h('span.ellipsis', `${fmt.time(m.start)} · ${m.game}`)),
     (m.tags.length || (m.chars || []).length) ? h('.tags',
       (m.chars || []).length ? avatarStack(m.chars, 20, 4) : null,
-      m.tags.slice(0, 4).map(t => h('span.tag', '#' + t))) : null));
+      m.tags.slice(0, 4).map(t => h('span.tag', '#' + t))) : null,
+    trHit(m)));
   return el;
 }
 
@@ -423,6 +453,13 @@ function cardMenu(e) {
     { label: 'Nová událost z výběru', icon: 'calendar-plus', onClick: () => eventFromSelection(ms) },
     { label: 'Označit postavy…', icon: 'users', onClick: () => addChars(ms) },
     { label: 'Přidat štítky…', icon: 'tag', onClick: () => addTags(ms) },
+    { label: 'Přepis', icon: 'captions', submenu: [
+      { label: 'Přepsat řeč', icon: 'audio-lines', onClick: () => transcribe(ms, { chapters: false }) },
+      { label: 'Řeč + Kronikář AI', icon: 'sparkles', onClick: () => transcribe(ms, { chapters: true }) },
+      { label: 'Řeč + obraz v rozhovorech + Kronikář AI', icon: 'wand-sparkles', onClick: () => transcribe(ms, { vision: true, chapters: true }) },
+      { sep: true },
+      { label: 'Fronta přepisů', icon: 'list-ordered', onClick: () => App.go('transcripts') },
+    ] },
     { label: 'Přidat do alba', icon: 'folder-plus', submenu: [
       ...App.albums.map(a => ({ label: a.name, icon: 'folder', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_add', value: a.id }); toast(`Přidáno do „${a.name}“`); App.refresh('meta'); } })),
       App.albums.length ? { sep: true } : null,
@@ -521,6 +558,7 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
         m.bm_full.some(b => b.source === 'auto' && !b.event_id && !b.note) ? h('.tiny.faint', { style: { padding: '2px 10px' } },
           `+ ${m.bm_full.filter(b => b.source === 'auto' && !b.event_id && !b.note).length} automatických herních momentů (šedé čárky)`) : null)
         : h('.faint.small', { style: { padding: '2px 8px' } }, 'Během přehrávání stiskni B. Shift+B označí začátek a konec úseku.'),
+      window.transcriptSection ? window.transcriptSection(m) : null,
       h('.section-title', icon('info'), 'Podrobnosti', h('.line')),
       h('.kv',
         h('.k', 'Hra'), gameIn,
@@ -546,6 +584,7 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
 }
 
 window.mediaPanel = mediaPanel;
+
 
 function editMediaDialog(m) {
   const box = h('.lib-insp.in-modal');
@@ -600,7 +639,7 @@ Views.register('library', {
     side = h('.lib-side');
     Shell.slot().appendChild(side);
     const search = h('input.input#lib-search', { placeholder: 'Hledat názvy, #štítky, postavy, hry…  (Ctrl+F)', value: S.q,
-      oninput: debounce(e => { S.q = e.target.value; renderGrid(); }, 150), onkeydown: e => e.stopPropagation() });
+      oninput: debounce(e => { S.q = e.target.value; searchTranscripts(); }, 150), onkeydown: e => e.stopPropagation() });
     const kindChips = h('.row', Object.entries(KIND).map(([k, v]) => h('span.chip' + (S.kinds.has(k) ? '.on' : ''), {
       onclick: e => { S.kinds.has(k) ? S.kinds.delete(k) : S.kinds.add(k); e.currentTarget.classList.toggle('on'); persist(); renderGrid(); },
     }, icon(v.icon), v.plural)));

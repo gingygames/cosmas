@@ -245,6 +245,86 @@ CREATE TABLE IF NOT EXISTS letters (
 );
 """
 
+# Speech transcript + frame descriptions of videos (see analysis.py), searchable without diacritics.
+# speaker: who talks ("Já" = microphone, "Discord", "Zvuk") or "Obraz" for a frame description.
+SCHEMA_V6 = """
+CREATE VIRTUAL TABLE IF NOT EXISTS transcript USING fts5(
+    text, media_id UNINDEXED, speaker UNINDEXED, t UNINDEXED, t_end UNINDEXED,
+    tokenize='unicode61 remove_diacritics 2'
+);
+-- where a character is named in speech (kind 'speech') or their name tag is seen ('seen')
+CREATE TABLE IF NOT EXISTS transcript_mentions (
+    media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    t REAL NOT NULL,
+    kind TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS transcript_mentions_char ON transcript_mentions(character_id);
+CREATE INDEX IF NOT EXISTS transcript_mentions_media ON transcript_mentions(media_id);
+-- places / factions / characters the Kronikář AI found mentioned in a video
+CREATE TABLE IF NOT EXISTS entity_mentions (
+    media_id INTEGER NOT NULL,
+    entity_type TEXT NOT NULL,                  -- character | place | faction
+    entity_id INTEGER NOT NULL,
+    t REAL NOT NULL,
+    text TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS entity_mentions_entity ON entity_mentions(entity_type, entity_id);
+-- new events / characters / places / factions proposed from a transcript, waiting for the user
+CREATE TABLE IF NOT EXISTS ai_proposals (
+    id INTEGER PRIMARY KEY,
+    media_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,                         -- event | character | place | faction
+    key TEXT NOT NULL,
+    data TEXT NOT NULL,                         -- JSON
+    status TEXT DEFAULT 'new',                  -- new | accepted | rejected
+    target_id INTEGER,
+    created_at REAL,
+    UNIQUE (media_id, kind, key)
+);
+-- how characters look (appearance.py): references from name tags or the user's confirmations
+CREATE TABLE IF NOT EXISTS appearance_refs (
+    id INTEGER PRIMARY KEY,
+    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    media_id INTEGER NOT NULL,
+    t REAL NOT NULL,
+    idx INTEGER NOT NULL,
+    file TEXT,
+    look TEXT DEFAULT '',
+    body TEXT,                                  -- clothing / hair fingerprint (base64 float16)
+    face TEXT,                                  -- face fingerprint, when visible
+    source TEXT NOT NULL,                       -- tag | user
+    abs_time REAL,
+    created_at REAL
+);
+CREATE INDEX IF NOT EXISTS appearance_refs_char ON appearance_refs(character_id);
+-- the user's answers about one person on one frame: yes = it is this character, no = it is not
+CREATE TABLE IF NOT EXISTS appearance_labels (
+    media_id INTEGER NOT NULL,
+    t REAL NOT NULL,
+    idx INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,
+    verdict TEXT NOT NULL,
+    PRIMARY KEY (media_id, t, idx, character_id)
+);
+-- who each person on a frame is (tag / user / look = recognised by appearance, with a score)
+CREATE TABLE IF NOT EXISTS appearance_hits (
+    media_id INTEGER NOT NULL,
+    t REAL NOT NULL,
+    idx INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,
+    score REAL,
+    source TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS appearance_hits_media ON appearance_hits(media_id);
+-- characters the user removed from a video: transcripts never link them to it again
+CREATE TABLE IF NOT EXISTS transcript_rejects (
+    media_id INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,
+    PRIMARY KEY (media_id, character_id)
+);
+"""
+
 EVENT_V2_COLUMNS = {
     "body_html": "TEXT DEFAULT ''",
     "location": "TEXT DEFAULT ''",
@@ -329,6 +409,7 @@ class Store:
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='factions'").fetchone()
         self.db.executescript(SCHEMA_V4)
         self.db.executescript(SCHEMA_V5)
+        self.db.executescript(SCHEMA_V6)
         if fresh_fac:   # turn the old free-text "faction" of characters into real factions
             now = time.time()
             for (name,) in self.db.execute("SELECT DISTINCT TRIM(faction) FROM characters "
@@ -475,7 +556,222 @@ class Store:
                             [(m, normalize_tag(t)) for m in media_ids for t in tags if normalize_tag(t)])
         self.db.commit()
 
+    # ---------- transcript ----------
+    def transcript_set(self, media_id, rows):
+        """Replace a video's transcript. rows: dicts with speaker, t, t_end, text."""
+        self.db.execute("DELETE FROM transcript WHERE media_id=?", (media_id,))
+        self.db.executemany("INSERT INTO transcript (text, media_id, speaker, t, t_end) VALUES (?,?,?,?,?)",
+                            [(r["text"], media_id, r["speaker"], r["t"], r.get("t_end")) for r in rows])
+        self.db.commit()
+
+    def transcript(self, media_id):
+        rows = self.db.execute("SELECT speaker, t, t_end, text FROM transcript WHERE media_id=?", (media_id,))
+        return sorted(({"speaker": s, "t": t, "t_end": e, "text": x} for s, t, e, x in rows), key=lambda r: r["t"])
+
+    def transcript_media_ids(self):
+        return {r[0] for r in self.db.execute("SELECT DISTINCT media_id FROM transcript")}
+
+    def transcript_status(self):
+        """media id -> {'speech': bool, 'vision': bool} for the library cards."""
+        out = {}
+        for mid, sp, n in self.db.execute("SELECT media_id, speaker='Obraz', COUNT(*) FROM transcript GROUP BY 1, 2"):
+            out.setdefault(mid, {"speech": False, "vision": False})["vision" if sp else "speech"] = n > 0
+        return out
+
+    def set_mentions(self, media_id, mentions, autolink=True):
+        """Replace a video's transcript mentions; optionally link the characters to the video."""
+        self.db.execute("DELETE FROM transcript_mentions WHERE media_id=?", (media_id,))
+        valid = {r[0] for r in self.db.execute("SELECT id FROM characters")}
+        mentions = [m for m in mentions if m["character_id"] in valid]
+        self.db.executemany("INSERT INTO transcript_mentions (media_id, character_id, t, kind) VALUES (?,?,?,?)",
+                            [(media_id, m["character_id"], m["t"], m["kind"]) for m in mentions])
+        self.db.execute("DELETE FROM character_links WHERE target_type='media' AND target_id=? AND source='transcript'",
+                        (media_id,))
+        if autolink:
+            rejected = {r[0] for r in self.db.execute(
+                "SELECT character_id FROM transcript_rejects WHERE media_id=?", (media_id,))}
+            self.db.executemany(
+                "INSERT OR IGNORE INTO character_links (character_id, target_type, target_id, role, source) "
+                "VALUES (?, 'media', ?, '', 'transcript')",
+                [(c, media_id) for c in {m["character_id"] for m in mentions} - rejected])
+        self.db.commit()
+
+    def mentions(self, media_id=None, character_id=None):
+        sql, args = "SELECT media_id, character_id, t, kind FROM transcript_mentions WHERE 1=1", []
+        if media_id is not None:
+            sql += " AND media_id=?"
+            args.append(media_id)
+        if character_id is not None:
+            sql += " AND character_id=?"
+            args.append(character_id)
+        return [dict(zip(("media_id", "character_id", "t", "kind"), r)) for r in self.db.execute(sql + " ORDER BY media_id, t", args)]
+
+    def transcript_near(self, media_id, t, window=8):
+        """Spoken lines around one moment (for showing why a character was found there)."""
+        rows = self.db.execute("SELECT speaker, t, text FROM transcript WHERE media_id=? AND speaker<>'Obraz'", (media_id,))
+        near = sorted((r for r in rows if abs(r[1] - t) <= window), key=lambda r: abs(r[1] - t))
+        return near[0][2] if near else ""
+
+    def set_entity_mentions(self, media_id, rows):
+        """rows: (entity_type, entity_id, t, text)."""
+        self.db.execute("DELETE FROM entity_mentions WHERE media_id=?", (media_id,))
+        self.db.executemany("INSERT INTO entity_mentions (media_id, entity_type, entity_id, t, text) VALUES (?,?,?,?,?)",
+                            [(media_id, *r) for r in rows])
+        self.db.commit()
+
+    def entity_mentions_of_media(self, media_id, entity_type=None):
+        rows = self.db.execute("SELECT entity_type, entity_id, t, text FROM entity_mentions WHERE media_id=?", (media_id,))
+        return [{"entity_type": a, "entity_id": b, "t": t, "text": x} for a, b, t, x in rows
+                if entity_type is None or a == entity_type]
+
+    def entity_mentions(self, entity_type, entity_id):
+        rows = self.db.execute("SELECT media_id, t, text FROM entity_mentions WHERE entity_type=? AND entity_id=? "
+                               "ORDER BY media_id, t", (entity_type, entity_id))
+        return [{"media_id": m, "t": t, "text": x, "kind": "ai"} for m, t, x in rows]
+
+    def set_proposals(self, media_id, items):
+        """Replace a video's waiting proposals; ones the user already accepted or rejected are not proposed again."""
+        decided = {(k, key) for k, key in self.db.execute(
+            "SELECT kind, key FROM ai_proposals WHERE status<>'new' AND (media_id=? OR kind<>'event')", (media_id,))}
+        accepted_names = {key for (key,) in self.db.execute("SELECT key FROM ai_proposals WHERE status<>'new' AND kind<>'event'")}
+        self.db.execute("DELETE FROM ai_proposals WHERE media_id=? AND status='new'", (media_id,))
+        now = time.time()
+        n = 0
+        for p in items:
+            if (p["kind"], p["key"]) in decided or (p["kind"] != "event" and p["key"] in accepted_names):
+                continue
+            self.db.execute("INSERT OR IGNORE INTO ai_proposals (media_id, kind, key, data, created_at) VALUES (?,?,?,?,?)",
+                            (media_id, p["kind"], p["key"], json.dumps(p["data"], ensure_ascii=False), now))
+            n += 1
+        self.db.commit()
+        return n
+
+    def proposals(self, status="new", media_id=None):
+        sql, args = "SELECT * FROM ai_proposals WHERE status=?", [status]
+        if media_id is not None:
+            sql += " AND media_id=?"
+            args.append(media_id)
+        out = []
+        for r in self.db.execute(sql + " ORDER BY media_id, id", args):
+            d = dict(r)
+            d["data"] = json.loads(d["data"])
+            out.append(d)
+        return out
+
+    def proposal(self, pid):
+        r = self.db.execute("SELECT * FROM ai_proposals WHERE id=?", (pid,)).fetchone()
+        if not r:
+            return None
+        d = dict(r)
+        d["data"] = json.loads(d["data"])
+        return d
+
+    def set_proposal_status(self, pid, status, target_id=None):
+        self.db.execute("UPDATE ai_proposals SET status=?, target_id=? WHERE id=?", (status, target_id, pid))
+        self.db.commit()
+
+    def proposal_media_ids(self):
+        return [r[0] for r in self.db.execute("SELECT DISTINCT media_id FROM ai_proposals")]
+
+    def proposal_counts(self):
+        return {mid: n for mid, n in self.db.execute(
+            "SELECT media_id, COUNT(*) FROM ai_proposals WHERE status='new' GROUP BY media_id")}
+
+    # ---------- appearance ----------
+    def set_appearance_refs(self, media_id, refs):
+        """Replace the automatic and confirmed references taken from one video."""
+        self.db.execute("DELETE FROM appearance_refs WHERE media_id=?", (media_id,))
+        now = time.time()
+        self.db.executemany(
+            "INSERT INTO appearance_refs (character_id, media_id, t, idx, file, look, body, face, source, abs_time, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            [(r["character_id"], media_id, r["t"], r["idx"], r.get("file"), r.get("look", ""), r.get("body"), r.get("face"),
+              r["source"], r.get("abs_time"), now) for r in refs])
+        self.db.commit()
+
+    def appearance_refs(self, character_id=None):
+        sql, args = "SELECT * FROM appearance_refs", []
+        if character_id is not None:
+            sql += " WHERE character_id=?"
+            args.append(character_id)
+        return [dict(r) for r in self.db.execute(sql + " ORDER BY abs_time, t", args)]
+
+    def delete_appearance_ref(self, ref_id):
+        """The user says this crop is not the character: remember it as a 'no' and drop the reference."""
+        r = self.db.execute("SELECT media_id, t, idx, character_id FROM appearance_refs WHERE id=?", (ref_id,)).fetchone()
+        if r:
+            self.label_person(r[0], r[1], r[2], r[3], "no")
+        self.db.execute("DELETE FROM appearance_refs WHERE id=?", (ref_id,))
+        self.db.commit()
+
+    def label_person(self, media_id, t, idx, character_id, verdict):
+        if verdict == "yes":     # one person is one character
+            self.db.execute("DELETE FROM appearance_labels WHERE media_id=? AND abs(t-?)<0.05 AND idx=? AND verdict='yes'",
+                            (media_id, t, idx))
+        self.db.execute("INSERT OR REPLACE INTO appearance_labels (media_id, t, idx, character_id, verdict) VALUES (?,?,?,?,?)",
+                        (media_id, round(t, 1), idx, character_id, verdict))
+        self.db.commit()
+
+    def appearance_labels(self, media_id):
+        out = {}
+        for t, idx, cid, verdict in self.db.execute(
+                "SELECT t, idx, character_id, verdict FROM appearance_labels WHERE media_id=?", (media_id,)):
+            d = out.setdefault((round(t, 1), idx), {"yes": None, "no": set()})
+            if verdict == "yes":
+                d["yes"] = cid
+            else:
+                d["no"].add(cid)
+        return out
+
+    def set_appearance_hits(self, media_id, hits):
+        self.db.execute("DELETE FROM appearance_hits WHERE media_id=?", (media_id,))
+        self.db.executemany("INSERT INTO appearance_hits (media_id, t, idx, character_id, score, source) VALUES (?,?,?,?,?,?)",
+                            [(media_id, h["t"], h["idx"], h["character_id"], h["score"], h["source"]) for h in hits])
+        self.db.commit()
+
+    def appearance_hits(self, media_id):
+        return {(round(t, 1), idx): {"character_id": c, "score": s, "source": src} for t, idx, c, s, src in self.db.execute(
+            "SELECT t, idx, character_id, score, source FROM appearance_hits WHERE media_id=?", (media_id,))}
+
+    def game_processes(self):
+        """Game executables seen in recordings (Medal names the game audio track after the process)."""
+        names = set()
+        for (raw,) in self.db.execute("SELECT tracks FROM media"):
+            for t in json.loads(raw or "[]"):
+                if t.get("role") == "game" and t.get("name"):
+                    n = t["name"].strip()
+                    names.add(n if n.lower().endswith(".exe") else n + ".exe")
+        return sorted(names)
+
+    def set_ai_bookmarks(self, media_id, items):
+        """Chapters as bookmarks (source 'ai'), replacing the previous ones of this video."""
+        self.db.execute("DELETE FROM bookmarks WHERE media_id=? AND source='ai'", (media_id,))
+        now = time.time()
+        self.db.executemany(
+            "INSERT INTO bookmarks (media_id, t, t_end, title, note, color, source, created_at, updated_at) "
+            "VALUES (?,?,?,?,?, '', 'ai', ?, ?)",
+            [(media_id, c["t"], c.get("t_end"), c["title"], c.get("summary", ""), now, now) for c in items])
+        self.db.commit()
+
+    def transcript_search(self, query, limit=200):
+        """Full-text hits [{media_id, speaker, t, snippet}]; every word must match (prefixes allowed)."""
+        words = re.findall(r"\w+", query or "")
+        if not words:
+            return []
+        fts = " ".join(f'"{w}"*' for w in words)
+        rows = self.db.execute(
+            "SELECT media_id, speaker, t, snippet(transcript, 0, '[', ']', '…', 12) FROM transcript "
+            "WHERE transcript MATCH ? ORDER BY rank LIMIT ?", (fts, limit))
+        return [{"media_id": m, "speaker": s, "t": t, "snippet": sn} for m, s, t, sn in rows]
+
     def delete_media_row(self, media_id):
+        self.db.execute("DELETE FROM transcript WHERE media_id=?", (media_id,))
+        self.db.execute("DELETE FROM transcript_rejects WHERE media_id=?", (media_id,))
+        self.db.execute("DELETE FROM transcript_mentions WHERE media_id=?", (media_id,))
+        self.db.execute("DELETE FROM entity_mentions WHERE media_id=?", (media_id,))
+        self.db.execute("DELETE FROM ai_proposals WHERE media_id=? AND status='new'", (media_id,))
+        for table in ("appearance_refs", "appearance_labels", "appearance_hits"):
+            self.db.execute(f"DELETE FROM {table} WHERE media_id=?", (media_id,))
         self.db.execute("DELETE FROM media WHERE id=?", (media_id,))
         self.db.execute("DELETE FROM character_links WHERE target_type='bookmark' "
                         "AND target_id NOT IN (SELECT id FROM bookmarks)")
@@ -761,6 +1057,8 @@ class Store:
         return [dict(r) for r in self.db.execute(sql + " ORDER BY id", args)]
 
     def link_character(self, character_id, target_type, target_id, role=""):
+        if target_type == "media":
+            self.db.execute("DELETE FROM transcript_rejects WHERE media_id=? AND character_id=?", (target_id, character_id))
         self.db.execute(
             "INSERT INTO character_links (character_id, target_type, target_id, role, source) "
             "VALUES (?,?,?,?, 'manual') ON CONFLICT(character_id, target_type, target_id, source) "
@@ -769,7 +1067,10 @@ class Store:
 
     def unlink_character(self, character_id, target_type, target_id):
         self.db.execute("DELETE FROM character_links WHERE character_id=? AND target_type=? AND target_id=? "
-                        "AND source='manual'", (character_id, target_type, target_id))
+                        "AND source IN ('manual', 'transcript')", (character_id, target_type, target_id))
+        if target_type == "media":    # found by a transcript but the user says no: remember that
+            self.db.execute("INSERT OR IGNORE INTO transcript_rejects (media_id, character_id) VALUES (?,?)",
+                            (target_id, character_id))
         self.db.commit()
 
     def sync_mentions(self, target_type, target_id, html):

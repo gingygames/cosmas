@@ -568,6 +568,8 @@ const DISCORD_WORLDS = [['cechy-1403', 'Čechy 1403'], ['moderni-mesto', 'Modern
       h('.ch-sec', h('.section-title', 'Holubí pošta', h('button.btn.sm.ghost', { style: { marginLeft: 'auto' }, onclick: () => App.go('letters', { char: c.id }) }, icon('mail'), 'Dopisy postavy'))),
       (c.bookmarks || []).length ? h('.ch-sec', h('.section-title', icon('bookmark'), 'Momenty ve videích', h('span.faint', c.bookmarks.length), h('.line')),
         h('div', c.bookmarks.sort((a, b) => (a.abs || 0) - (b.abs || 0)).map(b => bmRow(b, { showMedia: true })))) : null,
+      window.looksSection ? window.looksSection(c.id) : null,
+      window.mentionsSection ? window.mentionsSection('character', c.id) : null,
       h('.ch-sec', h('.section-title', icon('film'), 'Záznamy', h('span.faint', c.media.length || ''), h('.line'),
         h('button.btn.sm.ghost', { onclick: () => App.go('library') }, icon('library'), 'Knihovna')),
       c.media.length ? h('.ch-media', c.media.map(m => h('div', { oncontextmenu: e => menu(e, [

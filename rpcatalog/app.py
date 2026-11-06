@@ -5,7 +5,7 @@ import time
 import traceback
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QByteArray
-from PySide6.QtGui import QColor, QCursor
+from PySide6.QtGui import QColor, QCursor, QIcon
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -13,11 +13,16 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QSplitter, QMessageBox
                                QVBoxLayout, QLabel, QToolButton)
 
 from . import config, scanner
+from . import appearance, chronicle, mentions
+from .analysis import analysis_dir, load_frames, load_results, _read_json
+from .analysis_jobs import AnalysisJobs
 from .api import Api
 from .previews import PreviewWorker
 from .store import Store
 
 WEB_DIR = config.APP_DIR / "rpcatalog" / "web"
+ICON_PATH = config.APP_DIR / "rpcatalog" / "assets" / "kronikar.ico"
+APP_ID = "Gingygames.Kronikar"
 
 
 class ScanThread(QThread):
@@ -64,9 +69,9 @@ class TitleBar(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 0, 0, 0)
         lay.setSpacing(8)
-        self.logo = QLabel("K")
+        self.logo = QLabel()
         self.logo.setFixedSize(18, 18)
-        self.logo.setAlignment(Qt.AlignCenter)
+        self.logo.setPixmap(QIcon(str(ICON_PATH)).pixmap(18, 18))
         self.title = QLabel("Kronikář")
         lay.addWidget(self.logo)
         lay.addWidget(self.title)
@@ -92,7 +97,7 @@ class TitleBar(QWidget):
             QToolButton {{ border: 0; background: transparent; color: {fg}; }}
             QToolButton#tb_btn:hover {{ background: rgba(128,128,128,.22); }}
             QToolButton#tb_close:hover {{ background: #e81123; color: white; }}""")
-        self.logo.setStyleSheet(f"background: {accent}; color: #111; border-radius: 4px; font: 800 11px 'Segoe UI';")
+        self.logo.setStyleSheet("background: transparent;")
 
     def toggle_max(self):
         self.win.showNormal() if self.win.isMaximized() else self.win.showMaximized()
@@ -167,6 +172,13 @@ class MainWindow(QMainWindow):
         self.previews = PreviewWorker()
         self.previews.frames_ready.connect(lambda mid, meta: [p.set_frames(mid, meta) for p in self._players()])
         self.previews.wave_ready.connect(lambda mid, data: [p.set_wave(mid, data) for p in self._players()])
+        self.analysis = AnalysisJobs(self.settings, self._world)
+        self.analysis.detected_games = self.store.game_processes()
+        self.analysis.event.connect(self._on_analysis)    # bound method -> runs in the GUI thread
+        self._analysis_imported = {}
+        self._games_timer = QTimer(self)
+        self._games_timer.timeout.connect(self.analysis.check_games)
+        self._games_timer.start(10000)
         self._resume_tick = 0
         self._clip_done.connect(self._on_clip_done)
 
@@ -268,6 +280,40 @@ class MainWindow(QMainWindow):
             ok = r.returncode == 0 and dst.exists()
             self._clip_done.emit(media.id, str(dst), a, b, ok, r.stderr.decode("utf-8", "ignore")[-300:])
         threading.Thread(target=run, daemon=True).start()
+
+    def _world(self):
+        """What the chronicle already knows, for the models: names to recognise and use."""
+        chars = [c["name"] + (f" ({c['aliases']})" if c.get("aliases") else "") for c in self.store.characters()]
+        places = [p["name"] for p in self.store.places()]
+        factions = [f["name"] for f in self.store.factions()]
+        names = sorted({c["name"] for c in self.store.characters()} | {p["name"] for p in self.store.players() if p.get("name")})
+        return {"characters": chars, "places": places, "factions": factions, "names": names}
+
+    def _on_analysis(self, ev):
+        mid, final = ev.get("id"), ev.get("phase") == "done"
+        # results go into the searchable transcript table as they come (at most every 8 s while running)
+        if mid and (final or (ev.get("partial") and time.time() - self._analysis_imported.get(mid, 0) > 8)):
+            self._analysis_imported[mid] = time.time()
+            self.import_analysis(mid, final)
+            ev = dict(ev, imported=True)
+        self.api.emit("analysis", dict(ev, queue=self.analysis.snapshot()))
+        if final:
+            self.api.emit("media-changed", {})
+
+    def import_analysis(self, media_id, final=True):
+        rows, _ = load_results(media_id)
+        self.store.transcript_set(media_id, rows)
+        chronicle.import_chronicle(self.store, media_id)
+        matcher = mentions.Matcher([dict(c) for c in self.store.characters()], [dict(p) for p in self.store.players()])
+        frames = load_frames(media_id)
+        found = mentions.find(rows, frames, matcher)
+        found += appearance.match_media(self.store, media_id, frames, matcher, self.settings)
+        found += [{"character_id": x["entity_id"], "t": x["t"], "kind": "ai"}
+                  for x in self.store.entity_mentions_of_media(media_id, "character")]
+        self.store.set_mentions(media_id, found, autolink=self.settings.get("ai_autolink", True))
+        if final:
+            chapters = _read_json(analysis_dir(media_id) / "chapters.json", [])
+            self.store.set_ai_bookmarks(media_id, chapters if self.settings.get("ai_chapter_bookmarks") else [])
 
     def _on_clip_done(self, media_id, path, a, b, ok, err):
         if not ok:
@@ -620,6 +666,7 @@ class MainWindow(QMainWindow):
             self.popout.close()
         config.save_settings(self.settings)
         self.player.shutdown()
+        self.analysis.cancel()     # resumable: the next run continues where this one stopped
         if self.scan_thread and self.scan_thread.isRunning():
             self.scan_thread.wait(5000)
         self.api.sync_shutdown()
@@ -627,10 +674,18 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    if os.name == "nt":
+        try:   # own taskbar button with our icon, grouped with the Start-menu shortcut (same AppUserModelID)
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        except (OSError, AttributeError):
+            pass
+    config.prepare_data_dir()
     config.ensure_dirs()
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-driver-bug-workarounds")
     app = QApplication(sys.argv)
     app.setApplicationName("Kronikář")
+    app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyle("Fusion")
     import locale
     locale.setlocale(locale.LC_NUMERIC, "C")  # mpv requires C numeric locale

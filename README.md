@@ -1,24 +1,80 @@
-# Kronikář
+<p align="center"><img src="docs/img/banner.png" alt="Kronikář" width="100%"></p>
 
-Kronika RP: katalog záznamů z Medalu pro evidenci RP – knihovna videí, události s deníkem a přílohami,
-databáze postav, časové osy a přehrávač s mixem více zvukových stop najednou.
+<p align="center">
+  <a href="https://github.com/gingygames/kronikar/releases/latest"><b>⬇ Stáhnout instalátor pro Windows</b></a> ·
+  <a href="#instalace">Instalace</a> · <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#pro-vývojáře">Pro vývojáře</a>
+</p>
 
-Spuštění: zástupce **Kronikář** na ploše, nebo `Kronikar.bat`.
+**Kronikář** je katalog záznamů z [Medalu](https://medal.tv) pro hráče RP. Obsahuje:
+- knihovnu videí;
+- události s deníkem a přílohami;
+- databázi postav, frakcí, míst a hráčů;
+- časové osy;
+- přehrávač, který hraje víc zvukových stop najednou (hra, Discord, mikrofon).
 
-## Instalace (Windows)
-1. Python 3.12+, pak v kořeni projektu:
-   ```
-   python -m venv .venv
-   .venv\Scripts\pip install -r requirements.txt
-   ```
-2. **libmpv** (přehrávač): stáhni `mpv-dev-x86_64-…7z` z
-   https://github.com/shinchiro/mpv-winbuild-cmake/releases a soubor `libmpv-2.dll` dej do složky `vendor/`
-   (do repozitáře se nenahrává – má přes 100 MB).
-3. **ffmpeg / ffprobe** na PATH (např. `winget install Gyan.FFmpeg`) – náhledy, průběh stop, export klipů.
-4. Spusť `Kronikar.bat`.
+AI přepíše, co zaznělo, a popíše obraz. Přečte jmenovky nad hlavami a sepíše z večera kroniku s návrhy událostí a postav.
 
-Všechna tvoje data (katalog, postavy, přílohy, nastavení i token Discordu) jsou ve složce `data/`,
-která se do gitu nenahrává.
+| | |
+|:-:|:-:|
+| ![Přehled](docs/img/prehled.jpg) **Přehled**: poslední večer, rozkoukaná videa, hry | ![Přehrávač](docs/img/prehravac.jpg) **Přehrávač**: víc zvukových stop, záložky, postavy ve videu |
+| ![Knihovna](docs/img/knihovna.jpg) **Knihovna**: videa po dnech, filtry, hledání i v tom, co zaznělo | ![Postavy](docs/img/postavy.jpg) **Postavy**: portréty, vztahy, frakce, výskyty v záznamech |
+| ![Kronikář AI](docs/img/kronikar-ai.jpg) **Kronikář AI**: návrhy událostí, míst a postav z přepisu | ![Kde běží AI](docs/img/kde-bezi-ai.jpg) **Kde běží AI**: doporučení podle tvého PC a odhad ceny |
+| ![Momenty](docs/img/momenty.jpg) **Momenty**: záložky a úseky ze všech videí | ![Událost](docs/img/udalost.jpg) **Událost**: zápis, deník, přílohy, postavy a videa |
+
+## Instalace
+1. Stáhni **[Kronikar-Setup.exe](https://github.com/gingygames/kronikar/releases/latest)**. Funguje na 64bitových Windows 10 a 11.
+2. Spusť ho a klikni na **Další → Instalovat**.
+   - Nepotřebuje práva správce ani Python a nic dalšího se instalovat nemusí. Přehrávač i ffmpeg jsou uvnitř.
+   - Zástupce se objeví v nabídce Start, pokud chceš, i na ploše.
+3. Při prvním spuštění Kronikář sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v Nastavení.
+
+**Aktualizace:** spusť novější instalátor, data zůstanou.
+
+**Odinstalace:** přes *Nastavení Windows → Aplikace*. Zeptá se, jestli smazat i data.
+
+**Data** jsou v `%LOCALAPPDATA%\Kronikar` (katalog, nastavení, náhledy, přepisy). Tuhle složku zálohuj.
+
+> Pokud jsi Kronikáře dřív spouštěl ze zdrojových kódů, nainstalovaná verze si při prvním spuštění tvoje data sama převezme.
+
+## AI: na tvém PC, nebo placená služba
+Při prvním přepisu si vybereš, kde má AI běžet. Najdeš to v **Přepisy → Kde běží AI**. Volbu jde kdykoli změnit, i zvlášť pro každou část.
+
+**Na tomto PC: zdarma a soukromě.**
+- Kronikář zjistí grafickou kartu, paměť a procesor. Doporučí modely, které tvoje PC zvládne (v nabídce jsou označené ★).
+- Ollamu (pro obraz a kroniku) nainstaluje a modely stáhne jedním klikem.
+
+**Placená služba: rychlé i na slabém PC.**
+- U OpenRouteru se jen **přihlásíš v prohlížeči**. U ostatních vložíš **API klíč**; odkaz „Získat klíč“ vede rovnou na správnou stránku.
+- Klíče se ukládají šifrovaně do Správce přihlašovacích údajů Windows.
+- U každého modelu vidíš **odhad ceny za hodinu záznamu** i za celou nepřepsanou knihovnu.
+- Stránka ukazuje i skutečnou útratu za posledních 30 dní.
+
+| Služba | Řeč | Obraz | Kronikář AI | Poznámka |
+|---|---|---|---|---|
+| **Tento počítač** | Whisper (NVIDIA nebo procesor) | Ollama | Ollama | zdarma |
+| **Groq** | Whisper large-v3 ≈ 7,7 Kč/h · turbo ≈ 2,8 Kč/h | Qwen 3.8 ≈ 12 Kč/h | GPT-OSS 120B ≈ 0,3 Kč/h | nejlevnější přepis řeči, má i bezplatnou úroveň |
+| **Anthropic Claude** | – | Haiku 5.5 ≈ 1,4 · Sonnet 5.5 ≈ 28 · Opus 5.5 ≈ 57 Kč/h | Haiku ≈ 0,3 · Sonnet ≈ 6,7 · Opus ≈ 13 Kč/h | výborná čeština |
+| **Google Gemini** | – | 3.5 Flash-Lite ≈ 4,4 Kč/h | ≈ 1,1 Kč/h | bezplatná úroveň s denním limitem |
+| **OpenAI** | whisper-1 ≈ 25 Kč/h | GPT-5.4 nano ≈ 2,9 · mini ≈ 10 Kč/h | nano ≈ 0,7 · mini ≈ 2,5 Kč/h | |
+| **OpenRouter** | – | modely Gemini a GPT | modely Gemini a GPT | přihlášení v prohlížeči, jeden účet pro víc firem |
+
+<sub>Jsou to odhady za hodinu záznamu podle ceníků z listopadu 2026 (23 Kč/$). Počítají se 3 zvukovými stopami
+a zhruba 150 popsanými snímky za hodinu. Řeč se platí za každou stopu zvlášť. Skutečná cena se liší podle nastavení a obsahu.</sub>
+
+**Doporučení pro lokální AI podle grafické karty** (Kronikář vybere sám):
+
+| Paměť grafické karty | Obraz i kronika (Ollama) | Řeč (Whisper) |
+|---|---|---|
+| 24 GB a víc | `qwen3.8:27b` (18 GB) | large-v3 na GPU, hodina za pár minut |
+| 16 GB | `gemma4:12b-it-q8_0` | large-v3 na GPU |
+| 10–12 GB | `gemma4:12b-it-qat` | large-v3 na GPU |
+| 8 GB | `qwen3.5:9b` | large-v3 na GPU |
+| 6 GB | `qwen3.5:4b` | large-v3 na GPU (NVIDIA) |
+| 4 GB | `qwen3.5:2b` + `qwen3.5:4b` | large-v3-turbo na GPU (NVIDIA) |
+| bez samostatné karty | malé modely, velmi pomalé, doporučena placená služba | medium/small na procesoru |
+
+- Přepis řeči na grafické kartě umí jen NVIDIA. Knihovny CUDA (~1,5 GB) si Kronikář stáhne jedním klikem, když je potřeba.
+- Na kartách AMD a Intel běží Ollama přes Vulkan. Řeč pak jde přes procesor nebo placenou službu.
 
 ## Rozložení
 Jako v chatovacích aplikacích pro hráče: vlevo pruh s ikonami her (klik = knihovna hry s bannerem
@@ -87,14 +143,10 @@ Další tlačítko přepne rozložení: přehrávač vedle obsahu, nebo nahoře 
 Dekódování videa běží na GPU (libmpv, `hwdec=auto-safe`, `vo=gpu-next`).
 
 ## Data
-- Vše, co upravíš, je ve složce `data/` (catalog.db, settings.json, thumbs/, attachments/). Zálohuj ji.
+- Vše, co upravíš, je v datové složce: po instalaci `%LOCALAPPDATA%\Kronikar`, při spuštění ze zdrojových kódů `data/`.
+  Jsou v ní catalog.db, settings.json, thumbs/, attachments/ a analysis/. Zálohuj ji.
 - Databázi Medalu aplikace jen čte. Mazání videí posílá soubory do Koše.
 - `extras/multitrack-mix.lua` – samostatný skript pro obyčejné mpv.
-
-## Technika
-Python 3.12 + PySide6 (Qt WebEngine pro rozhraní v `rpcatalog/web/`, offline), libmpv
-(`vendor/libmpv-2.dll`), ikony Lucide, ffmpeg/ffprobe pro náhledy videí mimo Medal.
-Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
 
 ## Discord
 - **Hráči bez serveru:** stačí token bota (bot nemusí být nikde pozvaný) a u hráče „Propojit podle ID“ – stáhne jméno
@@ -119,6 +171,37 @@ Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
   Export MP4 (všechny zvukové stopy, do `data/clips`). `T` = aktuální snímek jako náhled videa.
   Označení postavy v momentu je teď `C`.
 
+## Přepisy, obraz a Kronikář AI podrobně
+Když AI běží na tvém PC, nic se nikam neposílá. S placenou službou jde zvuk (řeč) nebo snímky a text přepisu jen té zvolené službě.
+- **Spuštění:** v panelu videa sekce **Přepis**, pro víc videí pravý klik → Přepis, pro celou knihovnu stránka
+  **Přepisy** → „Přepsat chybějící“. Fronta běží na pozadí jedno video po druhém; po přerušení (i zavření aplikace)
+  naváže, kde skončilo.
+- **Řeč:** každá zvuková stopa zvlášť – **Já** (mikrofon), **Hra** (hlasový chat ve hře, NPC), **Discord**.
+- **Obraz:** hlavně během rozhovorů – když se scéna mění (chůze po světě), snímek každých ~8 s; když postavy sedí
+  a obraz se nemění, jen občas. Model čte **jmenovky nad postavami** (propojí je s postavami a hráči) a při rozhovorech
+  se hledají **tváře** – klik na tvář ji nastaví jako portrét postavy. Jakýkoli úsek jde dopracovat ručně:
+  na pruhu pokrytí v panelu videa táhni myší → „Popsat obraz“.
+- **Poznávání postav podle vzhledu:** model obrazu označí každou postavu na snímku (rámeček, jmenovka nad hlavou,
+  popis oblečení a vlasů); z výřezu se spočítá otisk oblečení/vlasů (DINOv2) a obličeje (SFace). Postavy se jmenovkou
+  nebo potvrzené tebou (klik na postavu u snímku → „Ano, je to…“ / „Kdo to je…“) jsou vzory, ostatní se poznají
+  podle podobnosti – vzory ze stejného večera mají přednost, starší váží méně (oblečení se mění). U postavy je galerie
+  „Vzhled v záznamech“. Modely (~130 MB) se stáhnou do `data/models` při prvním použití a běží na procesoru.
+- **Kronikář AI:** po přepisu projde záznam silnější textový model po blocích (dělených v pauzách mezi rozhovory,
+  pauzy jsou v textu vyznačené) s průběžnou pamětí děje, se shrnutím předchozího večera stejné hry a se znalostí
+  postav, míst a frakcí z databáze. Vytvoří kapitoly, shrnutí večera, zmínky (uloží se rovnou k postavám, místům,
+  frakcím) a **návrhy** nových událostí, postav, míst a frakcí – přijímají se jedním klikem (stránka Přepisy → Návrhy,
+  nebo v panelu videa); událost dostane odkaz do videa s časem, místo a postavy.
+- **Kde to je vidět:** pruh pokrytí (co je přepsané / popsané / nezpracované), přepis s kapitolami, pauzami,
+  zvýrazněnými jmény, náhledy snímků, jmenovkami a tvářemi; na kartách v Knihovně ikony řeči a obrazu; hledání
+  v Knihovně podle toho, co zaznělo; u postav, míst a frakcí sekce „V záznamech (přepis)“; titulky v přehrávači (V).
+- **Fronta a výkon:** stránka **Přepisy** – aktuální video s krokem, průběhem, odhadem času a rychlostí, pořadí fronty
+  (přetažením), historie, vytížení GPU/VRAM/teploty/CPU/RAM. Ukazatel v levém sloupci. Když hraješ (hra ze Steamu,
+  Epicu, Xboxu, GOG… nebo z nastaveného seznamu), přepisy se samy pozastaví a po hře pokračují.
+- **Nastavení:** Přepisy → Kde běží AI (služby, modely, účty, ceny) a Přepisy → Nastavení (jazyk, stopy, hustota snímků, citlivost, jmenovky, tváře, model a délka
+  bloků Kronikáře, kontext o hře a serveru, priorita, pauza při hraní).
+- Výsledky: `analysis/<id>/` v datové složce (přepis po částech, snímky, tváře, `chronicle.json`, `timeline.md` – celý večer jako text).
+- Rychlost na RTX 4090: řeč ~45× rychleji než reálný čas, popis snímku 3–9 s, Kronikář ~1 min na blok.
+
 ## Obrázky her
 Ikony v levém pruhu a bannery knihovny se při prvním spuštění samy doplní ze Steamu v tomto PC.
 Jinak pravý klik na ikonu hry → „Ikona a banner hry…“: Steam v PC (obal, logo, hero), obchod Steam (hledání),
@@ -128,3 +211,33 @@ ikony z Medalu, soubor, URL, schránka nebo snímek z videa – vše s ořezem.
 - Server: když má hra jediný server, je výchozí; jinak pravý klik na server → „Nastavit jako výchozí“. Videa bez
   serveru i nové postavy, události, frakce a místa (když je vybraná hra) dostanou výchozí server.
 - Nová postava má typ „Postava“ (dřív NPC). Hromadné úpravy postav: Ctrl/Shift + klik a pravé tlačítko.
+
+## Pro vývojáře
+**Technika:**
+- Python 3.12 + PySide6. Rozhraní je v `rpcatalog/web/` a běží offline v Qt WebEngine.
+- Přehrávač je libmpv (`vendor/libmpv-2.dll`), ikony jsou Lucide, na náhledy slouží ffmpeg/ffprobe.
+- Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
+- AI:
+  - `rpcatalog/analysis.py`: zpracování videí, běží jako samostatný proces;
+  - `ai_providers.py`: lokální i placené služby a ceník;
+  - `hardware.py`: zjištění hardwaru a doporučení modelů;
+  - `keystore.py`: klíče ve Správci přihlašovacích údajů;
+  - `ai_setup.py`: přihlášení, instalace Ollamy a stahování modelů.
+
+**Spuštění ze zdrojových kódů**
+1. Nainstaluj Python 3.12 a v kořeni projektu spusť:
+   ```
+   python -m venv .venv
+   .venv\Scripts\pip install -r requirements.txt -r requirements-ai.txt anthropic
+   ```
+2. Stáhni `mpv-dev-x86_64-…7z` z [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases) a soubor `libmpv-2.dll` z něj dej do složky `vendor/`.
+   Do gitu se nenahrává, má přes 100 MB.
+3. Dej ffmpeg/ffprobe na PATH (`winget install Gyan.FFmpeg`).
+4. Spusť `Kronikar.bat`. Data jsou pak ve složce `data/` vedle kódu.
+
+**Sestavení instalátoru:** spusť `.venv\Scripts\python.exe installer\build.py`. Skript:
+1. stáhne vestavěný Python 3.12;
+2. přibalí balíčky z `installer/requirements-dist.txt`, libmpv, ffmpeg a spouštěč `Kronikar.exe` s ikonou;
+3. přes Inno Setup vytvoří `build/Kronikar-Setup-<verze>.exe`. Verze se bere z `rpcatalog/__init__.py`.
+
+Ikonu z `rpcatalog/web/icon.svg` přegeneruje `installer/make_icon.py`.

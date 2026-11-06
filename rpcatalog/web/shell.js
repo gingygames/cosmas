@@ -10,7 +10,7 @@ const Shell = {
   catsClosed: new Set(),
 
   CHANNELS: [
-    ['Katalog', [['home', 'house', 'přehled'], ['library', 'clapperboard', 'knihovna'], ['moments', 'bookmark', 'momenty'], ['gallery', 'images', 'galerie']]],
+    ['Katalog', [['home', 'house', 'přehled'], ['library', 'clapperboard', 'knihovna'], ['moments', 'bookmark', 'momenty'], ['gallery', 'images', 'galerie'], ['transcripts', 'captions', 'přepisy']]],
     ['Příběh', [['events', 'calendar-range', 'události'], ['timeline', 'chart-gantt', 'časová osa'], ['letters', 'mail', 'holubí pošta']]],
     ['Svět', [['places', 'map', 'místa'], ['factions', 'shield', 'frakce a rody']]],
     ['Postavy', [['characters', 'users', 'databáze postav'], ['players', 'gamepad-2', 'hráči']]],
@@ -66,7 +66,7 @@ const Shell = {
         h('.pill'), h('.gi', { style: extra.style || {} }, content));
       return g;
     };
-    el.appendChild(item('home', h('span.logo', 'K'), 'Celý katalog – všechny hry', () => { this.setGuild('home'); App.go('home'); }));
+    el.appendChild(item('home', h('img.logo', { src: 'icon.svg', alt: 'Kronikář', draggable: false }), 'Celý katalog – všechny hry', () => { this.setGuild('home'); App.go('home'); }));
     el.appendChild(h('.gsep'));
     for (const g of this.games()) {
       const initials = g.game.split(/\s+/).map(w => w[0]).join('').slice(0, 3);

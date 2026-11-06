@@ -1,0 +1,9 @@
+# Volitelné: přepis řeči v záznamech (lokálně na grafické kartě NVIDIA)
+faster-whisper>=1.2
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*
+opencv-python-headless>=4.10
+psutil>=5.9
+onnxruntime>=1.18
+# Placené AI služby (Anthropic Claude); ostatní služby jdou přes HTTP bez dalších balíčků
+anthropic>=2.6

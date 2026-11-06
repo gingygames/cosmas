@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#262a32"/>
+      <stop offset="1" stop-color="#101216"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6d77e"/>
+      <stop offset="1" stop-color="#d9a12c"/>
+    </linearGradient>
+  </defs>
+  <!-- tile -->
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#bg)"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="53.5" fill="none" stroke="#e3b341" stroke-opacity=".22"/>
+  <!-- bookmark ribbon -->
+  <path d="M146 178 v52 l13 -11 l13 11 v-52 z" fill="#d6534a"/>
+  <!-- open book -->
+  <path d="M124 70 C100 56 70 52 38 58 V186 C70 180 100 184 124 198 Z" fill="url(#gold)"/>
+  <path d="M132 70 C156 56 186 52 218 58 V186 C186 180 156 184 132 198 Z" fill="url(#gold)"/>
+  <!-- page lines -->
+  <g stroke="#1a1405" stroke-opacity=".28" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M56 82 C76 79 94 80 108 86"/>
+    <path d="M56 104 C66 102 72 102 78 103"/>
+    <path d="M178 82 C164 80 158 80 150 82"/>
+  </g>
+  <!-- play mark -->
+  <path d="M106 102 L162 132 L106 162 Z" fill="#1a1405" stroke="#1a1405" stroke-width="10" stroke-linejoin="round"/>
+</svg>
