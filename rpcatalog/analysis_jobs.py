@@ -11,6 +11,7 @@ import uuid
 from PySide6.QtCore import QObject, Signal
 
 from . import config
+from .i18n import tr
 
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 PRIORITY = {"idle": 0x00000040, "below": 0x00004000, "normal": 0x00000020}
@@ -131,9 +132,9 @@ class AnalysisJobs(QObject):
                        "title": m.display_title, "speech": speech_tracks(m, enabled) if speech else [],
                        "vision": vision, "chapters": chapters, "vision_ranges": vision_ranges,
                        "prev_summary": (prev or {}).get(m.id, ""),
-                       "added": time.time(), "phase": "queued", "p": 0, "msg": "Čeká ve frontě"}
+                       "added": time.time(), "phase": "queued", "p": 0, "msg": tr("Waiting in queue")}
                 self.queue.append(job)
-                self.state[m.id] = {"id": m.id, "key": job["key"], "phase": "queued", "p": 0, "msg": "Čeká ve frontě"}
+                self.state[m.id] = {"id": m.id, "key": job["key"], "phase": "queued", "p": 0, "msg": tr("Waiting in queue")}
                 self.event.emit(self.state[m.id])
         self._changed()
 
@@ -144,7 +145,7 @@ class AnalysisJobs(QObject):
                 self.queue.remove(job)
                 self.state.pop(job["id"], None)
         if job:
-            self.event.emit({"id": job["id"], "key": key, "phase": "canceled", "p": None, "msg": "Odebráno z fronty"})
+            self.event.emit({"id": job["id"], "key": key, "phase": "canceled", "p": None, "msg": tr("Removed from queue")})
         self._changed()
 
     def move(self, key, index):
@@ -285,7 +286,8 @@ class AnalysisJobs(QObject):
 
     def _on_event_end(self, cur, code):
         ev = {"id": cur["id"], "key": cur["key"], "phase": "skipped" if code else "error", "p": None,
-              "msg": "Přerušeno – příště naváže, kde skončilo" if code else "Skončilo bez výsledku (viz data/analysis/worker.log)"}
+              "msg": tr("Interrupted – will continue where it left off next time") if code
+              else tr("Ended without a result (see data/analysis/worker.log)")}
         self.state[cur["id"]] = ev
         self.history.insert(0, {"key": cur["key"], "id": cur["id"], "title": cur["title"], "phase": ev["phase"],
                                 "msg": ev["msg"], "finished": time.time(), "took": 0, "duration": cur["duration"]})

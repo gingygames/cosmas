@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
+from ..i18n import tr
 
 os.environ["PATH"] = str(config.VENDOR_DIR) + os.pathsep + os.environ.get("PATH", "")
 import mpv  # noqa: E402
@@ -50,13 +51,13 @@ def icon_font(px=18):
     return f
 
 
-ROLE_INFO = {
-    "all": ("Vše", "#9aa3b2"),
-    "game": ("Hra", "#e3b341"),
-    "mic": ("Mikrofon", "#5cc98a"),
+ROLE_INFO = {    # (English label – shown through tr(), colour)
+    "all": ("All", "#9aa3b2"),
+    "game": ("Game", "#e3b341"),
+    "mic": ("Microphone", "#5cc98a"),
     "discord": ("Discord", "#7c8cf5"),
-    "system": ("Systém", "#40c4c4"),
-    "other": ("Stopa", "#a77be8"),
+    "system": ("System", "#40c4c4"),
+    "other": ("Track", "#a77be8"),
 }
 
 STYLE = """
@@ -210,7 +211,7 @@ class WaveStrip(QWidget):
         rows = self._rows()
         i = int((e.position().y() - 2) // 9)
         if 0 <= i < len(rows):
-            QToolTip.showText(e.globalPosition().toPoint(), f"{rows[i]['label']} – hlasitost v čase", self)
+            QToolTip.showText(e.globalPosition().toPoint(), tr("{track} – volume over time", track=rows[i]['label']), self)
 
     def paintEvent(self, e):
         rows = self._rows()
@@ -435,7 +436,7 @@ class TrackPill(QPushButton):
         color = ROLE_INFO.get(self.role, ROLE_INFO["other"])[1]
         vol = "" if self.volume == 100 else f"  {self.volume}%"
         self.setText(f"{self.aid}  {self.label}{vol}")
-        self.setToolTip(f"Ctrl+{self.aid} zapne/vypne · kolečko = hlasitost · pravé tlačítko = nastavení")
+        self.setToolTip(tr("Ctrl+{n} toggles · wheel = volume · right-click = settings", n=self.aid))
         if self.isChecked():
             self.setStyleSheet(f"QPushButton {{ background: {color}; border-color: {color}; }}")
         else:
@@ -466,8 +467,8 @@ class TrackPill(QPushButton):
         wa.setDefaultWidget(box)
         m.addAction(wa)
         m.addSeparator()
-        m.addAction("Hlasitost 100 %", lambda: self.set_volume(100))
-        m.addAction("Jen tato stopa", lambda: self.parent().solo(self.aid) if hasattr(self.parent(), "solo") else None)
+        m.addAction(tr("Volume 100%"), lambda: self.set_volume(100))
+        m.addAction(tr("Only this track"), lambda: self.parent().solo(self.aid) if hasattr(self.parent(), "solo") else None)
         m.exec(self.mapToGlobal(pos))
 
 
@@ -492,7 +493,7 @@ class TrackBar(QWidget):
         lbl = QLabel(glyph("audio-lines"))
         lbl.setFont(icon_font(16))
         lbl.setStyleSheet("color:#7d8490;")
-        lbl.setToolTip("Zvukové stopy – klikem zapínáš, můžeš jich mít víc najednou")
+        lbl.setToolTip(tr("Audio tracks – click to toggle, you can have several on at once"))
         self.lay.addWidget(lbl)
         for t in tracks:
             p = TrackPill(t["aid"], t["role"], t["label"])
@@ -520,13 +521,13 @@ class TrackBar(QWidget):
         return {p.aid: (p.isChecked(), p.volume) for p in self.pills}
 
 
-DEFAULT_PRESETS = [
-    {"name": "Vše (mix z Medalu)", "roles": [{"role": "all", "volume": 100}]},
-    {"name": "Hra + mikrofon", "roles": [{"role": "game", "volume": 100}, {"role": "mic", "volume": 100}]},
-    {"name": "Hra + Discord", "roles": [{"role": "game", "volume": 100}, {"role": "discord", "volume": 100}]},
-    {"name": "Hra + mikrofon + Discord", "roles": [{"role": "game", "volume": 100}, {"role": "mic", "volume": 100},
-                                                   {"role": "discord", "volume": 100}]},
-    {"name": "Jen hlasy (mikrofon + Discord)", "roles": [{"role": "mic", "volume": 100}, {"role": "discord", "volume": 100}]},
+DEFAULT_PRESETS = [     # names are translated when the presets are first saved to the settings
+    {"name": "All (Medal mix)", "roles": [{"role": "all", "volume": 100}]},
+    {"name": "Game + microphone", "roles": [{"role": "game", "volume": 100}, {"role": "mic", "volume": 100}]},
+    {"name": "Game + Discord", "roles": [{"role": "game", "volume": 100}, {"role": "discord", "volume": 100}]},
+    {"name": "Game + microphone + Discord", "roles": [{"role": "game", "volume": 100}, {"role": "mic", "volume": 100},
+                                                      {"role": "discord", "volume": 100}]},
+    {"name": "Voices only (microphone + Discord)", "roles": [{"role": "mic", "volume": 100}, {"role": "discord", "volume": 100}]},
 ]
 
 
@@ -575,18 +576,18 @@ class PlayerWidget(QWidget):
         tbox.setSpacing(0)
         tbox.addWidget(self.title)
         tbox.addWidget(self.sub)
-        self.snap_btn = QPushButton(" Snímek")
-        self.pin_btn = QPushButton(" Připnout")
-        self.bm_btn = QPushButton(" Záložka")
-        self.tag_btn = QPushButton(" Postava")
-        self.clip_btn = QPushButton(" Klip")
-        for b, ic, tip in ((self.snap_btn, "camera", "Uložit aktuální snímek do události (S)"),
+        self.snap_btn = QPushButton(" " + tr("Screenshot"))
+        self.pin_btn = QPushButton(" " + tr("Pin"))
+        self.bm_btn = QPushButton(" " + tr("Bookmark"))
+        self.tag_btn = QPushButton(" " + tr("Character"))
+        self.clip_btn = QPushButton(" " + tr("Clip"))
+        for b, ic, tip in ((self.snap_btn, "camera", tr("Save the current frame to the event (S)")),
                            (self.bm_btn, "bookmark-plus",
-                            "Záložka v tomto místě (B)\nShift+B = začátek / konec úseku (virtuální klip)\n"
-                            "Pravé tlačítko = úsek"),
-                           (self.tag_btn, "user-round-plus", "Označit postavy, které jsou v tomto momentu (C)"),
-                           (self.clip_btn, "scissors", "Klipovat: I = začátek, O = konec\nPravé tlačítko = další možnosti"),
-                           (self.pin_btn, "map-pin", "Záložka rovnou přiřazená k události (P)")):
+                            tr("Bookmark at this point (B)\nShift+B = start / end of a segment (virtual clip)\n"
+                               "Right-click = segment")),
+                           (self.tag_btn, "user-round-plus", tr("Tag the characters present at this moment (C)")),
+                           (self.clip_btn, "scissors", tr("Clip: I = start, O = end\nRight-click = more options")),
+                           (self.pin_btn, "map-pin", tr("Bookmark assigned straight to an event (P)"))):
             b.setObjectName("actbtn")
             b.setIcon(glyph_icon(ic))
             b.setToolTip(tip)
@@ -601,14 +602,14 @@ class PlayerWidget(QWidget):
         self.bm_btn.setContextMenuPolicy(Qt.CustomContextMenu)
         self.bm_btn.customContextMenuRequested.connect(lambda *_: self.handle_action("range"))
         self.pop_btn = ibutton("picture-in-picture-2" if not popout else "panel-right",
-                               "Vyskakovací okno" if not popout else "Vrátit do hlavního okna")
+                               tr("Pop-out window") if not popout else tr("Return to the main window"))
         self.pop_btn.clicked.connect(self.popout_requested.emit)
-        self.info_btn = ibutton("notebook-pen", "Informace o videu pod přehrávačem (I)", checkable=True)
+        self.info_btn = ibutton("notebook-pen", tr("Video info below the player (I)"), checkable=True)
         self.info_btn.setChecked(bool(settings.get("detail_pane", True)))
         self.info_btn.clicked.connect(lambda *_: self.info_requested.emit())
-        self.layout_btn = ibutton("columns-2", "Informace vedle videa")
+        self.layout_btn = ibutton("columns-2", tr("Info next to the video"))
         self.layout_btn.clicked.connect(self.layout_requested.emit)
-        self.close_btn = ibutton("x", "Zavřít přehrávač")
+        self.close_btn = ibutton("x", tr("Close player"))
         self.close_btn.clicked.connect(self.close_requested.emit)
         head = QHBoxLayout()
         head.setContentsMargins(14, 10, 8, 8)
@@ -651,17 +652,17 @@ class PlayerWidget(QWidget):
         self.speed_btn = QToolButton()
         self.speed_btn.setProperty("ib", True)
         self.speed_btn.setText("1×")
-        self.speed_btn.setToolTip("Rychlost přehrávání")
+        self.speed_btn.setToolTip(tr("Playback speed"))
         self.speed_btn.setCursor(Qt.PointingHandCursor)
         self.speed_btn.clicked.connect(self._speed_menu)
-        self.mute_btn = ibutton("volume-2", "Ztlumit (M)", checkable=True)
+        self.mute_btn = ibutton("volume-2", tr("Mute (M)"), checkable=True)
         self.mute_btn.toggled.connect(self._set_mute)
         self.vol = QSlider(Qt.Horizontal)
         self.vol.setRange(0, 130)
         self.vol.setFixedWidth(90)
         self.vol.setValue(int(settings.get("volume", 100)))
         self.vol.valueChanged.connect(self._set_volume)
-        self.fs_btn = ibutton("maximize", "Celá obrazovka (F)")
+        self.fs_btn = ibutton("maximize", tr("Full screen (F)"))
         self.fs_btn.clicked.connect(self.fullscreen_requested.emit)
         ctl = QHBoxLayout()
         ctl.setContentsMargins(10, 0, 10, 0)
@@ -686,10 +687,10 @@ class PlayerWidget(QWidget):
         self.clip_lbl = QLabel("")
         self.clip_lbl.setObjectName("cliplbl")
         cbl.addWidget(self.clip_lbl, 1)
-        for text, ic, tip, act in ((" Přehrát výběr", "play", "Přehrát jen vybraný úsek", "clip_play"),
-                                   (" Uložit klip", "bookmark-plus", "Uložit jako úsek (virtuální klip) do katalogu", "clip_save"),
-                                   (" Export MP4", "download", "Vytvořit skutečný soubor se všemi zvukovými stopami", "clip_export"),
-                                   ("", "x", "Zrušit výběr (Esc)", "clip_clear")):
+        for text, ic, tip, act in ((" " + tr("Play selection"), "play", tr("Play only the selected segment"), "clip_play"),
+                                   (" " + tr("Save clip"), "bookmark-plus", tr("Save as a segment (virtual clip) to the catalogue"), "clip_save"),
+                                   (" Export MP4", "download", tr("Create a real file with all audio tracks"), "clip_export"),
+                                   ("", "x", tr("Cancel selection (Esc)"), "clip_clear")):
             b = QPushButton(text)
             b.setObjectName("actbtn")
             b.setIcon(glyph_icon(ic))
@@ -701,8 +702,8 @@ class PlayerWidget(QWidget):
 
         self.trackbar = TrackBar()
         self.trackbar.changed.connect(self._schedule_mix)
-        self.preset_btn = ibutton("sliders-horizontal", "Předvolby zvukových stop")
-        self.wave_btn = ibutton("audio-waveform", "Průběh hlasitosti stop pod časovou osou", checkable=True)
+        self.preset_btn = ibutton("sliders-horizontal", tr("Audio track presets"))
+        self.wave_btn = ibutton("audio-waveform", tr("Track volume over time below the timeline"), checkable=True)
         self.wave_btn.setChecked(bool(settings.get("show_waves", True)))
         self.wave_btn.toggled.connect(self._toggle_waves)
         self.waves = WaveStrip()
@@ -711,12 +712,12 @@ class PlayerWidget(QWidget):
         self.preset_btn.clicked.connect(self._preset_menu)
         self.warn = QLabel("")
         self.warn.setObjectName("warn")
-        tr = QHBoxLayout()
-        tr.setContentsMargins(14, 0, 14, 10)
-        tr.addWidget(self.trackbar, 1)
-        tr.addWidget(self.warn)
-        tr.addWidget(self.wave_btn)
-        tr.addWidget(self.preset_btn)
+        trk = QHBoxLayout()
+        trk.setContentsMargins(14, 0, 14, 10)
+        trk.addWidget(self.trackbar, 1)
+        trk.addWidget(self.warn)
+        trk.addWidget(self.wave_btn)
+        trk.addWidget(self.preset_btn)
 
         self.controls = QFrame()
         cl = QVBoxLayout(self.controls)
@@ -731,7 +732,7 @@ class PlayerWidget(QWidget):
         wl.addWidget(self.waves)
         cl.addLayout(wl)
         cl.addLayout(ctl)
-        cl.addLayout(tr)
+        cl.addLayout(trk)
         cl.addWidget(self.clipbar)
 
         lay = QVBoxLayout(self)
@@ -816,7 +817,7 @@ class PlayerWidget(QWidget):
             pos = self.position()
             if self.seekbar.range_a is None:
                 self.seekbar.range_a = pos
-                self.bm_btn.setText(" Konec úseku")
+                self.bm_btn.setText(" " + tr("Segment end"))
                 self.bm_btn.setProperty("armed", True)
             else:
                 a = self.seekbar.range_a
@@ -844,7 +845,7 @@ class PlayerWidget(QWidget):
             if b is None:
                 b = self.position()
                 if b <= a:
-                    self.warn.setText("Nastav konec klipu (O)")
+                    self.warn.setText(tr("Set the clip end (O)"))
                     return
                 self.seekbar.clip = [a, b]
             if act == "clip_play":
@@ -883,7 +884,7 @@ class PlayerWidget(QWidget):
 
     def _clear_range(self):
         self.seekbar.range_a = None
-        self.bm_btn.setText(" Záložka")
+        self.bm_btn.setText(" " + tr("Bookmark"))
         self.bm_btn.setProperty("armed", False)
         self.bm_btn.style().unpolish(self.bm_btn)
         self.bm_btn.style().polish(self.bm_btn)
@@ -917,7 +918,7 @@ class PlayerWidget(QWidget):
         self.pending_seek = offset
         self.pending_state = state
         self.title.setText(media.display_title)
-        kind = {"session": "Záznam", "manual": "Nahrávka"}.get(media.effective_kind, "Klip")
+        kind = {"session": tr("Recording"), "manual": tr("Manual recording")}.get(media.effective_kind, tr("Clip"))
         from .common import fmt_dt
         self.sub.setText(f"{media.game}  ·  {fmt_dt(media.start_time)}  ·  {kind}")
         self.seekbar.duration = media.duration or 0
@@ -949,9 +950,10 @@ class PlayerWidget(QWidget):
         self.clipbar.setVisible(bool(c))
         if c:
             if c[1] is None:
-                self.clip_lbl.setText(f"✂  Klip od {fmt_dur(c[0])} – teď nastav konec (O)")
+                self.clip_lbl.setText("✂  " + tr("Clip from {start} – now set the end (O)", start=fmt_dur(c[0])))
             else:
-                self.clip_lbl.setText(f"✂  Klip {fmt_dur(c[0])} – {fmt_dur(c[1])}   ({fmt_dur(c[1] - c[0])})   · okraje jdou táhnout na ose")
+                self.clip_lbl.setText("✂  " + tr("Clip {start} – {end}   ({duration})   · drag the edges on the timeline",
+                                                 start=fmt_dur(c[0]), end=fmt_dur(c[1]), duration=fmt_dur(c[1] - c[0])))
         self.seekbar.update()
 
     def set_frames(self, media_id, meta):
@@ -1036,14 +1038,14 @@ class PlayerWidget(QWidget):
                 continue
             aid = t["id"]
             if t.get("external"):
-                sc = sidecars[ext_i] if ext_i < len(sidecars) else {"role": "other", "name": "Externí"}
+                sc = sidecars[ext_i] if ext_i < len(sidecars) else {"role": "other", "name": tr("External")}
                 ext_i += 1
                 role, name = sc.get("role", "other"), sc.get("name", "")
             elif aid - 1 < len(names):
                 role, name = names[aid - 1]["role"], names[aid - 1]["name"]
             else:
                 role, name = ("all" if aid == 1 else "other"), (t.get("title") or "")
-            label = ROLE_INFO.get(role, ROLE_INFO["other"])[0]
+            label = tr(ROLE_INFO.get(role, ROLE_INFO["other"])[0])
             if role == "other" and name:
                 label = name
             tracks.append({"aid": aid, "role": role, "label": label})
@@ -1069,7 +1071,7 @@ class PlayerWidget(QWidget):
     # ---------------------------------------------------------------- presets
     def presets(self):
         if "mix_presets" not in self.settings:
-            self.settings["mix_presets"] = [dict(p) for p in DEFAULT_PRESETS]
+            self.settings["mix_presets"] = [dict(p, name=tr(p["name"])) for p in DEFAULT_PRESETS]
         return self.settings["mix_presets"]
 
     def _current_roles(self):
@@ -1090,16 +1092,16 @@ class PlayerWidget(QWidget):
 
     def apply_preset(self, roles, remember=True):
         if not self._apply_roles(roles):
-            self.warn.setText("Toto video takové stopy nemá")
+            self.warn.setText(tr("This video doesn't have those tracks"))
             return
         if remember:
             self.mix_changed.emit(self._current_roles())
 
     def _more_menu(self, *_):
         m = QMenu(self)
-        for label, act in (("Začátek klipu tady (I)", "clip_in"), ("Konec klipu tady (O)", "clip_out"),
-                           ("Zrušit výběr", "clip_clear"), (None, None),
-                           ("Nastavit tento snímek jako náhled videa (T)", "thumb")):
+        for label, act in ((tr("Clip start here (I)"), "clip_in"), (tr("Clip end here (O)"), "clip_out"),
+                           (tr("Cancel selection"), "clip_clear"), (None, None),
+                           (tr("Set this frame as the video thumbnail (T)"), "thumb")):
             if label is None:
                 m.addSeparator()
                 continue
@@ -1110,26 +1112,26 @@ class PlayerWidget(QWidget):
     def _preset_menu(self):
         m = QMenu(self)
         cur = self._current_roles()
-        head = m.addAction("Předvolby zvukových stop")
+        head = m.addAction(tr("Audio track presets"))
         head.setEnabled(False)
         for i, pr in enumerate(self.presets()):
             a = m.addAction(("✓  " if self._same_roles(pr["roles"], cur) else "     ") + pr["name"]
                             + (f"\tCtrl+Shift+{i + 1}" if i < 9 else ""))
             a.triggered.connect(lambda *_, r=pr["roles"]: self.apply_preset(r))
         m.addSeparator()
-        save = m.addAction("Uložit současné stopy jako předvolbu…")
+        save = m.addAction(tr("Save current tracks as a preset…"))
         save.triggered.connect(self._save_preset)
         game = self.media.game if self.media else None
         if game:
             gm = self.settings.setdefault("game_mix", {})
-            a = m.addAction(f"Pro hru „{game}“ vždy začínat s těmito stopami")
+            a = m.addAction(tr("Always start with these tracks for the game “{game}”", game=game))
             a.triggered.connect(lambda *_: (gm.__setitem__(game, cur), self._save_settings(),
-                                            self.warn.setText(f"Výchozí stopy pro {game} uloženy")))
+                                            self.warn.setText(tr("Default tracks for {game} saved", game=game))))
             if game in gm:
-                a2 = m.addAction(f"Zrušit výchozí stopy pro „{game}“")
+                a2 = m.addAction(tr("Remove default tracks for “{game}”", game=game))
                 a2.triggered.connect(lambda *_: (gm.pop(game, None), self._save_settings()))
         if self.presets():
-            dm = m.addMenu("Smazat předvolbu")
+            dm = m.addMenu(tr("Delete preset"))
             for pr in list(self.presets()):
                 a = dm.addAction(pr["name"])
                 a.triggered.connect(lambda *_, p=pr: (self.presets().remove(p), self._save_settings()))
@@ -1140,8 +1142,8 @@ class PlayerWidget(QWidget):
         cur = self._current_roles()
         if not cur:
             return
-        labels = " + ".join(ROLE_INFO.get(r["role"], ROLE_INFO["other"])[0] for r in cur)
-        name, ok = QInputDialog.getText(self, "Nová předvolba", "Název předvolby:", text=labels)
+        labels = " + ".join(tr(ROLE_INFO.get(r["role"], ROLE_INFO["other"])[0]) for r in cur)
+        name, ok = QInputDialog.getText(self, tr("New preset"), tr("Preset name:"), text=labels)
         if ok and name.strip():
             self.presets().append({"name": name.strip(), "roles": cur})
             self._save_settings()
@@ -1194,7 +1196,7 @@ class PlayerWidget(QWidget):
                 labels = "".join(f"[a{a}]" for a, _ in sel)
                 self.player["lavfi-complex"] = ";".join(parts) + f";{labels}amix=inputs={len(sel)}:normalize=0:dropout_transition=0[ao]"
         except Exception as e:
-            self.warn.setText(f"Mix se nepovedl: {e}")
+            self.warn.setText(tr("Mix failed: {error}", error=e))
             return
         self._update_warn()
         self._refresh_waves()
@@ -1207,7 +1209,7 @@ class PlayerWidget(QWidget):
         st = self.trackbar.state()
         on = [t for t in self.tracks if st.get(t["aid"], (False,))[0]]
         if any(t["role"] == "all" for t in on) and len(on) > 1:
-            self.warn.setText("„Vše“ už obsahuje ostatní stopy – zvuk se zdvojí")
+            self.warn.setText(tr("“All” already contains the other tracks – the sound will be doubled"))
         else:
             self.warn.setText("")
 
@@ -1300,7 +1302,7 @@ class PlayerWidget(QWidget):
     def set_layout_mode(self, mode):
         row = mode == "row"
         self.layout_btn.setText(glyph("panel-bottom" if row else "columns-2"))
-        self.layout_btn.setToolTip("Informace pod videem" if row else "Informace vedle videa")
+        self.layout_btn.setToolTip(tr("Info below the video") if row else tr("Info next to the video"))
 
     def set_chrome_visible(self, on):
         self.header.setVisible(on)
@@ -1330,7 +1332,7 @@ class PlayerWindow(QWidget):
 
     def __init__(self, settings, temporary_fullscreen=False):
         super().__init__(None, Qt.Window)
-        self.setWindowTitle("Kronikář – přehrávač")
+        self.setWindowTitle(tr("Kosmas – player"))
         self.setStyleSheet("background:#0b0d11;")
         self.resize(1280, 800)
         self.temporary = temporary_fullscreen

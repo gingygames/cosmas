@@ -2,6 +2,8 @@
 import datetime as dt
 from collections import Counter
 
+from .i18n import lang, tr
+
 HOUR = 3600.0
 
 
@@ -9,7 +11,8 @@ def fmt_gap(seconds):
     seconds = abs(seconds)
     if seconds < HOUR:
         return f"{int(seconds // 60)} min"
-    return f"{seconds / HOUR:.1f} h".replace(".", ",")
+    h = f"{seconds / HOUR:.1f} h"
+    return h.replace(".", ",") if lang() == "cs" else h
 
 
 def event_range(event, linked_media):
@@ -51,23 +54,23 @@ def suggest_for_event(event, all_media, linked_ids, link_titles, max_items=60):
         if overlap > 0:
             shorter = max(1.0, min(e - s, me - ms))
             score = 60 + 40 * min(1.0, overlap / shorter)
-            reasons.append(f"překrývá se ({fmt_gap(overlap)})")
+            reasons.append(tr("overlaps ({gap})", gap=fmt_gap(overlap)))
             if ms < s - 60 and m.effective_kind != "clip":
                 offset = s - ms
-                reasons.append(f"událost začíná v čase {fmt_clock(offset)}")
+                reasons.append(tr("event starts at {time}", time=fmt_clock(offset)))
         else:
             gap = (ms - e) if ms >= e else (s - me)
             if gap < 6 * HOUR:
                 score = 45 * (1 - gap / (6 * HOUR))
-                reasons.append(f"{fmt_gap(gap)} {'po' if ms >= e else 'před'}")
+                reasons.append(tr("{gap} after" if ms >= e else "{gap} before", gap=fmt_gap(gap)))
             elif dt.date.fromtimestamp(ms) == dt.date.fromtimestamp(s):
                 score = 5
-                reasons.append("stejný den")
+                reasons.append(tr("same day"))
         if score <= 0:
             continue
         if main_game and m.game == main_game:
             score += 15
-            reasons.append("stejná hra")
+            reasons.append(tr("same game"))
         elif main_game:
             score -= 15
         shared = ev_tags & set(m.tags or [])
@@ -77,7 +80,7 @@ def suggest_for_event(event, all_media, linked_ids, link_titles, max_items=60):
         others = link_titles.get(m.id)
         if others:
             score -= 10
-            reasons.append("už v: " + ", ".join(others[:2]))
+            reasons.append(tr("already in: {events}", events=", ".join(others[:2])))
         if score > 3:
             out.append({"media": m, "score": score, "reasons": reasons, "offset": offset})
     out.sort(key=lambda x: -x["score"])
@@ -112,12 +115,12 @@ def fmt_clock(seconds):
 def part_of_day(t):
     h = dt.datetime.fromtimestamp(t).hour
     if h < 5:
-        return "noc"
+        return tr("night")
     if h < 12:
-        return "dopoledne"
+        return tr("morning")
     if h < 18:
-        return "odpoledne"
-    return "večer"
+        return tr("afternoon")
+    return tr("evening")
 
 
 def cluster_sessions(media, gap_minutes=45, linked_ids=frozenset()):

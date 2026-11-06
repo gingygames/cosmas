@@ -1,4 +1,4 @@
-"""Kronikář – catalogue of game recordings for RP."""
+"""Kosmas (formerly Kronikář) – catalogue of game recordings for RP."""
 __version__ = "1.0.0"
 
 

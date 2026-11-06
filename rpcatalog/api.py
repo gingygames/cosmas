@@ -21,6 +21,8 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot, QUrl, Qt
 from PySide6.QtWidgets import QFileDialog
 
 from . import config, suggest
+from . import i18n
+from .i18n import tr, trn
 from . import discord_link
 from . import gameart
 from . import sync as websync
@@ -49,7 +51,7 @@ class SyncThread(QThread):
             self.failed.emit(str(e))
         except Exception as e:
             traceback.print_exc()
-            self.failed.emit(f"Synchronizace selhala: {type(e).__name__}: {e}")
+            self.failed.emit(tr("Sync failed: {error}", error=f"{type(e).__name__}: {e}"))
 
 
 def file_url(path):
@@ -82,7 +84,7 @@ class Api(QObject):
                  "analysis.get", "analysis.queue", "analysis.stats", "analysis.models", "analysis.overview",
                  "analysis.char_mentions", "analysis.search", "analysis.open_timeline", "analysis.skip",
                  "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
-                 "analysis.char_looks", "ai.info", "ai.open"}
+                 "analysis.char_looks", "ai.info", "ai.open", "lang.set"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -256,8 +258,8 @@ class Api(QObject):
         linked = self.store.linked_media_ids()
         chars = self._char_map("media")
         bms = self._bm_map()
-        tr = self.store.transcript_status()
-        return [dict(self._media(m, linked, chars, bms), tr=tr.get(m.id), transcribed=bool(tr.get(m.id)))
+        ts = self.store.transcript_status()
+        return [dict(self._media(m, linked, chars, bms), tr=ts.get(m.id), transcribed=bool(ts.get(m.id)))
                 for m in self.store.all_media()]
 
     def m_media_get(self, id):
@@ -272,8 +274,8 @@ class Api(QObject):
 
     # ------------------------------------------------------------ transcript / analysis
     WHISPER_MODELS = [
-        ("large-v3", "Large v3 – nejpřesnější (doporučeno)"), ("large-v3-turbo", "Large v3 Turbo – asi 2× rychlejší, o chlup horší"),
-        ("medium", "Medium – rychlý, horší čeština"), ("small", "Small – jen na zkoušku")]
+        ("large-v3", "Large v3 – most accurate (recommended)"), ("large-v3-turbo", "Large v3 Turbo – about 2× faster, slightly worse"),
+        ("medium", "Medium – fast, worse Czech"), ("small", "Small – just for testing")]     # labels go through tr()
 
     def m_analysis_get(self, id):
         jobs = self.host.analysis
@@ -307,7 +309,7 @@ class Api(QObject):
 
     def m_analysis_start(self, ids, speech=True, vision=False, chapters=None, ranges=None):
         if not self.host.analysis.available():
-            raise RuntimeError("Chybí knihovny pro přepis: .venv\\Scripts\\pip install -r requirements-ai.txt")
+            raise RuntimeError(tr("Transcription libraries are missing: .venv\\Scripts\\pip install -r requirements-ai.txt"))
         media = [m for m in (self.store.media(i) for i in ids) if m]
         self.host.analysis.request(media, speech=speech, vision=vision, chapters=chapters, vision_ranges=ranges,
                                    prev={m.id: self._prev_summary(m) for m in media})
@@ -398,7 +400,7 @@ class Api(QObject):
             ollama = [{"name": t["name"], "size": t.get("size"), "family": t.get("details", {}).get("family", "")} for t in tags]
         except OSError:
             ollama = None
-        return {"whisper": self.WHISPER_MODELS, "ollama": ollama, "available": self.host.analysis.available(),
+        return {"whisper": [(k, tr(v)) for k, v in self.WHISPER_MODELS], "ollama": ollama, "available": self.host.analysis.available(),
                 "games": self.host.analysis.detected_games}
 
     # ------------------------------------------------------------ AI setup (ai_setup.py)
@@ -473,7 +475,7 @@ class Api(QObject):
         if data is None:
             data = (analysis_dir(media_id) / "faces" / file).read_bytes()
         dst, mime, kind = self._store_file(data=data, name="portret.jpg")
-        att = self._add("character", character_id, dst, f"Portrét z videa {m.display_title if m else ''}", mime, kind)
+        att = self._add("character", character_id, dst, tr("Portrait from video {title}", title=m.display_title if m else '').strip(), mime, kind)
         self.m_char_portrait(character_id, att["id"])
         return True
 
@@ -535,7 +537,7 @@ class Api(QObject):
             raw = (fields["youtube"] or "").strip()
             fields["youtube"] = websync.youtube_id(raw)
             if raw and not fields["youtube"]:
-                raise ValueError("Tohle nevypadá jako odkaz na video na YouTube (ani jako ID videa).")
+                raise ValueError(tr("This doesn't look like a YouTube video link (or a video ID)."))
         if "tags" in fields:
             self.store.set_media_tags(id, fields.pop("tags"))
         if "chars" in fields:
@@ -670,8 +672,8 @@ class Api(QObject):
         return True
 
     def m_media_thumb_pick(self, id):
-        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, "Vlastní náhled videa", "",
-                                              "Obrázky (*.png *.jpg *.jpeg *.webp *.bmp)")
+        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, tr("Custom video thumbnail"), "",
+                                              tr("Images") + " (*.png *.jpg *.jpeg *.webp *.bmp)")
         if not path:
             return False
         dst = config.THUMB_DIR / "custom" / f"{id}-{uuid.uuid4().hex[:6]}{Path(path).suffix.lower()}"
@@ -801,7 +803,7 @@ class Api(QObject):
 
     def m_event_move(self, id, parent_id, position=None):
         if parent_id is not None and parent_id in self.store.event_descendant_ids(id):
-            raise ValueError("Událost nejde vložit sama do sebe")
+            raise ValueError(tr("An event can't be placed inside itself"))
         siblings = [e for e in self.store.events() if e["parent_id"] == parent_id and e["id"] != id]
         pos = len(siblings) if position is None else max(0, min(position, len(siblings)))
         siblings.insert(pos, {"id": id})
@@ -910,8 +912,8 @@ class Api(QObject):
         return self._att(self.store.attachment(aid))
 
     def m_att_pick(self, owner_type, owner_id, images_only=False):
-        flt = "Obrázky (*.png *.jpg *.jpeg *.gif *.webp *.bmp)" if images_only else "Všechny soubory (*.*)"
-        paths, _ = QFileDialog.getOpenFileNames(self.host.dialog_parent, "Přidat přílohy", "", flt)
+        flt = tr("Images") + " (*.png *.jpg *.jpeg *.gif *.webp *.bmp)" if images_only else tr("All files") + " (*.*)"
+        paths, _ = QFileDialog.getOpenFileNames(self.host.dialog_parent, tr("Add attachments"), "", flt)
         out = []
         for p in paths:
             dst, mime, kind = self._store_file(src_path=p, name=os.path.basename(p))
@@ -934,7 +936,7 @@ class Api(QObject):
         dst.parent.mkdir(parents=True, exist_ok=True)
         res = self.host.player_snapshot(str(dst))
         if not res:
-            raise ValueError("Nic se nepřehrává – pusť video, ze kterého chceš snímek.")
+            raise ValueError(tr("Nothing is playing – play the video you want a screenshot from."))
         media, pos = res
         moment = (media.start_time or time.time()) + pos
         caption = f"{media.display_title} @ {suggest.fmt_clock(pos)}"
@@ -948,7 +950,7 @@ class Api(QObject):
         dst = tmp / f"grab-{uuid.uuid4().hex[:8]}.jpg"
         res = self.host.player_snapshot(str(dst))
         if not res:
-            raise ValueError("Nic se nepřehrává – pusť video, ze kterého chceš snímek.")
+            raise ValueError(tr("Nothing is playing – play the video you want a screenshot from."))
         media, pos = res
         try:
             data = "data:image/jpeg;base64," + base64.b64encode(dst.read_bytes()).decode()
@@ -1140,7 +1142,7 @@ class Api(QObject):
         try:
             return gameart.store_search(term)
         except Exception as e:
-            raise ValueError(f"Obchod Steamu teď nejde načíst: {e}")
+            raise ValueError(tr("The Steam store can't be loaded right now: {error}", error=e))
 
     def m_game_image_data(self, path=None, url=None):
         """Image as a data URL (lets the UI crop it on a canvas)."""
@@ -1151,7 +1153,7 @@ class Api(QObject):
         return None
 
     def m_game_art_pick_file(self):
-        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, "Obrázek hry", "", "Obrázky (*.png *.jpg *.jpeg *.webp *.bmp)")
+        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, tr("Game image"), "", tr("Images") + " (*.png *.jpg *.jpeg *.webp *.bmp)")
         return self.m_game_image_data(path=path) if path else None
 
     def _save_art(self, game, kind, raw, ext=".jpg", appid=None):
@@ -1346,15 +1348,15 @@ class Api(QObject):
         return {"found": len(items), "new": n}
 
     def m_letters_import_export(self):
-        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, "Export dat z Discordu (package.zip)", "",
-                                              "Discord export (*.zip);;Všechny soubory (*.*)")
+        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, tr("Discord data export (package.zip)"), "",
+                                              "Discord export (*.zip);;" + tr("All files") + " (*.*)")
         if not path:
             return None
         items = discord_link.export_letters(path, self.settings.get("holub_marker") or "holub")
         return self._save_letters(items)
 
     def m_letters_import_folder(self):
-        path = QFileDialog.getExistingDirectory(self.host.dialog_parent, "Rozbalený export dat z Discordu")
+        path = QFileDialog.getExistingDirectory(self.host.dialog_parent, tr("Extracted Discord data export"))
         if not path:
             return None
         items = discord_link.export_letters(path, self.settings.get("holub_marker") or "holub")
@@ -1363,7 +1365,7 @@ class Api(QObject):
     def m_letters_import_channel(self):
         tok, ch = self.settings.get("discord_token"), self.settings.get("discord_channel")
         if not tok or not ch:
-            raise ValueError("V Nastavení → Discord vyplň token bota a ID kanálu s dopisy.")
+            raise ValueError(tr("Fill in the bot token and the letters channel ID in Settings → Discord."))
         items = discord_link.channel_letters(tok, ch, self.settings.get("holub_marker") or "holub")
         return self._save_letters(items)
 
@@ -1371,7 +1373,7 @@ class Api(QObject):
     def m_discord_members(self):
         tok, gid = self.settings.get("discord_token"), self.settings.get("discord_guild")
         if not tok or not gid:
-            raise ValueError("V Nastavení → Discord vyplň token bota a ID serveru.")
+            raise ValueError(tr("Fill in the bot token and the server ID in Settings → Discord."))
         return discord_link.members(tok, gid)
 
     def _player_avatar_from(self, pid, url):
@@ -1392,7 +1394,7 @@ class Api(QObject):
     def _token(self):
         tok = self.settings.get("discord_token")
         if not tok:
-            raise ValueError("V Nastavení → Discord vyplň token bota (bot nemusí být na žádném serveru).")
+            raise ValueError(tr("Fill in the bot token in Settings → Discord (the bot doesn't need to be on any server)."))
         return tok
 
     def m_discord_user(self, user_id):
@@ -1612,6 +1614,15 @@ class Api(QObject):
             self.host.rescan()
         return True
 
+    def m_lang_set(self, lang="auto"):
+        """UI language setting (auto | en | cs). Both web pages reload themselves in the resolved language."""
+        lang = lang if lang in ("auto", "en", "cs") else "auto"
+        self.settings["lang"] = lang
+        self.host.save_settings()
+        resolved = i18n.set_lang(lang)
+        self.emit("lang", {"lang": resolved, "setting": lang})
+        return resolved
+
     # ------------------------------------------------------------ synchronizace s webem
     def m_sync_status(self):
         st = websync.status(config.DB_PATH, self.settings)
@@ -1622,7 +1633,7 @@ class Api(QObject):
     def m_sync_set_token(self, token=""):
         token = (token or "").strip()
         if token and not token.startswith("krt_"):
-            raise ValueError("Tohle není API token Kronikáře (začíná na krt_). Vytvoř ho na webu v Nastavení.")
+            raise ValueError(tr("This isn't a Kosmas API token (it starts with krt_). Create one on the web in Settings."))
         self.settings["sync_token"] = token
         self.host.save_settings()
         return self.m_sync_status()
@@ -1644,7 +1655,7 @@ class Api(QObject):
         if self._sync["running"]:
             return self.m_sync_status()
         if not self.settings.get("sync_token"):
-            raise ValueError("Nejdřív vlož osobní API token z webu.")
+            raise ValueError(tr("Paste your personal API token from the web first."))
         settings = dict(self.settings)
         cancel = threading.Event()
         prog = lambda msg: self._sync.__setitem__("progress", msg)
@@ -1660,7 +1671,7 @@ class Api(QObject):
         # sloty Api běží v hlavním vlákně (vlákno synchronizace jen posílá signál)
         th.done.connect(self._sync_done, Qt.QueuedConnection)
         th.failed.connect(self._sync_failed, Qt.QueuedConnection)
-        self._sync.update(thread=th, running=True, progress="Spouštím…", error=None, pairing=False,
+        self._sync.update(thread=th, running=True, progress=tr("Starting…"), error=None, pairing=False,
                           quiet=quiet, cancel=cancel)
         th.start()
         return self.m_sync_status()
@@ -1672,7 +1683,9 @@ class Api(QObject):
         self.emit("web-sync", res)
         n = res.get("conflicts") or 0
         if not self._sync["quiet"] or n or res.get("received"):
-            self.emit("toast", {"msg": f"Synchronizováno s webem{f' – {n} konfliktů k vyřešení (Nastavení)' if n else ''}",
+            self.emit("toast", {"msg": trn(n, "Synced with the web – {n} conflict to resolve (Settings)",
+                                           "Synced with the web – {n} conflicts to resolve (Settings)")
+                                if n else tr("Synced with the web"),
                                 "type": "err" if n else "ok"})
 
     @Slot(str)
@@ -1681,7 +1694,7 @@ class Api(QObject):
         msg = msg[len("pairing:"):] if pairing else msg
         self._sync.update(running=False, progress="", error=msg, pairing=pairing)
         self.emit("web-sync", {"error": msg, "need_pairing": pairing})
-        self.emit("toast", {"msg": "Synchronizace čeká na tvou volbu (Nastavení → Webová kronika)" if pairing else msg,
+        self.emit("toast", {"msg": tr("Sync is waiting for your choice (Settings → Web chronicle)") if pairing else msg,
                             "type": "err"})
 
     def sync_shutdown(self, timeout_ms=10000):
@@ -1693,7 +1706,7 @@ class Api(QObject):
 
     def m_sync_run(self, quiet=False, pairing=None):
         if pairing not in (None, "match", "copy"):
-            raise ValueError("Neznámá volba párování")
+            raise ValueError(tr("Unknown pairing option"))
         return self._sync_start(lambda s: s.run(pairing=pairing), quiet)
 
     def m_sync_cancel(self):
@@ -1705,7 +1718,7 @@ class Api(QObject):
         return self._sync_start(lambda s: s.resolve(items))
 
     def m_pick_folder(self):
-        return QFileDialog.getExistingDirectory(self.host.dialog_parent, "Složka se záznamy") or None
+        return QFileDialog.getExistingDirectory(self.host.dialog_parent, tr("Recordings folder")) or None
 
     def m_rescan(self):
         self.host.rescan()

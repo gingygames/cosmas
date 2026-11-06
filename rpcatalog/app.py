@@ -17,6 +17,8 @@ from . import appearance, chronicle, mentions
 from .analysis import analysis_dir, load_frames, load_results, _read_json
 from .analysis_jobs import AnalysisJobs
 from .api import Api
+from . import i18n
+from .i18n import tr
 from .previews import PreviewWorker
 from .store import Store
 
@@ -72,13 +74,13 @@ class TitleBar(QWidget):
         self.logo = QLabel()
         self.logo.setFixedSize(18, 18)
         self.logo.setPixmap(QIcon(str(ICON_PATH)).pixmap(18, 18))
-        self.title = QLabel("Kronikář")
+        self.title = QLabel("Kosmas")
         lay.addWidget(self.logo)
         lay.addWidget(self.title)
         lay.addStretch(1)
         self.btns = []
-        for name, tip, fn in (("minus", "Minimalizovat", win.showMinimized), ("square", "Maximalizovat", self.toggle_max),
-                              ("x", "Zavřít", win.close)):
+        for name, tip, fn in (("minus", tr("Minimize"), win.showMinimized), ("square", tr("Maximize"), self.toggle_max),
+                              ("x", tr("Close"), win.close)):
             b = QToolButton(self)
             b.setText(glyph(name))
             b.setFont(icon_font(14))
@@ -119,7 +121,7 @@ class MainWindow(QMainWindow):
         # controls) native too, and those stayed on screen after the player was closed.
         QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
         from .ui.player import PlayerWidget  # imports mpv (needs locale set)
-        self.setWindowTitle("Kronikář")
+        self.setWindowTitle("Kosmas")
         self.setWindowFlag(Qt.FramelessWindowHint, True)
         self.resize(1700, 1000)
         self.setStyleSheet("QMainWindow { background: #0d0f13; } QSplitter::handle { background: #1a1e25; }")
@@ -143,7 +145,10 @@ class MainWindow(QMainWindow):
         self.channel = QWebChannel(self.page)
         self.channel.registerObject("api", self.api)
         self.page.setWebChannel(self.channel)
-        self.web.load(QUrl.fromLocalFile(str(WEB_DIR / "index.html")))
+        lang = i18n.set_lang(self.settings.get("lang", "auto"))
+        url = QUrl.fromLocalFile(str(WEB_DIR / "index.html"))
+        url.setQuery(f"lang={lang}")
+        self.web.load(url)
 
         # second, small page under the docked player: info + editing of the playing video
         self.detail = QWebEngineView()
@@ -159,7 +164,7 @@ class MainWindow(QMainWindow):
         self.dchannel.registerObject("api", self.api)
         self.dpage.setWebChannel(self.dchannel)
         durl = QUrl.fromLocalFile(str(WEB_DIR / "index.html"))
-        durl.setQuery("pane=detail")
+        durl.setQuery(f"pane=detail&lang={lang}")
         self.detail.load(durl)
         self.detail.setMinimumHeight(120)
 
@@ -247,7 +252,7 @@ class MainWindow(QMainWindow):
         if self.active_player().snapshot(str(dst)):
             QTimer.singleShot(600, lambda: (self.api._set_custom_thumb(media.id, dst),
                                             self.api.emit("media-changed", {}),
-                                            self.api.emit("toast", {"msg": "Náhled videa nastaven"})))
+                                            self.api.emit("toast", {"msg": tr("Video thumbnail set")})))
 
     def _export_clip(self, media, a, b):
         """Cut [a, b] into a real MP4 with all audio tracks (stream copy - fast, cuts on keyframes)."""
@@ -257,14 +262,14 @@ class MainWindow(QMainWindow):
         from .scanner import make_thumb
         ff = config.find_tool("ffmpeg")
         if not ff:
-            self.api.emit("toast", {"msg": "Chybí ffmpeg", "type": "err"})
+            self.api.emit("toast", {"msg": tr("ffmpeg is missing"), "type": "err"})
             return
         safe = re.sub(r'[\\/:*?"<>|]+', "", media.display_title)[:60].strip() or "klip"
         out_dir = config.DATA_DIR / "clips" / (media.game or "Ostatní")
         out_dir.mkdir(parents=True, exist_ok=True)
         from .ui.common import fmt_dur
         dst = out_dir / f"{safe} {fmt_dur(a).replace(':', '-')}–{fmt_dur(b).replace(':', '-')}.mp4"
-        self.api.emit("toast", {"msg": f"Exportuji klip ({fmt_dur(b - a)})…"})
+        self.api.emit("toast", {"msg": tr("Exporting clip ({duration})…", duration=fmt_dur(b - a))})
 
         def run():
             args = [ff, "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", media.path]
@@ -317,7 +322,7 @@ class MainWindow(QMainWindow):
 
     def _on_clip_done(self, media_id, path, a, b, ok, err):
         if not ok:
-            self.api.emit("toast", {"msg": f"Export se nepovedl: {err}", "type": "err"})
+            self.api.emit("toast", {"msg": tr("Export failed: {error}", error=err), "type": "err"})
             return
         src = self.store.media(media_id)
         from .scanner import make_thumb
@@ -328,7 +333,7 @@ class MainWindow(QMainWindow):
                "parent_path": src.path}
         mid = self.store.upsert_media(rec)
         self.store.commit()
-        self.store.update_media(mid, title=f"{src.display_title} – klip")
+        self.store.update_media(mid, title=tr("{title} – clip", title=src.display_title))
         self.api.emit("media-changed", {})
         self.api.emit("clip-exported", {"id": mid, "path": path})
 
@@ -383,7 +388,7 @@ class MainWindow(QMainWindow):
         from .ui.common import fmt_dur
         marks = []
         for b in self.store.bookmarks(media_id=media.id):
-            label = b["title"] or ("úsek" if b["t_end"] else "záložka")
+            label = b["title"] or (tr("segment") if b["t_end"] else tr("bookmark"))
             if b["event_title"]:
                 label += f" → {b['event_title']}"
             marks.append({"t": b["t"], "t_end": b["t_end"], "label": label,
@@ -406,7 +411,7 @@ class MainWindow(QMainWindow):
 
     def play(self, media, offset=None, popout=False, end=None):
         if not os.path.exists(media.path):
-            QMessageBox.warning(self, "Soubor chybí", f"Soubor už neexistuje:\n{media.path}")
+            QMessageBox.warning(self, tr("File missing"), tr("The file no longer exists:\n{path}", path=media.path))
             return False
         media = self.store.media(media.id) or media
         if popout and not self.popout:
@@ -684,7 +689,8 @@ def main():
     config.ensure_dirs()
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-driver-bug-workarounds")
     app = QApplication(sys.argv)
-    app.setApplicationName("Kronikář")
+    app.setApplicationName("Kronikář")          # internal id (Qt storage paths) – product name is Kosmas
+    app.setApplicationDisplayName("Kosmas")
     app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyle("Fusion")
     import locale

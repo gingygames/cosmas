@@ -14,6 +14,8 @@ import urllib.request
 import zipfile
 from datetime import datetime
 
+from .i18n import tr
+
 API = "https://discord.com/api/v10"
 UA = "RPKatalog (local catalog app, 1.0)"
 
@@ -38,13 +40,14 @@ def _get(token, path, params=None):
                     wait = 1.0
                 time.sleep(min(wait, 10) + 0.2)
                 continue
-            hints = {401: "Neplatný token bota.", 403: "Bot nemá oprávnění (pozvi ho na server, zapni 'Server Members Intent' "
-                                                       "a pro dopisy 'Message Content Intent' v Discord Developer Portalu).",
-                     404: "Server nebo kanál nenalezen – zkontroluj ID."}
-            raise DiscordError(hints.get(e.code, f"Discord vrátil chybu {e.code}: {body[:200]}"))
+            hints = {401: tr("Invalid bot token."),
+                     403: tr("The bot lacks permissions (invite it to the server, enable 'Server Members Intent' "
+                             "and, for letters, 'Message Content Intent' in the Discord Developer Portal)."),
+                     404: tr("Server or channel not found – check the ID.")}
+            raise DiscordError(hints.get(e.code) or tr("Discord returned error {code}: {body}", code=e.code, body=body[:200]))
         except urllib.error.URLError as e:
-            raise DiscordError(f"Nepovedlo se připojit k Discordu: {e.reason}")
-    raise DiscordError("Discord odmítá příliš mnoho požadavků, zkus to za chvíli.")
+            raise DiscordError(tr("Could not connect to Discord: {reason}", reason=e.reason))
+    raise DiscordError(tr("Discord is refusing too many requests, try again in a moment."))
 
 
 def avatar_url(member):
@@ -65,7 +68,7 @@ def user(token, user_id):
     """Public profile of any user by ID - the bot does not need to share a server with them."""
     uid = str(user_id).strip()
     if not uid.isdigit() or not 15 <= len(uid) <= 21:
-        raise DiscordError("Discord ID je číslo o 17–20 číslicích (pravý klik na uživatele → Kopírovat ID uživatele).")
+        raise DiscordError(tr("A Discord ID is a number with 17–20 digits (right-click the user → Copy User ID)."))
     u = _get(token, f"/users/{uid}")
     return {"id": u.get("id"), "username": u.get("username", ""), "global_name": u.get("global_name") or "",
             "nick": "", "display": u.get("global_name") or u.get("username", ""),
@@ -145,7 +148,7 @@ def export_letters(path, marker):
         for n in z.namelist():
             files[n] = lambda n=n: z.read(n)
     else:
-        raise DiscordError("Vyber soubor package.zip z Discordu nebo jeho rozbalenou složku.")
+        raise DiscordError(tr("Choose the package.zip file from Discord or its unpacked folder."))
 
     def find(suffix):
         return [k for k in files if k.lower().endswith(suffix.lower())]
@@ -177,5 +180,5 @@ def export_letters(path, marker):
             out.append({"source_ref": f"dx:{mid}", "sent_at": _iso(r.get("Timestamp") or r.get("timestamp") or ""),
                         "body": text, "author": "já", "channel": chan or "", "source": "discord-export"})
     if not out and not index:
-        raise DiscordError("V souboru jsem nenašel složku messages/ – je to opravdu export dat z Discordu?")
+        raise DiscordError(tr("I couldn't find a messages/ folder in the file – is it really a Discord data export?"))
     return out

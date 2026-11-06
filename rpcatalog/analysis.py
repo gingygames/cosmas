@@ -27,6 +27,7 @@ import urllib.request
 from pathlib import Path
 
 from . import ai_providers as ai
+from .i18n import tr, trn
 from . import config
 
 CHUNK_S = 900                 # audio is transcribed in 15 min pieces: low memory, resumable
@@ -135,7 +136,7 @@ class Worker:
             skip.unlink(missing_ok=True)
             raise Skipped()
         if (self.flags / "pause.flag").exists():
-            self.say("paused", p, "Pozastaveno")
+            self.say("paused", p, tr("Paused"))
             while (self.flags / "pause.flag").exists():
                 time.sleep(1)
                 if skip.exists():
@@ -160,7 +161,7 @@ class Worker:
             dst = out / f"speech_{sp['speaker']}_{k:03d}.json"
             if dst.exists():
                 continue
-            self.checkpoint("speech", i / len(todo), f"Řeč · {sp['speaker']} · {clock(k * CHUNK_S)}")
+            self.checkpoint("speech", i / len(todo), tr("Speech · {speaker} · {time}", speaker=sp["speaker"], time=clock(k * CHUNK_S)))
             audio = self._audio(sp["input"], sp["stream"], k * CHUNK_S, CHUNK_S)
             rows = []
             if audio.size > 16000 and float(abs(audio).max()) > 0.003:      # silent track: nothing to do
@@ -179,13 +180,13 @@ class Worker:
             tmp = dst.with_suffix(".part")
             tmp.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
             tmp.replace(dst)
-            self.say("speech", (i + 1) / len(todo), f"Řeč · {sp['speaker']} · {clock((k + 1) * CHUNK_S)}",
+            self.say("speech", (i + 1) / len(todo), tr("Speech · {speaker} · {time}", speaker=sp["speaker"], time=clock((k + 1) * CHUNK_S)),
                      partial=bool(rows), audio_s=min(CHUNK_S, job["duration"] - k * CHUNK_S))
 
     def _speech_local(self, audio, p):
         cfg = self.cfg
         if self.whisper is None:
-            self.say("speech", p, "Načítám model řeči…")
+            self.say("speech", p, tr("Loading the speech model…"))
             from faster_whisper import BatchedInferencePipeline, WhisperModel
             device, compute = whisper_device(cfg)
             self.whisper = BatchedInferencePipeline(WhisperModel(
@@ -298,7 +299,7 @@ class Worker:
         cap_path = out / "captions.jsonl"
         with cap_path.open("a", encoding="utf-8") as f:
             for i, (t, kind) in enumerate(plan):
-                self.checkpoint("vision", i / max(1, len(plan)), f"Obraz · {clock(t)} · {len(plan) - i} snímků zbývá")
+                self.checkpoint("vision", i / max(1, len(plan)), trn(len(plan) - i, "Picture · {time} · {n} frame left", "Picture · {time} · {n} frames left", time=clock(t)))
                 path = self._frame(t, int(cfg["vision_width"]))
                 if not path:
                     continue
@@ -321,7 +322,7 @@ class Worker:
                 except (OSError, ValueError, KeyError, ai.AIError) as e:      # one bad frame must not stop the video
                     if getattr(e, "fatal", False):
                         raise
-                    self.say("vision", i / max(1, len(plan)), f"Obraz · {clock(t)} · přeskočeno ({type(e).__name__})")
+                    self.say("vision", i / max(1, len(plan)), tr("Picture · {time} · skipped ({error})", time=clock(t), error=type(e).__name__))
                     f.write(json.dumps({"t": t, "kind": kind, "skip": True, "error": str(e)[:200]}) + "\n")
                     path.unlink(missing_ok=True)
                     continue
@@ -335,7 +336,7 @@ class Worker:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 f.flush()
                 last_img, last_t = small.astype(int), t
-                self.say("vision", (i + 1) / len(plan), f"Obraz · {clock(t)}", partial=True)
+                self.say("vision", (i + 1) / len(plan), tr("Picture · {time}", time=clock(t)), partial=True)
 
     def _persons(self, img, t, raw):
         """Crop every person the model marked, fingerprint clothing/hair (and the face if visible)."""
@@ -416,7 +417,7 @@ class Worker:
             return {"caption": d.get("popis", "").strip(), "names": names, "people": d.get("postav"),
                     "place": d.get("misto", ""), "persons": persons}
         except (AttributeError, TypeError):
-            raise ValueError("odpověď modelu nemá očekávaný tvar") from None
+            raise ValueError(tr("the model's answer does not have the expected shape")) from None
 
     # ---- chronicle: chapters, events, mentions and proposals with a running memory
     def blocks(self, rows):
@@ -472,7 +473,7 @@ class Worker:
             if a in done:
                 result.append(done[a])
                 continue
-            self.checkpoint("chapters", i / max(1, len(blocks)), f"Kronika · blok {i + 1}/{len(blocks)} · {clock(a)}")
+            self.checkpoint("chapters", i / max(1, len(blocks)), tr("Chronicle · block {i}/{total} · {time}", i=i + 1, total=len(blocks), time=clock(a)))
             text = "\n".join(lines)
             if len(text) > 22000:          # keep the start and the end of very long blocks
                 text = text[:14000] + "\n— — (zkráceno) — —\n" + text[-8000:]
@@ -528,11 +529,11 @@ class Worker:
             result.append(blk)
             _write_json(out / "chronicle.json", {"blocks": result, "memory": memory, "found": found})
             _write_json(out / "chapters.json", [{k: b[k] for k in ("t", "t_end", "title", "summary")} for b in result])
-            self.say("chapters", (i + 1) / len(blocks), f"Kronika · {clock(z)}", partial=True)
+            self.say("chapters", (i + 1) / len(blocks), tr("Chronicle · {time}", time=clock(z)), partial=True)
         _write_json(out / "chronicle.json", {"blocks": result, "memory": memory, "found": found})
         _write_json(out / "chapters.json", [{k: b[k] for k in ("t", "t_end", "title", "summary")} for b in result])
         if result:
-            self.checkpoint("chapters", 1, "Shrnutí celého záznamu")
+            self.checkpoint("chapters", 1, tr("Summary of the whole recording"))
             d = _ask_text(cfg,
                           "Toto jsou kapitoly jednoho večera hraní RP (jen herní děj). Napiš česky shrnutí celého večera "
                           "(4–8 vět, jako zápis do kroniky) a seznam nejdůležitějších momentů.\n"
@@ -548,13 +549,13 @@ class Worker:
         rows, _ = load_results(job["id"])
         chapters = _read_json(out / "chapters.json", [])
         summary = _read_json(out / "summary.json")
-        lines = [f"# {job.get('title') or Path(job['path']).name}", f"Délka {clock(job['duration'])}", ""]
+        lines = [f"# {job.get('title') or Path(job['path']).name}", tr("Length {time}", time=clock(job["duration"])), ""]
         if summary and summary.get("text"):
-            lines += ["## Shrnutí", summary["text"], ""]
+            lines += ["## " + tr("Summary"), summary["text"], ""]
         ci, cur, last_end = 0, None, None
         for r in rows:
             if last_end is not None and r["t"] - last_end >= 60:
-                lines += ["", f"_— pauza {round((r['t'] - last_end) / 60)} min —_"]
+                lines += ["", "_" + tr("— pause {n} min —", n=round((r["t"] - last_end) / 60)) + "_"]
             last_end = max(last_end or 0, r.get("t_end") or r["t"])
             while ci < len(chapters) and chapters[ci]["t"] <= r["t"]:
                 lines += ["", f"# {clock(chapters[ci]['t'])} {chapters[ci]['title']}", f"_{chapters[ci]['summary']}_"]
@@ -593,9 +594,9 @@ class Worker:
                 "vision": bool(prev.get("vision") or frames), "chapters": (out / "chapters.json").exists(),
                 "whisper": self.cfg["whisper"], "vision_model": self.cfg["vision_model"], "finished_at": time.time()}),
                 encoding="utf-8")
-            self.say("done", 1, f"Hotovo za {clock(time.time() - started)}")
+            self.say("done", 1, tr("Done in {time}", time=clock(time.time() - started)))
         except Skipped:
-            self.say("skipped", None, "Přeskočeno – příště naváže, kde skončilo")
+            self.say("skipped", None, tr("Skipped – will continue where it left off next time"))
         except Exception as e:   # one bad video must not stop the queue
             self.say("error", None, str(e) if isinstance(e, (ai.AIError, RuntimeError)) else f"{type(e).__name__}: {e}")
 
@@ -636,9 +637,9 @@ def _need_ollama_model(model):
     try:
         models = [m["name"] for m in _ollama("/api/tags", timeout=5).get("models", [])]
     except OSError:
-        raise RuntimeError("Ollama neběží – spusť aplikaci Ollama, nebo v nastavení AI vyber placenou službu") from None
+        raise RuntimeError(tr("Ollama is not running – start the Ollama app, or choose a paid service in the AI settings")) from None
     if model not in models and model + ":latest" not in models:
-        raise RuntimeError(f"V Ollamě chybí model {model} – stáhni ho v Přepisy → Nastavení → AI")
+        raise RuntimeError(tr("Model {model} is missing in Ollama – download it under Transcripts → Settings → AI", model=model))
 
 
 def _ask_text(cfg, prompt, props, ctx=16384, max_tokens=12000, fallback=None):

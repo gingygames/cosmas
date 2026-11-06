@@ -467,7 +467,7 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(c["portrait_id"], bad_att)
         self.assertIn(f'data-att="{bad_att}"', c["body_html"])
         self.assertIn("Hans z webu", c["body_html"])
-        self.assertTrue(any("stáhnout" in w for w in res["warnings"]), res)
+        self.assertTrue(any("stáhnout" in w or "could not be downloaded" in w for w in res["warnings"]), res)  # cs or en UI
 
     def test_whitelist_and_account_key(self):
         self.seed()

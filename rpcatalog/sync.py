@@ -31,6 +31,9 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from . import i18n
+from .i18n import tr, trn
+
 DEFAULT_URL = "https://gingygames.com"
 TOKEN_URL = "https://gingygames.com/kronika/app/#settings"
 
@@ -168,9 +171,9 @@ def check_url(url):
     u = urllib.parse.urlsplit(url)
     host = (u.hostname or "").lower()
     if u.scheme not in ("http", "https") or not host:
-        raise SyncError("Adresa serveru musí začínat https://")
+        raise SyncError(tr("The server address must start with https://"))
     if u.scheme != "https" and host not in LOCAL_HOSTS and not host.endswith(".localhost"):
-        raise SyncError("Adresa serveru musí být https:// (http jde jen pro lokální vývoj).")
+        raise SyncError(tr("The server address must be https:// (http only works for local development)."))
     return url
 
 
@@ -229,7 +232,7 @@ class Client:
         if query:
             url += "?" + urllib.parse.urlencode({k: v for k, v in query.items() if v is not None})
         headers = {"Authorization": f"Bearer {self.token}", "User-Agent": "Kronikar-desktop/1.0",
-                   "Accept": "application/json"}
+                   "Accept": "application/json", "Accept-Language": i18n.lang()}   # server errors in the UI language
         if body is not None:
             data = json.dumps(body, ensure_ascii=False, default=str).encode("utf-8")
             ctype = "application/json"
@@ -246,31 +249,31 @@ class Client:
             except Exception:
                 pass
             if e.code == 401:
-                raise SyncError(msg or "Neplatný API token – vytvoř nový na webu (Nastavení → Synchronizace).")
+                raise SyncError(msg or tr("Invalid API token – create a new one on the web (Settings → Sync)."))
             if e.code == 404 and not msg:
-                msg = "Adresa neexistuje – zkontroluj adresu serveru."
-            err = SyncError(f"Server odmítl požadavek ({e.code}): {msg or e.reason}")
+                msg = tr("The address doesn't exist – check the server address.")
+            err = SyncError(tr("The server rejected the request ({code}): {reason}", code=e.code, reason=msg or e.reason))
             err.status = e.code
             raise err
         except urllib.error.URLError as e:
-            raise NetworkError(f"Server {self.base} není dostupný: {e.reason}")
+            raise NetworkError(tr("Server {url} is unreachable: {reason}", url=self.base, reason=e.reason))
         except (TimeoutError, OSError) as e:
-            raise NetworkError(f"Spojení se serverem selhalo: {e}")
+            raise NetworkError(tr("Connection to the server failed: {error}", error=e))
         try:
             return json.loads(raw.decode("utf-8")) if raw else {}
         except ValueError:
-            raise SyncError("Server vrátil nečitelnou odpověď – je adresa serveru správně?")
+            raise SyncError(tr("The server returned an unreadable response – is the server address correct?"))
 
     def get_bytes(self, path):
         url = self.base.rsplit("/api", 1)[0] + path
-        req = urllib.request.Request(url, headers={"User-Agent": "Kronikar-desktop/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Kronikar-desktop/1.0", "Accept-Language": i18n.lang()})
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 return r.read(), (r.headers.get("Content-Type") or "").split(";")[0]
         except urllib.error.HTTPError as e:
-            raise SyncError(f"Obrázek {path} se nepodařilo stáhnout ({e.code}).")
+            raise SyncError(tr("Image {path} could not be downloaded ({code}).", path=path, code=e.code))
         except (urllib.error.URLError, OSError) as e:
-            raise NetworkError(f"Obrázek {path} se nepodařilo stáhnout: {e}")
+            raise NetworkError(tr("Image {path} could not be downloaded: {error}", path=path, error=e))
 
 
 # ---------------------------------------------------------------- obrázky
@@ -281,7 +284,7 @@ def prepare_image(path, mime=None):
     try:
         raw = p.read_bytes()
     except OSError as e:
-        raise SyncError(f"Obrázek {p.name} nejde přečíst: {e}")
+        raise SyncError(tr("Image {name} can't be read: {error}", name=p.name, error=e))
     try:
         from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
         from PySide6.QtGui import QImage
@@ -303,7 +306,8 @@ def prepare_image(path, mime=None):
                     return bytes(ba.data()), mt, img.width(), img.height()
     if mime in UPLOAD_MIME and len(raw) <= 8 * 1024 * 1024:
         return raw, mime, None, None
-    raise SyncError(f"Obrázek {p.name} se nepodařilo připravit k nahrání (nepodporovaný formát nebo větší než 8 MB).")
+    raise SyncError(tr("Image {name} could not be prepared for upload (unsupported format or larger than 8 MB).",
+                       name=p.name))
 
 
 # ---------------------------------------------------------------- synchronizace
@@ -334,7 +338,7 @@ class Syncer:
 
     def check_cancel(self):
         if self.cancel.is_set():
-            raise SyncError("Synchronizace přerušena.")
+            raise SyncError(tr("Sync cancelled."))
 
     @contextmanager
     def tx(self):
@@ -432,7 +436,7 @@ class Syncer:
         me = self.client.request("GET", "/me")
         user = me.get("user")
         if not user:
-            raise SyncError("Server token nepřijal – vytvoř nový na webu (Nastavení → Synchronizace).")
+            raise SyncError(tr("The server didn't accept the token – create a new one on the web (Settings → Sync)."))
         prev = self.state("account")
         uid = str(user["id"])
         if prev is not None and str(prev).rsplit("|", 1)[-1] != uid:
@@ -453,14 +457,18 @@ class Syncer:
         me_uuid = self.db_uuid()
         web_settings = self.client.request("GET", "/settings") or {}
         dbs = web_settings.get("desktop_dbs") or []
+        lang = i18n.lang()          # the web sends notifications / bot DMs in the user's language
         if any(d.get("uuid") == me_uuid for d in dbs if isinstance(d, dict)):
+            if web_settings.get("lang") != lang:
+                self.client.request("PUT", "/settings", dict(web_settings, lang=lang))
             return
         n_pub = self.db.execute("SELECT COUNT(*) FROM published").fetchone()[0]
         if n_pub == 0 and pairing not in ("match", "copy"):
             full = self.client.request("GET", "/sync", query={"since": 0})
             if any(r.get("src") and not r.get("deleted") for r in full.get("records") or []):
-                raise PairingNeeded("Tato databáze se s webem ještě nesynchronizovala, ale na webu už jsou záznamy "
-                                    "z desktopu (jiná nebo obnovená databáze, nebo import na webu). Vyber, co s tím.")
+                raise PairingNeeded(tr("This database hasn't been synced with the web yet, but the web already has records "
+                                       "from a desktop app (a different or restored database, or an import on the web). "
+                                       "Choose what to do."))
         if pairing == "copy":
             self._clear_mapping()
             self.off = (secrets.randbelow(8_999) + 1) * 1_000_000_000     # src této kopie se nepotkají s ostatními
@@ -468,7 +476,7 @@ class Syncer:
         dbs = [d for d in dbs if isinstance(d, dict)] + [{
             "uuid": me_uuid, "name": f"{socket.gethostname()} – {self.db_path.name}", "first_sync": time.time(),
             "mode": pairing or "new"}]
-        self.client.request("PUT", "/settings", dict(web_settings, desktop_dbs=dbs[-50:]))
+        self.client.request("PUT", "/settings", dict(web_settings, desktop_dbs=dbs[-50:], lang=lang))
 
     # ---------- lokální data → řádky pro web
     def _body_out(self, html, keys):
@@ -520,7 +528,7 @@ class Syncer:
                 continue                      # video mimo složky se záznamy a bez YouTube se neposílá
             kind = m.effective_kind if m.effective_kind in ("clip", "session") else "clip"
             rows["media"][r["id"]] = {
-                "id": r["id"], "youtube": r["youtube"] or None, "local": local, "title": m.display_title,
+                "id": r["id"], "youtube": r["youtube"] or None, "local": local, "title": m.sync_title,
                 "description": r["description"] or "", "game": r["game"] or "", "start_time": r["start_time"],
                 "duration": r["duration"], "favorite": 1 if r["favorite"] else 0, "server_id": r["server_id"],
                 "kind": kind, "tags": mtags.get(r["id"], []), "created_at": r["added_at"]}
@@ -810,7 +818,8 @@ class Syncer:
                     except NetworkError:
                         raise
                     except SyncError as e:
-                        self.warn(f"Záznam {op.get('src') or op.get('id')} se na webu nepodařilo označit: {e}")
+                        self.warn(tr("Record {id} could not be marked on the web: {error}",
+                                       id=op.get('src') or op.get('id'), error=e))
 
     def _adopt(self, table, lid, r, local_rows):
         """Záznam se src, ke kterému tu chybí mapa (import catalog.db na webu, „Spárovat podle id“).
@@ -844,7 +853,7 @@ class Syncer:
             raise
         except (SyncError, OSError) as e:
             self.files[key] = None
-            self.warn(f"Obrázek „{r.get('title') or key}“ z webu se nepodařilo stáhnout: {e}")
+            self.warn(tr("Image “{title}” could not be downloaded from the web: {error}", title=r.get('title') or key, error=e))
 
     def create_local(self, table, r):
         d = r.get("data") or {}
@@ -853,9 +862,9 @@ class Syncer:
         if table == "servers":
             f = {"game": d.get("game") or "", "name": d.get("name") or "Server"}
         elif table in ("players", "factions", "characters", "places"):
-            f = {"name": d.get("name") or r.get("title") or "Bez jména"}
+            f = {"name": d.get("name") or r.get("title") or tr("Unnamed")}
         elif table == "events":
-            f = {"title": d.get("title") or r.get("title") or "Událost"}
+            f = {"title": d.get("title") or r.get("title") or tr("Event")}
         elif table == "entries":
             ev = self.local_id("events", d.get("event_id"))
             if ev is None:
@@ -869,8 +878,8 @@ class Syncer:
                 if mid is None:
                     return None
                 if self.pub("media", mid):
-                    self.warn(f"Video „{r.get('title') or d['local'].get('name')}“ je na webu dvakrát – "
-                              "nadbytečný záznam na webu smaž, tady jsem ho nepřevzal.")
+                    self.warn(tr("Video “{title}” is on the web twice – delete the extra record on the web; "
+                                 "it wasn't taken over here.", title=r.get('title') or d['local'].get('name')))
                     return None
                 return mid
             if not yt:
@@ -880,8 +889,8 @@ class Syncer:
             if ex:
                 if self.pub("media", ex[0]):
                     # stejné video už je na webu jako jiný záznam – nic nepřepisovat
-                    self.warn(f"Video „{r.get('title') or yt}“ je na webu dvakrát (YouTube {yt}) – "
-                              "nadbytečný záznam na webu smaž, tady jsem ho nepřevzal.")
+                    self.warn(tr("Video “{title}” is on the web twice (YouTube {youtube}) – delete the extra record on the web; "
+                                 "it wasn't taken over here.", title=r.get('title') or yt, youtube=yt))
                     return None
                 return ex[0]
             f = {"path": path, "kind": "manual", "youtube": yt, "game": d.get("game") or "",
@@ -1234,7 +1243,7 @@ class Syncer:
             if p.get("remote_key") and p.get("file_sig") == sig:
                 continue
             name0 = a.get("orig_name") or Path(path).name
-            self.progress(f"Nahrávám obrázek {name0}…")
+            self.progress(tr("Uploading image {name}…", name=name0))
             try:
                 data, mime, w, h = prepare_image(path, a.get("mime"))
                 name = Path(name0).stem + {"image/webp": ".webp", "image/jpeg": ".jpg"}.get(mime, Path(path).suffix)
@@ -1244,11 +1253,11 @@ class Syncer:
                 rec = res.get("record") or {}
                 key = (rec.get("data") or {}).get("key")
                 if not key:
-                    raise SyncError("server po nahrání nevrátil klíč obrázku")
+                    raise SyncError(tr("the server didn't return an image key after the upload"))
             except NetworkError:
                 raise
             except SyncError as e:
-                self.warn(f"Obrázek „{name0}“ se nepodařilo nahrát: {e}")
+                self.warn(tr("Image “{name}” could not be uploaded: {error}", name=name0, error=e))
                 continue
             self.set_pub("attachments", aid, remote_id=rec.get("id"), rev=rec.get("rev"),
                          visibility=rec.get("visibility"), file_sig=sig, remote_key=key, img_w=w, img_h=h)
@@ -1312,7 +1321,7 @@ class Syncer:
                 if self.pub(table, lid):
                     self.db.execute("UPDATE published SET pending_hash=? WHERE local_type=? AND local_id=?", (h, table, lid))
         self.check_cancel()
-        self.progress(f"Odesílám {sum(len(v) for v in tables.values())} řádků…")
+        self.progress(trn(sum(len(v) for v in tables.values()), "Sending {n} row…", "Sending {n} rows…"))
         res = self.client.request("POST", "/import", {"tables": tables, "deleted": deleted, "base": base, "force": force})
         rmap = res.get("map") or {}
         conflicted = set()
@@ -1349,13 +1358,13 @@ class Syncer:
     def run(self, pairing=None):
         """pairing: None | 'match' (spárovat podle id) | 'copy' (nahrát jako novou kopii)."""
         if not self.client.token:
-            raise SyncError("Chybí osobní API token – vytvoř ho na webu v Nastavení a vlož ho sem.")
-        self.progress("Ověřuji účet…")
+            raise SyncError(tr("Personal API token is missing – create it on the web in Settings and paste it here."))
+        self.progress(tr("Verifying account…"))
         user = self.check_account()
         self.check_database(pairing)
         since = self.state("last_sync", 0) or 0
         self.check_cancel()
-        self.progress("Stahuji změny z webu…")
+        self.progress(tr("Downloading changes from the web…"))
         first = self.client.request("GET", "/sync", query={"since": since})
         n0 = first.get("now") or time.time()
         self.apply_remote(first.get("records") or [], first.get("links") or [])
@@ -1371,7 +1380,7 @@ class Syncer:
         self.check_cancel()
         echo = self.push(rows, links, base=n0)
         echo |= set(uploaded)
-        self.progress("Kontroluji výsledek…")
+        self.progress(tr("Checking the result…"))
         second = self.client.request("GET", "/sync", query={"since": n0})
         self.apply_remote(second.get("records") or [], second.get("links") or [], echo=frozenset(echo))
         self.set_state("last_sync", second.get("now") or n0)
