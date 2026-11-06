@@ -48,7 +48,7 @@ function parseClock(v) {
   return parts.reduce((acc, x) => acc * 60 + x, 0);
 }
 
-function bmTitle(b) { return b.title || (b.t_end ? tr('Untitled segment') : tr('Untitled bookmark')); }
+function bmTitle(b) { return b.title || (b.t_end ? tr('Untitled segment') : tr('Untitled moment')); }
 function bmColor(b) { return b.color || b.event_color || (b.source === 'auto' ? 'var(--text-3)' : 'var(--accent)'); }
 
 function playBm(b, popout = false) {
@@ -86,7 +86,7 @@ async function bmEditor(bm) {
         e ? h('span.chip.on', { onclick: () => App.go('events', { id: e.id }) }, h('span.dot', { style: { background: e.color } }), e.title) : h('span.faint.small', tr('Not assigned')),
         h('button.btn.sm', {
           onclick: async () => {
-            const r = await pickEvent({ title: tr('Assign bookmark to an event'), moment: b.abs || (b.media && b.media.start ? b.media.start + st.t : null), withNote: false });
+            const r = await pickEvent({ title: tr('Assign the moment to an event'), moment: b.abs || (b.media && b.media.start ? b.media.start + st.t : null), withNote: false });
             if (r) { st.event_id = r.id; renderEv(); }
           },
         }, icon('link'), e ? tr('Change') : tr('Choose event')),
@@ -112,14 +112,14 @@ async function bmEditor(bm) {
     };
     const m = b.media;
     modal({
-      title: b.t_end ? tr('Video segment') : tr('Bookmark'), icon: 'bookmark', wide: true,
+      title: b.t_end ? tr('Video segment') : tr('Moment'), icon: 'bookmark', wide: true,
       body: h('.bm-ed.col', { style: { gap: '14px' } },
         m ? h('.row.small.muted', icon('film'), h('span.ellipsis', `${m.name} · ${m.game}`), b.abs ? h('span.faint', '· ' + fmt.dt(b.abs)) : null,
           h('span.bm-src', '· ' + (SRC[b.source] || b.source))) : null,
         title,
         h('.kv2',
           h('.k', tr('Start time')), h('.row', tIn, nowBtn(tIn)),
-          h('.k', tr('End time')), h('.row', eIn, nowBtn(eIn), h('span.faint.small', tr('fill it in and the bookmark becomes a virtual clip'))),
+          h('.k', tr('End time')), h('.row', eIn, nowBtn(eIn), h('span.faint.small', tr('fill it in and the moment becomes a virtual clip'))),
           h('.k', tr('Event')), evBox,
           h('.k', tr('Characters')), charBox,
           h('.k', tr('Color')), swBox),
@@ -130,7 +130,7 @@ async function bmEditor(bm) {
       onClose: () => { if (changed) bmChanged(); resolve(changed); },
       actions: [
         { label: tr('Delete'), danger: true, icon: 'trash-2', onClick: async () => {
-          if (!await confirmDialog(tr('Delete bookmark?'), b.source === 'manual' ? tr('The bookmark will be deleted.') : tr('The Medal bookmark will be hidden and will not reappear on the next scan.'), { danger: true, okLabel: tr('Delete') })) return false;
+          if (!await confirmDialog(tr('Delete the moment?'), b.source === 'manual' ? tr('The moment will be deleted.') : tr('The moment from Medal will be hidden and will not reappear on the next scan.'), { danger: true, okLabel: tr('Delete') })) return false;
           await API.call('bm.delete', { id: b.id }); changed = true;
         } },
         { label: tr('Cancel') },
@@ -157,7 +157,7 @@ function bmRow(b, { showMedia = false, onChange, hideEvent = false } = {}) {
     h('.acts',
       !ev ? h('button.btn.sm.ghost.icon', { title: tr('Assign to event'), onclick: async e => {
         e.stopPropagation();
-        const r = await pickEvent({ title: tr('Assign bookmark to an event'), moment: b.abs, withNote: false });
+        const r = await pickEvent({ title: tr('Assign the moment to an event'), moment: b.abs, withNote: false });
         if (r) { await API.call('bm.update', { id: b.id, event_id: r.id }); toast(tr('Assigned to event')); await bmChanged(); onChange && onChange(); }
       } }, icon('link')) : null,
       window.shareButton ? shareButton('bookmark', b.id, { compact: true }) : null,
@@ -215,7 +215,7 @@ async function render() {
   clear(body);
   const tb = $('.toolbar', root);
   clear(tb).append(
-    h('input.input', { placeholder: tr('Search bookmarks…'), value: F.q, style: { width: '240px' }, oninput: debounce(e => { F.q = e.target.value; render(); }, 250) }),
+    h('input.input', { placeholder: tr('Search moments…'), value: F.q, style: { width: '240px' }, oninput: debounce(e => { F.q = e.target.value; render(); }, 250) }),
     h('.seg', [['all', tr('All')], ['free', tr('Unassigned') + (free ? ' (' + free + ')' : '')], ['linked', tr('In events')]].map(([k, l]) =>
       h('button' + (F.state === k ? '.on' : ''), { onclick: () => { F.state = k; render(); } }, l))),
     h('select.input', { style: { width: 'auto' }, onchange: e => { F.game = e.target.value; render(); } },
@@ -224,8 +224,8 @@ async function render() {
       h('input', { type: 'checkbox', checked: F.auto, onchange: e => { F.auto = e.target.checked; render(); } }), tr('include automatic game moments')));
 
   if (!ordered.length) {
-    body.appendChild(emptyState('bookmark', tr('No bookmarks yet'),
-      tr('While playing, press B (bookmark) or Shift+B at the start and end of a segment. Bookmarks you make in Medal with the hotkey are loaded automatically.')));
+    body.appendChild(emptyState('bookmark', tr('No moments yet'),
+      tr('While playing, press B (moment) or Shift+B at the start and end of a segment. Moments you mark in Medal with the hotkey are loaded automatically.')));
     return;
   }
   for (const bms of ordered) {
@@ -236,7 +236,7 @@ async function render() {
         h('.bm-th', { 'data-rmid': m.id }, m.thumb ? h('img', { src: m.thumb, loading: 'lazy' }) : h('.noimg', icon('film')), resumeBar(full || m)),
         h('.grow', { style: { minWidth: 0 } },
           h('.ellipsis', { style: { fontWeight: 600 } }, m.name),
-          h('.small.muted', `${m.game} · ${fmt.dt(m.start)} · ${fmt.dur(m.duration)} · ${trn(bms.length, '{n} bookmark', '{n} bookmarks')}`)),
+          h('.small.muted', `${m.game} · ${fmt.dt(m.start)} · ${fmt.dur(m.duration)} · ${trn(bms.length, '{n} moment', '{n} moments')}`)),
         h('button.btn.sm', { onclick: () => addBookmarkHere(m.id).then(render) }, icon('bookmark-plus'), tr('Add')),
         h('button.btn.sm.ghost.icon', { title: tr('Show in library'), onclick: () => App.go('library', { select: [m.id] }) }, icon('clapperboard'))),
       bmStrip(full || m, bms, { onChange: render }),
@@ -245,13 +245,13 @@ async function render() {
 }
 
 Views.register('moments', {
-  title: tr('Moments and bookmarks'), short: tr('Moments'), icon: 'bookmark', order: 15,
+  title: tr('Moments'), short: tr('Moments'), icon: 'bookmark', order: 15,
   mount(el, params = {}) {
     root = el;
     F.game = params.game || '';
     el.append(h('.moments.page', { style: { padding: '16px 24px', overflow: 'auto', height: '100%' } },
       h('.toolbar', { style: { padding: 0 } }), h('.mom-body')));
-    Shell.header({ icon: 'bookmark', title: tr('moments'), topic: tr('B = bookmark · Shift+B = segment start and end · double-click = edit') });
+    Shell.header({ icon: 'bookmark', title: tr('moments'), topic: tr('B = moment · Shift+B = segment start and end · double-click = edit') });
     unsub = [App.on('bookmarks', render), App.on('events', render)];
     render();
   },

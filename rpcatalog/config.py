@@ -23,20 +23,72 @@ _MIGRATE_SKIP = {"tmp", "pylibs", "catalog.db", "catalog.db-wal", "catalog.db-sh
 _MIGRATE_SKIP_FILES = {"pause.flag", "skip.flag", "queue.json", "queue.tmp", "worker.json"}
 
 
-def prepare_data_dir():
-    """Called once at app start. A source checkout remembers where its data is; an installed copy that has
-    no catalog yet takes that data over once (database, settings, thumbnails, transcripts, models)."""
+def should_write_pointer():
+    """The pointer tells an installed copy where a source checkout keeps its catalogue. Only a real checkout writes it:
+    its own data/ folder (not KRONIKAR_DATA), with a catalogue in it, and only when the pointer is missing or points
+    to a folder without a catalogue – a test or temporary checkout never takes over a valid pointer."""
+    if os.environ.get("KRONIKAR_DATA") or DATA_DIR != _DEV_DATA or not DB_PATH.exists():
+        return False
     try:
-        if DATA_DIR == _DEV_DATA:
+        cur = Path(DEV_POINTER.read_text("utf-8").strip()) if DEV_POINTER.exists() else None
+    except OSError:
+        cur = None
+    return cur is None or not (cur / "catalog.db").exists()
+
+
+def prepare_data_dir():
+    """Called once at app start (before the window). A source checkout remembers where its data is."""
+    try:
+        if should_write_pointer():
             USER_DIR.mkdir(parents=True, exist_ok=True)
             DEV_POINTER.write_text(str(DATA_DIR), "utf-8")
-        elif DATA_DIR == USER_DIR and not DB_PATH.exists() and DEV_POINTER.exists():
-            src = Path(DEV_POINTER.read_text("utf-8").strip())
-            if (src / "catalog.db").exists() and src != DATA_DIR:
-                _import_data(src)
-    except Exception:          # never block the start; worst case the catalog starts empty
+    except Exception:          # never block the start
         import traceback
         traceback.print_exc()
+
+
+IMPORT_DECLINED = USER_DIR / "import_declined.txt"
+
+
+def import_candidates():
+    """Existing catalogues an installed copy without a catalogue can take over: the folder a source checkout
+    remembered (last_dev_data.txt) and the usual places of a portable / source copy. Never this data folder."""
+    if DATA_DIR != USER_DIR or os.environ.get("KRONIKAR_DATA") or DB_PATH.exists() or IMPORT_DECLINED.exists():
+        return []
+    cands = []
+    try:
+        if DEV_POINTER.exists():
+            cands.append(Path(DEV_POINTER.read_text("utf-8").strip()))
+    except OSError:
+        pass
+    docs = Path.home() / "Documents"
+    cands += [docs / n / "data" for n in ("RPcatalog", "kronikar", "Kronikar", "kosmas", "Kosmas")]
+    out = []
+    for c in cands:
+        try:
+            ok = c != DATA_DIR and (c / "catalog.db").is_file()
+        except OSError:
+            ok = False
+        if ok and all(os.path.normcase(str(c)) != os.path.normcase(str(o)) for o in out):
+            out.append(c)
+    return out
+
+
+def import_data(src):
+    """Copy the catalogue in `src` into DATA_DIR. The source is only read (never moved or changed); whatever
+    DATA_DIR already holds is first moved aside into backup-before-import-<time>/."""
+    src = Path(src)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    keep = {DEV_POINTER.name, IMPORT_DECLINED.name}
+    existing = [p for p in DATA_DIR.iterdir() if p.name not in keep and not p.name.startswith("backup-before-import-")
+                and not (p.is_dir() and not any(p.iterdir()))]
+    if existing:
+        import time
+        bk = DATA_DIR / time.strftime("backup-before-import-%Y%m%d-%H%M%S")
+        bk.mkdir()
+        for p in existing:
+            shutil.move(str(p), str(bk / p.name))
+    _import_data(src)
 
 
 def _import_data(src):
@@ -51,9 +103,22 @@ def _import_data(src):
         else:
             shutil.copy2(item, DATA_DIR / item.name)
     tmp = DATA_DIR / "catalog.db.tmp"
-    a, db = sqlite3.connect(src / "catalog.db"), sqlite3.connect(tmp)
-    a.backup(db)                          # consistent copy even while the other copy has the database open
-    a.close()
+    # The source is never opened by SQLite (even a read-only open of a WAL database creates -shm/-wal files next
+    # to it): its files are copied as they are and the copy is opened instead.
+    raw = DATA_DIR / "import-raw"
+    shutil.rmtree(raw, ignore_errors=True)
+    raw.mkdir()
+    for suffix in ("", "-wal", "-shm"):
+        if (src / ("catalog.db" + suffix)).exists():
+            shutil.copy2(src / ("catalog.db" + suffix), raw / ("catalog.db" + suffix))
+    a, db = sqlite3.connect(raw / "catalog.db"), sqlite3.connect(tmp)
+    try:
+        if a.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+            raise sqlite3.DatabaseError("the copied catalogue is damaged – close the other copy of Kosmas and try again")
+        a.backup(db)
+    finally:
+        a.close()
+        shutil.rmtree(raw, ignore_errors=True)
     pairs = [(str(src), str(DATA_DIR)), (src.as_posix(), DATA_DIR.as_posix()), (src.as_uri(), DATA_DIR.as_uri())]
     with db:                              # stored file paths point into the old folder
         for (table, sql) in db.execute("SELECT name, sql FROM sqlite_master WHERE type='table'").fetchall():
@@ -79,6 +144,8 @@ DEFAULTS = {
     "roots": [],
     # UI language: auto (Czech on a Czech/Slovak system, otherwise English) | en | cs
     "lang": "auto",
+    # records marked as test data are hidden unless this is on (they are never synced)
+    "show_test_data": False,
     # Recordings without Medal metadata: anything up to this length counts as a clip
     "clip_max_seconds": 300,
     # Full recordings shorter than this are hidden unless "show short" is on

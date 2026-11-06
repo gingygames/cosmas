@@ -80,7 +80,10 @@ function h(tag, attrs, ...children) {
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
     if (k === 'class') el.className += (el.className ? ' ' : '') + v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'style' && typeof v === 'object') {
+      // custom properties (--bm, --c …) need setProperty – Object.assign silently drops them
+      for (const [p, x] of Object.entries(v)) { if (p.startsWith('--')) { if (x != null) el.style.setProperty(p, x); } else el.style[p] = x; }
+    }
     else if (k === 'html') el.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
     else if (k === 'value') el.value = v;
@@ -475,8 +478,27 @@ document.addEventListener('mousedown', e => { if (!e.target.closest('.menu')) { 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); $$('.menu').forEach(x => x.remove()); } });
 
 /* ---------------- shared widgets ---------------- */
+/** Menu item that marks records as test data (hidden unless Settings → Test data → Show, never synced) or back. */
+function testMenuItem(kind, recs) {
+  recs = (Array.isArray(recs) ? recs : [recs]).filter(Boolean);
+  const on = recs.length > 0 && recs.every(r => r.is_test);
+  return { label: on ? tr('Not a test record') : tr('Mark as test record'), icon: 'flask-conical', onClick: async () => {
+    await API.call('test.mark', { kind, ids: recs.map(r => r.id), value: !on });
+    toast(on ? tr('Marked as a real record') : (App.settings.show_test_data ? tr('Marked as test record')
+      : tr('Marked as test record – hidden until you turn on Show test data in Settings')));
+    await Promise.all([App.refresh('media', 'events', 'chars', 'meta'), App.loadServers ? App.loadServers() : null]);
+    App.emit('bookmarks'); App.emit('synced');
+    Views.show(Views.activeName, {});
+  } };
+}
+/** Small "TEST" chip next to a record name while test data are shown. */
+function testChip(r) {
+  return r && r.is_test ? h('span.test-chip', { title: tr('Test record – hidden unless test data are shown, never synced') }, tr('TEST')) : null;
+}
 function initials(name) {
-  return (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  // first letter of the first two words, skipping quotes and nicknames ('Ada "Crow" Malone' -> AM)
+  const words = (name || '').split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w));
+  return (words.length ? words.slice(0, 2).map(w => w[0]).join('') : (name || '?').trim()[0] || '?').toUpperCase();
 }
 function avatar(c, size = 28) {
   const el = h('.avatar', { title: c ? c.name : '', style: { width: size + 'px', height: size + 'px', fontSize: Math.round(size * .38) + 'px' } });

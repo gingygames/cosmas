@@ -190,7 +190,7 @@ function makeView(kind) {
     const tags = splitTags(g.tags);
     const head = editing ? editForm(g) : h('.grow', { style: { minWidth: 0 } },
       h('.kind', kindLabel),
-      h('h1', g.name),
+      h('h1', g.name, testChip(g)),
       kind === 'places' ? placeLine(g) : null,
       kind === 'players' && g.discord_name ? h('.small.muted', icon('message-circle'), ' Discord: ', g.discord_name) : null,
       kind === 'players' && g.contact ? h('.small.muted', icon('at-sign'), ' ', g.contact) : null,
@@ -199,7 +199,7 @@ function makeView(kind) {
     d.appendChild(h('.gp-hero', imgEl, head,
       h('.row', { style: { alignSelf: 'flex-start' } },
         h('button.btn' + (editing ? '.primary' : ''), { onclick: () => { editing = !editing; if (!editing) refresh(); else renderDetail(); } }, icon(editing ? 'check' : 'pencil'), editing ? tr('Done') : tr('Edit')),
-        h('button.btn.icon', { title: tr('More'), onclick: e => menu(e, [{ label: tr('Delete ({noun})', { noun: C.noun }), icon: 'trash-2', danger: true, onClick: async () => {
+        h('button.btn.icon', { title: tr('More'), onclick: e => menu(e, [testMenuItem(C.owner, g), { label: tr('Delete ({noun})', { noun: C.noun }), icon: 'trash-2', danger: true, onClick: async () => {
           if (!await confirmDialog(tr('Delete'), tr('Delete “{name}”? Characters will remain.', { name: g.name }), { danger: true, okLabel: tr('Delete') })) return;
           await API.call(C.del, { id: g.id }); cur = null; await refresh(); renderSide(); renderDetail();
         } }]) }, icon('ellipsis')))));

@@ -1,44 +1,71 @@
 [English](README.md) · **Čeština**
 
-<p align="center"><img src="docs/img/banner.png" alt="Kosmas" width="100%"></p>
+<p align="center"><img src="docs/img/banner-cs.png" alt="Kosmas – kronika tvých RP večerů" width="100%"></p>
 
 <p align="center">
-  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Stáhnout instalátor pro Windows</b></a> ·
-  <a href="#instalace">Instalace</a> · <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#pro-vývojáře">Pro vývojáře</a>
+  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Stáhnout pro Windows</b></a> ·
+  <a href="https://gingygames.com/kosmas/">Webová kronika</a> ·
+  <a href="#instalace">Instalace</a> · <a href="#přihlášení-a-synchronizace-s-webem">Synchronizace</a> ·
+  <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#soukromí">Soukromí</a> · <a href="#sestavení-ze-zdrojových-kódů">Ze zdrojových kódů</a>
 </p>
 
-# Kosmas — kronika pro RP hráče
+# Kosmas — kronika tvých RP večerů
 
-**Kosmas** (dříve Kronikář, pojmenovaný po nejstarším českém kronikáři) je katalog záznamů z [Medalu](https://medal.tv) pro hráče RP. Obsahuje:
-- knihovnu videí;
-- události s deníkem a přílohami;
-- databázi postav, frakcí, míst a hráčů;
-- časové osy;
-- přehrávač, který hraje víc zvukových stop najednou (hra, Discord, mikrofon).
+**Kosmas** (dříve Kronikář, pojmenovaný po nejstarším českém kronikáři) je aplikace pro Windows, která z tvých záznamů z
+[Medalu](https://medal.tv) udělá kroniku hraní rolí:
+- **knihovna** záznamů a klipů podle her a večerů;
+- **události** se zápisem, deníkem a přílohami na **časové ose** (kronika, Gantt, kalendář, dráhy postav);
+- databáze **postav, frakcí a rodů, míst a hráčů** se vztahy a portréty;
+- **momenty** – označená místa a úseky ve videích, přiřazené k událostem a postavám;
+- **přehrávač**, který hraje víc zvukových stop najednou (hra, Discord, mikrofon);
+- volitelně **AI**: přepis řeči, popis obrazu, jmenovky přečtené z obrazovky a návrh kroniky večera;
+- volitelně **synchronizace s webovou kronikou** na [gingygames.com/kosmas](https://gingygames.com/kosmas/) – postavu nebo událost
+  nasdílíš odkazem a postavy použiješ v komunitním botovi na Discordu.
 
-AI přepíše, co zaznělo, a popíše obraz. Přečte jmenovky nad hlavami a sepíše z večera kroniku s návrhy událostí a postav.
+Rozhraní je anglicky, nebo česky, když máš Windows v češtině či slovenštině (Nastavení → Jazyk: Automaticky / English / Čeština).
 
 | | |
 |:-:|:-:|
-| ![Přehled](docs/img/prehled.jpg) **Přehled**: poslední večer, rozkoukaná videa, hry | ![Přehrávač](docs/img/prehravac.jpg) **Přehrávač**: víc zvukových stop, záložky, postavy ve videu |
-| ![Knihovna](docs/img/knihovna.jpg) **Knihovna**: videa po dnech, filtry, hledání i v tom, co zaznělo | ![Postavy](docs/img/postavy.jpg) **Postavy**: portréty, vztahy, frakce, výskyty v záznamech |
-| ![Kosmas AI](docs/img/kronikar-ai.jpg) **Kosmas AI**: návrhy událostí, míst a postav z přepisu | ![Kde běží AI](docs/img/kde-bezi-ai.jpg) **Kde běží AI**: doporučení podle tvého PC a odhad ceny |
-| ![Momenty](docs/img/momenty.jpg) **Momenty**: záložky a úseky ze všech videí | ![Událost](docs/img/udalost.jpg) **Událost**: zápis, deník, přílohy, postavy a videa |
+| ![Knihovna](docs/img/desktop-library.webp) **Knihovna** – záznamy a klipy, filtry, postavy v každém videu | ![Přehrávač](docs/img/desktop-player.webp) **Přehrávač** – víc zvukových stop, momenty, událost vedle videa |
+| ![Postavy](docs/img/desktop-characters.webp) **Postavy** – profil, frakce, vztahy, události a momenty | ![Časová osa](docs/img/desktop-timeline.webp) **Časová osa** – příběh jako kronika, Gantt, kalendář nebo dráhy postav |
+
+<sub>Snímky ukazují smyšlená ukázková data (anglické rozhraní).</sub>
+
+## Stažení
+Stáhni **Kosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
+(odkaz je i na [gingygames.com/kosmas](https://gingygames.com/kosmas/)). 64bitové Windows 10 (1809 a novější) nebo Windows 11.
 
 ## Instalace
-1. Stáhni **[Kronikar-Setup.exe](https://github.com/gingygames/kosmas/releases/latest)**. Funguje na 64bitových Windows 10 a 11.
-2. Spusť ho a klikni na **Další → Instalovat**.
-   - Nepotřebuje práva správce ani Python a nic dalšího se instalovat nemusí. Přehrávač i ffmpeg jsou uvnitř.
-   - Zástupce se objeví v nabídce Start, pokud chceš, i na ploše.
-3. Při prvním spuštění Kosmas sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v Nastavení.
+1. Spusť instalátor a klikni na **Další → Instalovat**.
+   - Instaluje se jen pro tvého uživatele (`%LOCALAPPDATA%\Programs\Kronikar`): bez práv správce, bez Pythonu, nic dalšího –
+     přehrávač (libmpv) i ffmpeg jsou uvnitř.
+   - Zástupci se vytvoří v nabídce Start a na ploše (ten na ploše můžeš odškrtnout).
+2. **Aktualizace:** spusť novější instalátor. Nahradí program a data nechá; existující instalaci 1.0 (Kronikář) aktualizuje na místě
+   a staré zástupce nahradí.
+3. **Odinstalace:** *Nastavení Windows → Aplikace → Kosmas*. Zeptá se, jestli smazat i katalog (výchozí je ponechat); videa se nikdy nemažou.
 
-**Aktualizace:** spusť novější instalátor, data zůstanou.
+## První spuštění
+- Kosmas sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v **Nastavení → Složky se záznamy**.
+  Databázi Medalu jen čte, nikdy do ní nezapisuje.
+- Katalog je v `%LOCALAPPDATA%\Kronikar` (catalog.db, nastavení, náhledy, přílohy, přepisy). Tuhle složku zálohuj;
+  Nastavení → Data katalogu ukáže přesnou cestu a otevře ji.
+- Pokud jsi Kosmase dřív spouštěl ze zdrojových kódů nebo z přenosné kopie, první spuštění ten katalog najde a **zeptá se**,
+  jestli ho má zkopírovat. Původní složka se nikdy nepřesouvá ani nemění.
+- Chceš si něco vyzkoušet a nezaneřádit kroniku? Označ záznamy jako testovací (⋯ → *Označit jako testovací záznam*): jsou skryté,
+  dokud nezapneš **Nastavení → Testovací data → Zobrazit testovací data**, nikdy se nesynchronizují a *Smazat testovací data* je
+  odstraní (po záloze).
 
-**Odinstalace:** přes *Nastavení Windows → Aplikace*. Zeptá se, jestli smazat i data.
-
-**Data** jsou v `%LOCALAPPDATA%\Kronikar` (katalog, nastavení, náhledy, přepisy). Tuhle složku zálohuj.
-
-> Pokud jsi aplikaci dřív spouštěl ze zdrojových kódů, nainstalovaná verze si při prvním spuštění tvoje data sama převezme.
+## Přihlášení a synchronizace s webem
+Webová kronika na [gingygames.com/kosmas](https://gingygames.com/kosmas/) ukáže tvoje postavy, události, frakce a místa v prohlížeči
+a umožní je sdílet.
+1. **Nastavení → Webová kronika → Přihlásit se přes Discord.** Otevře se prohlížeč; přihlas se Discordem a klikni na **Povolit**. Nic se nekopíruje.
+   (Když se prohlížeč nemůže vrátit do aplikace, použij zobrazený kód.)
+2. **Synchronizovat teď** – nebo zaškrtni *Synchronizovat po startu aplikace*. Změny jdou oběma směry; když se tentýž záznam změnil na obou stranách,
+   vybereš, která verze platí.
+3. Všechno na webu je **soukromé**, dokud to nenasdílíš: tlačítko **Sdílet** u postavy, frakce, místa, události nebo momentu nabízí
+   *Jen já*, *Kdo má odkaz* a *Veřejné*.
+4. **Používat na Discordu** (v úpravách postavy) dá postavu jako kartu do komunitního bota na Discordu.
+5. *Odhlásit / odpojit toto zařízení* zruší přístup zařízení; zařízení můžeš odpojit i na webu (Nastavení → Synchronizace).
 
 ## AI: na tvém PC, nebo placená služba
 Při prvním přepisu si vybereš, kde má AI běžet. Najdeš to v **Přepisy → Kde běží AI**. Volbu jde kdykoli změnit, i zvlášť pro každou část.
@@ -104,7 +131,7 @@ okně se seznam postav sám schová.
   (vygeneruje se na pozadí při prvním přehrání, uloží se do `data/previews`).
 - Předvolby zvukových stop (tlačítko s posuvníky, Ctrl+Shift+1…9) a výchozí stopy pro každou hru.
 - Video pokračuje tam, kde jsi skončil (červený proužek na kartě, „Pokračovat ve sledování“ na Přehledu).
-- `O` / tlačítko **Postava** označí, kdo je ve videu v tomto momentu.
+- `C` / tlačítko **Postava** označí, kdo je ve videu v tomto momentu.
 - Snímky a obrázky z videí mají tlačítko „Přehrát video od …“.
 
 ## Obrazovky
@@ -117,16 +144,16 @@ okně se seznam postav sám schová.
 - **Postavy** – profil s portrétem, frakcí, stavem, hráčem, životopisem, vztahy, událostmi,
   videi a zmínkami v deníku.
 - **Osa** – čtyři pohledy: Kronika, Osa (zoomovatelný Gantt), Kalendář, Postavy (dráhy).
-- **Momenty** – všechny záložky a úseky (virtuální klipy) z videí, seskupené podle záznamu,
-  filtr nepřiřazené / v událostech. Záložky udělané v Medalu klávesou se načtou samy
+- **Momenty** – všechny momenty a úseky (virtuální klipy) z videí, seskupené podle záznamu,
+  filtr nepřiřazené / v událostech. Momenty označené v Medalu klávesou se načtou samy
   (automatické herní momenty typu „Double Kill“ jsou skryté, dají se zapnout).
 - **Galerie** – všechny screenshoty a snímky z videí.
 - **Nastavení** – jazyk (Automaticky / English / Čeština; automaticky = čeština, když je systém česky nebo slovensky, jinak angličtina), vzhled (7 motivů, barva zvýraznění, velikost rozhraní, zaoblení, písmo, animace,
   rozložení přehrávače), složky, pravidla klip/záznam, výchozí zvukové stopy, přejmenování her.
 
-## Záložky a úseky
-`B` = záložka v aktuálním místě, `Shift+B` = začátek a pak konec úseku, `P` = záložka rovnou do
-události. Záložka má název, poznámku, barvu, postavy a událost; úsek se přehraje a sám zastaví.
+## Momenty a úseky
+`B` = moment v aktuálním místě, `Shift+B` = začátek a pak konec úseku, `P` = moment rovnou do
+události. Moment má název, poznámku, barvu, postavy a událost; úsek se přehraje a sám zastaví.
 Najdeš je v Momentech, v inspektoru videa v Knihovně, u události (Záznamy → Momenty), u postavy
 a na Ose jako praporky.
 
@@ -216,7 +243,7 @@ ikony z Medalu, soubor, URL, schránka nebo snímek z videa – vše s ořezem.
   serveru i nové postavy, události, frakce a místa (když je vybraná hra) dostanou výchozí server.
 - Nová postava má typ „Postava“ (dřív NPC). Hromadné úpravy postav: Ctrl/Shift + klik a pravé tlačítko.
 
-## Pro vývojáře
+## Sestavení ze zdrojových kódů
 **Technika:**
 - Python 3.12 + PySide6. Rozhraní je v `rpcatalog/web/` a běží offline v Qt WebEngine.
 - Přehrávač je libmpv (`vendor/libmpv-2.dll`), ikony jsou Lucide, na náhledy slouží ffmpeg/ffprobe.
@@ -238,11 +265,32 @@ ikony z Medalu, soubor, URL, schránka nebo snímek z videa – vše s ořezem.
 2. Stáhni `mpv-dev-x86_64-…7z` z [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases) a soubor `libmpv-2.dll` z něj dej do složky `vendor/`.
    Do gitu se nenahrává, má přes 100 MB.
 3. Dej ffmpeg/ffprobe na PATH (`winget install Gyan.FFmpeg`).
-4. Spusť `Kronikar.bat`. Data jsou pak ve složce `data/` vedle kódu.
+4. Spusť `Kronikar.bat`. Data jsou pak ve složce `data/` vedle kódu; proměnná `KRONIKAR_DATA` nastaví jinou (třeba prázdnou testovací) složku.
+5. Testy: `python -m unittest discover -s tests` (testy synchronizace potřebují lokální webový backend, jinak se přeskočí).
 
 **Sestavení instalátoru:** spusť `.venv\Scripts\python.exe installer\build.py`. Skript:
 1. stáhne vestavěný Python 3.12;
 2. přibalí balíčky z `installer/requirements-dist.txt`, libmpv, ffmpeg a spouštěč `Kronikar.exe` s ikonou;
-3. přes Inno Setup vytvoří `build/Kronikar-Setup-<verze>.exe`. Verze se bere z `rpcatalog/__init__.py`.
+3. přes Inno Setup vytvoří `build/Kosmas-Setup-<verze>.exe`. Verze se bere z `rpcatalog/__init__.py`.
 
 Ikonu z `rpcatalog/web/icon.svg` přegeneruje `installer/make_icon.py`.
+
+## Soukromí
+Kosmas je **local first**: katalog je soubor SQLite na tvém PC a všechno funguje offline.
+- **Nic se nenahrává, dokud se nepřihlásíš a nesynchronizuješ.** Pak jde na web jen kronika (postavy, frakce, místa, jména hráčů,
+  události, zápisy, momenty, obrázky, které jsi přiložil, názvy videí a odkazy na YouTube). Soubory videí se nenahrávají nikdy; u lokálního
+  videa se posílá jen název, délka a cesta relativní ke složce se záznamy. Kontakty hráčů a tokeny botů neopustí tvoje PC;
+  holubí pošta jen když ji zaškrtneš. Testovací záznamy se nesynchronizují nikdy.
+- Co synchronizuješ, je na webu soukromé, dokud to nenasdílíš.
+- **AI na tomto PC** nechá všechno v PC. U **placené služby** jde do vybrané služby jen zvuk (řeč) nebo snímky a text přepisu;
+  API klíče jsou šifrovaně ve Správci přihlašovacích údajů Windows.
+- Databázi Medalu Kosmas jen čte; smazané video jde do Koše.
+
+## Licence
+Repozitář zatím nemá soubor s licencí, takže ke kódu žádná licence udělená není. Přibalené komponenty mají vlastní licence:
+libmpv (mpv), FFmpeg (GPL build), Qt/PySide6 (LGPL), ikony Lucide (ISC).
+
+## Odkazy
+- Webová kronika: https://gingygames.com/kosmas/
+- Stažení: https://github.com/gingygames/kosmas/releases/latest
+- Chyby a nápady: https://github.com/gingygames/kosmas/issues

@@ -567,6 +567,74 @@ class SyncTest(unittest.TestCase):
         res = self.run_sync()
         self.assertEqual((res["sent"], res["received"]), (0, 0), res)
 
+    def test_sync_never_changes_local_storage(self):
+        """Whatever the web sends (local metadata of videos, paths, roots), sync changes no roots, no settings
+        outside its own keys, no file paths of local videos and no data folder."""
+        import copy
+        from rpcatalog import config
+        roots = self.tmp / "videa"
+        (roots / "Hra").mkdir(parents=True)
+        f1 = roots / "Hra" / "klip.mp4"
+        f1.write_bytes(b"x" * 100)
+        m1 = self.store.upsert_media({"path": str(f1), "game": "Hra", "kind": "clip", "size": 100, "duration": 9,
+                                      "thumb": str(self.tmp / "thumb.jpg")})
+        self.store.commit()
+        self.settings.update(roots=[str(roots)], lang="en", ai_tracks=["Hra"])
+        self.run_sync()
+        rid = self.by_src()[f"media:{m1}"]["id"]
+        media_before = [tuple(r) for r in self.store.db.execute("SELECT id, path, thumb, custom_thumb, game FROM media ORDER BY id")]
+        settings_before = copy.deepcopy(self.settings)
+        data_dir = config.DATA_DIR
+        evil = "C:/Windows/Temp/hijack"
+        self.web("POST", "/ops", {"ops": [
+            {"op": "update", "id": rid, "data": {"title": "Nový název", "path": evil + ".mp4", "thumb": evil + ".jpg",
+                                                 "roots": [evil], "local": {"name": "x.mp4", "rel_path": "../../hijack/x.mp4", "size": 5}}},
+            {"op": "create", "type": "video", "data": {"title": "Cizí cesta", "kind": "clip", "path": evil + "2.mp4",
+                                                        "local": {"name": "y.mp4", "rel_path": "C:/Windows/Temp/y.mp4", "size": 7}}},
+            {"op": "create", "type": "video", "data": {"title": "Ven ze složky", "kind": "clip",
+                                                        "local": {"name": "klip.mp4", "rel_path": "../videa/Hra/klip.mp4", "size": 100}}},
+        ]})
+        self.run_sync()
+        sync_keys = {k for k in self.settings if k.startswith("sync_")}
+        self.assertEqual({k: v for k, v in self.settings.items() if k not in sync_keys},
+                         {k: v for k, v in settings_before.items() if k not in sync_keys})
+        self.assertEqual(self.settings["roots"], [str(roots)])
+        media_after = [tuple(r) for r in self.store.db.execute("SELECT id, path, thumb, custom_thumb, game FROM media ORDER BY id")]
+        self.assertEqual(media_after, media_before)                      # no new rows, no changed paths
+        self.assertEqual(self.store.media(m1).title, "Nový název")       # ordinary metadata still arrives
+        self.assertNotIn(evil, json.dumps([list(r) for r in self.store.db.execute("SELECT * FROM media")], default=str))
+        self.assertEqual(config.DATA_DIR, data_dir)
+        self.assertTrue(f1.exists())
+
+    def test_test_records_never_sync(self):
+        """is_test rows stay local in both directions; marking a published row as test removes it from the web."""
+        self.seed()
+        self.store.set_test("characters", [self.c2])
+        self.store.set_test("events", [self.ev])
+        self.run_sync()
+        srcs = set(self.by_src())
+        self.assertNotIn(f"characters:{self.c2}", srcs)
+        self.assertNotIn(f"events:{self.ev}", srcs)
+        self.assertNotIn(f"entries:{self.en}", srcs)                     # entry of a test event
+        self.assertIn(f"characters:{self.c1}", srcs)
+        links = self.data()["links"]
+        self.assertFalse([l for l in links if (l.get("src") or "").startswith(f"character_relations:{self.rel}")])
+        # a published record marked as test afterwards disappears from the web and stays here untouched
+        rid = self.by_src()[f"characters:{self.c1}"]["id"]
+        self.store.set_test("characters", [self.c1])
+        self.run_sync()
+        self.assertNotIn(f"characters:{self.c1}", self.by_src())
+        self.assertEqual(self.store.character(self.c1)["name"], "Jindřich")
+        # web records marked as test are not taken over
+        n = self.store.db.execute("SELECT COUNT(*) FROM characters").fetchone()[0]
+        new = self.web("POST", "/ops", {"ops": [{"op": "create", "type": "character", "is_test": True, "data": {"name": "Zkušební"}}]})
+        self.web("POST", "/ops", {"ops": [{"op": "meta", "id": new["results"][0]["id"], "is_test": True}]})
+        self.run_sync()
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM characters").fetchone()[0], n)
+        # a second run changes nothing
+        res = self.run_sync()
+        self.assertEqual((res["sent"], res["deleted_remote"], res["created_local"]), (0, 0, 0), res)
+
     def test_bad_token(self):
         s = sync.Syncer(self.db_path, {"sync_url": URL, "sync_token": "krt_spatny"}, self.att_dir)
         try:

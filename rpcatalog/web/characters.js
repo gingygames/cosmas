@@ -199,7 +199,7 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
     const st = CHAR_STATUS[c.status] || CHAR_STATUS.unknown;
     return h('.ch-row' + (c.id === state.id ? '.on' : '') + (sel.has(c.id) ? '.msel' : ''), { 'data-cid': c.id, onclick: e => clickChar(e, c), oncontextmenu: e => listMenu(e, c) },
       avatar(c, 38), h('span.st', { style: { background: st.color }, title: st.label }),
-      h('.grow', h('.nm.ellipsis', c.name),
+      h('.grow', h('.nm.ellipsis', c.name, testChip(c)),
         h('.meta.ellipsis', [c.faction, c.player ? tr('played by {player}', { player: c.player }) : ''].filter(Boolean).join(' · ') || CHAR_KIND[c.kind]?.label)),
       evCount(c) ? h('.cnt', icon('calendar-days'), evCount(c)) : null);
   }
@@ -315,6 +315,7 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
       { label: tr('Open'), icon: 'user', onClick: () => select(c.id) },
       { label: tr('Add to event…'), icon: 'calendar-plus', onClick: () => addToEvent(c.id) },
       { sep: true },
+      testMenuItem('character', c),
       { label: tr('Delete character'), icon: 'trash-2', danger: true, onClick: () => deleteChar(c) },
     ]);
   }
@@ -433,9 +434,10 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
           { label: tr('Change portrait…'), icon: 'image-up', onClick: () => portrait.click() },
           c.portrait ? { label: tr('Remove portrait'), icon: 'image-off', onClick: async () => { await API.call('char.update', { id: c.id, portrait_id: null }); await App.loadChars(); loadDetail(c.id, true); } } : null,
           { sep: true },
+          testMenuItem('character', c),
           { label: tr('Delete character'), icon: 'trash-2', danger: true, onClick: () => deleteChar(c) },
         ]) }, icon('ellipsis'))),
-      h('h1.ch-title', c.name),
+      h('h1.ch-title', c.name, testChip(c)),
       c.aliases ? h('.small.muted', tr('Also: {aliases}', { aliases: c.aliases })) : null,
       c.summary ? h('.ch-summary', c.summary) : null,
       gone ? h('.ch-fate', icon(c.status === 'dead' ? 'skull' : 'circle-help'),

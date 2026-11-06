@@ -31,7 +31,7 @@ function discordCard(s) {
 }
 
 const SYNC_TYPES = { servers: tr('Server'), players: tr('Player'), factions: tr('Faction'), characters: tr('Character'), places: tr('Place'), events: tr('Event'),
-  entries: tr('Entry'), letters: tr('Letter'), media: tr('Video'), bookmarks: tr('Bookmark'), attachments: tr('Image') };
+  entries: tr('Entry'), letters: tr('Letter'), media: tr('Video'), bookmarks: tr('Moment'), attachments: tr('Image') };
 const SYNC_KINDS = { both: tr('changed here and on the web'), deleted_remote: tr('deleted on the web, changed here'), deleted_local: tr('deleted here, changed on the web') };
 
 /* Sign in with Discord: the browser opens the web, the user allows Kosmas and the browser comes back to a one-shot
@@ -105,7 +105,7 @@ function webSyncCard() {
       h('.row.wrap',
         h('button.btn' + (st.has_token ? '.primary' : ''), { disabled: st.running || !st.has_token, onclick: () => run('sync.run') }, icon('refresh-cw'), st.running ? tr('Syncing…') : tr('Sync now'))),
       st.running ? h('.small.muted', st.progress || tr('Syncing…')) : null,
-      st.error ? h('.small', { style: { color: 'var(--danger)' } }, st.error) : null,
+      st.error && !st.need_pairing ? h('.small', { style: { color: 'var(--danger)' } }, st.error) : null,
       st.need_pairing ? h('.col', { style: { gap: '8px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '10px', background: 'var(--surface)' } },
         h('.small', tr('This database has not been synced with the web yet. The web already has records from a desktop – from another or a restored database, or from an import on the web.')),
         h('.tiny.faint', tr('Pair by id: identical records get linked; where the content differs, a conflict to resolve is created. New copy: this database is uploaded next to the existing records (nothing is overwritten, content may end up duplicated).')),
@@ -206,12 +206,32 @@ Views.register('settings', {
       App.settings.short_session_seconds = +shortS.value; App.settings.event_gap_minutes = +gap.value;
       toast(tr('Saved – reloading the library'));
     };
+    const testCard = () => {
+      const box = h('div');
+      const render = async () => {
+        const t = await API.call('test.info');
+        const n = Object.values(t.counts || {}).reduce((a, b) => a + b, 0);
+        clear(box).append(
+          h('label.check', h('input', { type: 'checkbox', checked: !!t.show, onchange: async e => {
+            await API.call('test.show', { show: e.target.checked }); App.settings.show_test_data = e.target.checked; location.reload();
+          } }), tr('Show test data')),
+          h('.small.faint', { style: { margin: '8px 0 10px' } }, n ? trn(n, '{n} test record', '{n} test records') : tr('No test records.')),
+          h('button.btn.danger', { disabled: !n, onclick: async () => {
+            if (!await confirmDialog(tr('Delete test data'), tr('Delete all test records? A backup of the catalogue is made first. Videos stay in the library (still marked as test) – files on disk are never touched.'), { danger: true, okLabel: tr('Delete') })) return;
+            const r = await API.call('test.delete');
+            toast(tr('Test data deleted. Backup: {path}', { path: r.backup }));
+            await App.refresh('media', 'events', 'chars', 'meta'); App.emit('synced'); render();
+          } }, icon('trash-2'), tr('Delete test data')));
+      };
+      render();
+      return box;
+    };
     root.appendChild(h('.scroll', { style: { flex: 1 } },
       h('.page-head', h('h1', tr('Settings')), h('.grow'), h('button.btn.primary', { onclick: save }, icon('save'), tr('Save'))),
       h('div', { style: { padding: '0 24px 40px', maxWidth: '820px' } },
         card(tr('Language'), tr('Automatic follows the system language: Czech on a Czech or Slovak system, English otherwise.'), langPicker(s)),
         card(tr('Appearance'), tr('Changes immediately, no saving needed.'), appearanceSection()),
-        card('Discord', tr('Player names and avatars are fetched via your bot on the server. The token stays on this computer only (data/settings.json).'),
+        card('Discord', tr('Player names and avatars are fetched via your bot on the server. The token stays on this computer only (in the settings file in the data folder).'),
           discordCard(s)),
         card(tr('Web chronicle'), tr('Sync with gingygames.com/kosmas: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.'),
           webSyncCard()),
@@ -224,11 +244,12 @@ Views.register('settings', {
         card(tr('Audio tracks'), tr('Which tracks are turned on when a video is opened (when the last choice is not remembered).'), mixRow,
           h('label.check', { style: { marginTop: '12px' } }, remember, tr('Remember the last selected tracks (by type – game, microphone…)'))),
         card(tr('Renaming and merging games'), tr('One line = original name = new name.'), aliases),
-        card(tr('Catalog data'), tr('Edits, journals, characters and attachments are in the data/ folder next to the app. Back it up.'),
+        card(tr('Test data'), tr('Records marked as test (menu ⋯ → Mark as test record) are hidden everywhere unless shown here, and they are never synced or published.'), testCard()),
+        card(tr('Catalog data'), tr('Edits, journals, characters and attachments are stored in {path}. Back this folder up.', { path: s.data_dir || 'data' }),
           h('.row', h('button.btn', { onclick: () => API.call('open_data_dir') }, icon('folder-open'), tr('Open data folder')),
             h('button.btn', { onclick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } }, icon('refresh-cw'), tr('Reload library')))),
         card(tr('Keyboard shortcuts'), null, h('.small.muted', { html: [
-          tr('<b>Player:</b> <span class="kbd">Space</span> pause · <span class="kbd">←</span>/<span class="kbd">→</span> 5 s · <span class="kbd">Shift</span>+arrows 30 s · <span class="kbd">F</span> full screen · <span class="kbd">M</span> mute · <span class="kbd">Ctrl+1…9</span> audio tracks · <span class="kbd">B</span> bookmark · <span class="kbd">Shift+B</span> segment start/end · <span class="kbd">P</span> bookmark straight into an event · <span class="kbd">S</span> screenshot (to event / crop / character portrait)'),
+          tr('<b>Player:</b> <span class="kbd">Space</span> pause · <span class="kbd">←</span>/<span class="kbd">→</span> 5 s · <span class="kbd">Shift</span>+arrows 30 s · <span class="kbd">F</span> full screen · <span class="kbd">M</span> mute · <span class="kbd">Ctrl+1…9</span> audio tracks · <span class="kbd">B</span> moment · <span class="kbd">Shift+B</span> segment start/end · <span class="kbd">P</span> moment straight into an event · <span class="kbd">C</span> tag characters · <span class="kbd">I</span>/<span class="kbd">O</span> clip start/end · <span class="kbd">S</span> screenshot (to event / crop / character portrait)'),
           tr('<b>Library:</b> <span class="kbd">Enter</span> play · <span class="kbd">Delete</span> move to Trash · <span class="kbd">Ctrl+A</span> select all · <span class="kbd">Ctrl+F</span> search · dragging videos onto an event/album attaches them'),
           tr('<b>Editor:</b> <span class="kbd">@</span> tag a character · <span class="kbd">Ctrl+V</span> paste a screenshot · <span class="kbd">Ctrl+B/I/U</span>'),
         ].join('<br><br>') })))));

@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import traceback
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QByteArray
 from PySide6.QtGui import QColor, QCursor, QIcon
@@ -26,6 +27,17 @@ WEB_DIR = config.APP_DIR / "rpcatalog" / "web"
 ICON_PATH = config.APP_DIR / "rpcatalog" / "assets" / "kronikar.ico"
 APP_ID = "Gingygames.Kronikar"
 
+
+
+def window_title():
+    """'Kosmas', plus the data folder when KRONIKAR_DATA points elsewhere and KOSMAS_TITLE_SUFFIX for test runs,
+    so a test or second copy can't be mistaken for the real catalogue."""
+    t = "Kosmas"
+    if os.environ.get("KOSMAS_TITLE_SUFFIX"):
+        t += " – " + os.environ["KOSMAS_TITLE_SUFFIX"]
+    if os.environ.get("KRONIKAR_DATA"):
+        t += " – " + str(config.DATA_DIR)
+    return t
 
 class ScanThread(QThread):
     done = Signal(dict)
@@ -74,7 +86,7 @@ class TitleBar(QWidget):
         self.logo = QLabel()
         self.logo.setFixedSize(18, 18)
         self.logo.setPixmap(QIcon(str(ICON_PATH)).pixmap(18, 18))
-        self.title = QLabel("Kosmas")
+        self.title = QLabel(window_title())
         lay.addWidget(self.logo)
         lay.addWidget(self.title)
         lay.addStretch(1)
@@ -121,12 +133,13 @@ class MainWindow(QMainWindow):
         # controls) native too, and those stayed on screen after the player was closed.
         QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
         from .ui.player import PlayerWidget  # imports mpv (needs locale set)
-        self.setWindowTitle("Kosmas")
+        self.setWindowTitle(window_title())
         self.setWindowFlag(Qt.FramelessWindowHint, True)
         self.resize(1700, 1000)
         self.setStyleSheet("QMainWindow { background: #0d0f13; } QSplitter::handle { background: #1a1e25; }")
         self.settings = config.load_settings()
         self.store = Store(config.DB_PATH)
+        self.store.hide_test = not self.settings.get("show_test_data")
         self.scan_thread = None
         self.popout = None
         self.fs_temp = False
@@ -221,6 +234,7 @@ class MainWindow(QMainWindow):
         geo = self.settings.get("geometry")
         if geo:
             self.restoreGeometry(QByteArray.fromBase64(geo.encode()))
+        self.fit_to_screen()
         QTimer.singleShot(400, self.rescan)
         if self.settings.get("sync_auto") and self.settings.get("sync_token"):
             # automatická synchronizace s webovou Kronikou po startu
@@ -388,7 +402,7 @@ class MainWindow(QMainWindow):
         from .ui.common import fmt_dur
         marks = []
         for b in self.store.bookmarks(media_id=media.id):
-            label = b["title"] or (tr("segment") if b["t_end"] else tr("bookmark"))
+            label = b["title"] or (tr("segment") if b["t_end"] else tr("moment"))
             if b["event_title"]:
                 label += f" → {b['event_title']}"
             marks.append({"t": b["t"], "t_end": b["t_end"], "label": label,
@@ -605,6 +619,25 @@ class MainWindow(QMainWindow):
         # SWP_FRAMECHANGED | NOMOVE | NOSIZE | NOZORDER | NOACTIVATE
         u.SetWindowPos(wintypes.HWND(hwnd), None, 0, 0, 0, 0, 0x0020 | 0x0002 | 0x0001 | 0x0004 | 0x0010)
 
+    def fit_to_screen(self):
+        """Keeps the window on a screen and no bigger than it (default 1700×1000 on a 1366×768 laptop, or a saved
+        geometry from a bigger / disconnected monitor)."""
+        if self.isMaximized() or self.isFullScreen():
+            return
+        g = self.frameGeometry()
+        scr = QApplication.screenAt(g.center()) or self.screen() or QApplication.primaryScreen()
+        if scr is None:
+            return
+        av = scr.availableGeometry()
+        w, h = min(self.width(), av.width()), min(self.height(), av.height())
+        if (w, h) != (self.width(), self.height()):
+            self.resize(w, h)
+        g = self.frameGeometry()
+        x = min(max(g.x(), av.left()), av.right() - g.width() + 1)
+        y = min(max(g.y(), av.top()), av.bottom() - g.height() + 1)
+        if (x, y) != (g.x(), g.y()):
+            self.move(x, y)
+
     def showEvent(self, e):
         super().showEvent(e)
         self._native_frame()
@@ -678,6 +711,60 @@ class MainWindow(QMainWindow):
         super().closeEvent(e)
 
 
+def _catalog_summary(path):
+    """'123 videos, 45 characters, 6 events' of a catalogue, read-only; '' when it can't be read."""
+    import shutil
+    import sqlite3
+    import tempfile
+    tmp = Path(tempfile.mkdtemp(prefix="kosmas-import-"))
+    try:      # counted on a copy: even a read-only SQLite open would create files next to the original
+        for suffix in ("", "-wal", "-shm"):
+            if (path / ("catalog.db" + suffix)).exists():
+                shutil.copy2(path / ("catalog.db" + suffix), tmp / ("catalog.db" + suffix))
+        db = sqlite3.connect(tmp / "catalog.db")
+        try:
+            n = {t: db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("media", "characters", "events")}
+        finally:
+            db.close()
+    except Exception:
+        return ""
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return ", ".join([i18n.trn(n["media"], "{n} video", "{n} videos"), i18n.trn(n["characters"], "{n} character", "{n} characters"),
+                      i18n.trn(n["events"], "{n} event", "{n} events")])
+
+
+def offer_import():
+    """First start of an installed copy: an existing catalogue (source checkout / portable copy) can be copied in."""
+    for src in config.import_candidates():
+        info = _catalog_summary(src)
+        box = QMessageBox(QMessageBox.Icon.Question, tr("Existing catalogue found"),
+                          tr("Kosmas found a catalogue from an earlier copy of the app:\n{path}\n{info}\n\n"
+                             "Copy it into this installation? The original folder stays exactly as it is.",
+                             path=src, info=info))
+        yes = box.addButton(tr("Copy the catalogue"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("Start with an empty catalogue"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(yes)
+        box.exec()
+        if box.clickedButton() is not yes:
+            continue
+        try:
+            config.import_data(src)
+            return
+        except Exception as e:
+            traceback.print_exc()
+            QMessageBox.warning(None, tr("Existing catalogue found"),
+                                tr("The catalogue could not be copied ({error}). Kosmas starts with an empty catalogue; "
+                                   "the original folder was not changed.", error=e))
+            return
+    if not config.DB_PATH.exists() and config.import_candidates():
+        try:                       # declined: don't ask on every start
+            config.USER_DIR.mkdir(parents=True, exist_ok=True)
+            config.IMPORT_DECLINED.write_text("declined\n", "utf-8")
+        except OSError:
+            pass
+
+
 def main():
     if os.name == "nt":
         try:   # own taskbar button with our icon, grouped with the Start-menu shortcut (same AppUserModelID)
@@ -690,9 +777,10 @@ def main():
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-driver-bug-workarounds")
     app = QApplication(sys.argv)
     app.setApplicationName("Kronikář")          # internal id (Qt storage paths) – product name is Kosmas
-    app.setApplicationDisplayName("Kosmas")
+    app.setApplicationDisplayName(window_title())
     app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyle("Fusion")
+    offer_import()
     import locale
     locale.setlocale(locale.LC_NUMERIC, "C")  # mpv requires C numeric locale
     w = MainWindow()

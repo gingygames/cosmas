@@ -211,11 +211,12 @@ function renderSide(side) {
     ]),
   })));
 
-  if (App.chars.length) {
+  const counts = new Map();
+  all.forEach(m => (m.chars || []).forEach(id => counts.set(id, (counts.get(id) || 0) + 1)));
+  const inVideos = App.chars.filter(c => counts.get(c.id));
+  if (inVideos.length) {          // no empty heading when no character is tagged in a video yet
     side.appendChild(h('.grp', tr('Characters')));
-    const counts = new Map();
-    all.forEach(m => (m.chars || []).forEach(id => counts.set(id, (counts.get(id) || 0) + 1)));
-    App.chars.filter(c => counts.get(c.id)).forEach(c => {
+    inVideos.forEach(c => {
       const row = it(c.name, null, { type: 'char', id: c.id }, counts.get(c.id));
       row.insertBefore(avatar(c, 18), row.firstChild);
       side.appendChild(row);
@@ -327,7 +328,7 @@ function card(m) {
     resumeBar(m),
     h('.pl', { onclick: e => { e.stopPropagation(); play(m); } }, h('span', icon('play')))),
   h('.meta',
-    h('.t.ellipsis', m.name),
+    h('.t.ellipsis', m.name, testChip(m)),
     h('.s', h('span.ellipsis', `${fmt.time(m.start)} · ${m.game}`)),
     (m.tags.length || (m.chars || []).length) ? h('.tags',
       (m.chars || []).length ? avatarStack(m.chars, 20, 4) : null,
@@ -478,6 +479,7 @@ function cardMenu(e) {
       { label: tr('No server'), onClick: async () => { await API.call('server.assign', { type: 'media', ids: ms.map(m => m.id), server_id: null }); App.refresh('media'); } },
     ] },
     one ? { label: tr('Show in folder'), icon: 'folder-open', onClick: () => API.call('media.reveal', { id: one.id }) } : null,
+    testMenuItem('media', ms),
     { label: tr('Delete to Recycle Bin…'), icon: 'trash-2', danger: true, onClick: () => deleteMedia(ms) },
   ]);
   async function bulk_(op, value) { await API.call('media.bulk', { ids: ms.map(m => m.id), op, value }); App.refresh('media'); }
@@ -551,8 +553,8 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
       h('.row.wrap', App.albums.map(a => h('span.chip' + (m.albums.includes(a.id) ? '.on' : ''), {
         onclick: async () => { await API.call('media.bulk', { ids: [m.id], op: m.albums.includes(a.id) ? 'album_remove' : 'album_add', value: a.id }); App.refresh('meta'); rerender(); },
       }, a.name)), h('span.chip', { onclick: () => newAlbum([m.id]) }, icon('plus'), tr('New'))),
-      h('.section-title', icon('bookmark'), tr('Bookmarks') + (m.bm_full.length ? ' · ' + m.bm_full.length : ''), h('.line'),
-        h('button.btn.sm.ghost', { title: tr('Bookmark at the current playback position (B)'), onclick: () => addBookmarkHere(m.id).then(rerender) }, icon('bookmark-plus'), tr('Add'))),
+      h('.section-title', icon('bookmark'), tr('Moments') + (m.bm_full.length ? ' · ' + m.bm_full.length : ''), h('.line'),
+        h('button.btn.sm.ghost', { title: tr('Moment at the current playback position (B)'), onclick: () => addBookmarkHere(m.id).then(rerender) }, icon('bookmark-plus'), tr('Add'))),
       m.bm_full.length ? h('div', bmStrip(m, m.bm_full, { onChange: rerender }),
         h('div', m.bm_full.filter(b => b.source !== 'auto' || b.event_id || b.note).map(b => bmRow(b, { onChange: rerender }))),
         m.bm_full.some(b => b.source === 'auto' && !b.event_id && !b.note) ? h('.tiny.faint', { style: { padding: '2px 10px' } },

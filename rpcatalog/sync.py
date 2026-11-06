@@ -33,6 +33,7 @@ from pathlib import Path
 
 from . import i18n
 from .i18n import tr, trn
+from . import __version__
 
 DEFAULT_URL = "https://gingygames.com"
 TOKEN_URL = "https://gingygames.com/kosmas/app/#settings"
@@ -234,7 +235,7 @@ class Client:
         url = self.base + path
         if query:
             url += "?" + urllib.parse.urlencode({k: v for k, v in query.items() if v is not None})
-        headers = {"Authorization": f"Bearer {self.token}", "User-Agent": "Kronikar-desktop/1.0",
+        headers = {"Authorization": f"Bearer {self.token}", "User-Agent": f"Kosmas-desktop/{__version__}",
                    "Accept": "application/json", "Accept-Language": i18n.lang()}   # server errors in the UI language
         if body is not None:
             data = json.dumps(body, ensure_ascii=False, default=str).encode("utf-8")
@@ -269,7 +270,7 @@ class Client:
 
     def get_bytes(self, path):
         url = self.base.rsplit("/api", 1)[0] + path
-        req = urllib.request.Request(url, headers={"User-Agent": "Kronikar-desktop/1.0", "Accept-Language": i18n.lang()})
+        req = urllib.request.Request(url, headers={"User-Agent": f"Kosmas-desktop/{__version__}", "Accept-Language": i18n.lang()})
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 return r.read(), (r.headers.get("Content-Type") or "").split(";")[0]
@@ -506,24 +507,39 @@ class Syncer:
                                             "WHERE local_type='attachments' AND remote_key IS NOT NULL")}
         keys = {k: v["remote_key"] for k, v in imgs.items()}
         rows = {}
-        for t in ("servers", "players", "factions", "characters", "places", "entries"):
-            rows[t] = {r["id"]: pick(t, r) for r in q(f"SELECT * FROM {t}")}
+        # test records (is_test=1) never go to the web – nor anything that hangs on them
+        for t in ("servers", "players", "factions", "characters", "places"):
+            rows[t] = {r["id"]: pick(t, r) for r in q(f"SELECT * FROM {t}") if not r.get("is_test")}
         ev_tags = {}
         for r in q("SELECT event_id, tag FROM event_tags ORDER BY tag"):
             ev_tags.setdefault(r["event_id"], []).append(r["tag"])
         rows["events"] = {}
-        for r in q("SELECT * FROM events"):
+        all_ev = q("SELECT * FROM events")
+        test_ev = {r["id"] for r in all_ev if r.get("is_test")}
+        parent = {r["id"]: r["parent_id"] for r in all_ev}
+        def under_test(eid, seen=()):
+            while eid is not None and eid not in seen:
+                if eid in test_ev:
+                    return True
+                seen = (*seen, eid)
+                eid = parent.get(eid)
+            return False
+        for r in all_ev:
+            if under_test(r["id"]):
+                continue
             e = pick("events", r)
             e["tags"] = ev_tags.get(r["id"], [])
             rows["events"][r["id"]] = e
-        rows["letters"] = {r["id"]: pick("letters", r) for r in q("SELECT * FROM letters")} if self.letters else {}
+        rows["entries"] = {r["id"]: pick("entries", r) for r in q("SELECT * FROM entries") if r["event_id"] in rows["events"]}
+        rows["letters"] = ({r["id"]: pick("letters", r) for r in q("SELECT * FROM letters") if not r.get("is_test")}
+                           if self.letters else {})
         mtags = {}
         for r in q("SELECT media_id, tag FROM media_tags ORDER BY tag"):
             mtags.setdefault(r["media_id"], []).append(r["tag"])
         rows["media"] = {}
         excluded = set(self.state("media_excluded", []) or [])
         for r in q("SELECT * FROM media WHERE missing=0 OR (youtube IS NOT NULL AND youtube <> '')"):
-            if r["id"] in excluded:
+            if r["id"] in excluded or r.get("is_test"):
                 continue
             m = Media(r)
             local = None if str(r["path"]).startswith("http") else self.local_ref(r["path"], r["size"])
@@ -536,7 +552,7 @@ class Syncer:
                 "duration": r["duration"], "favorite": 1 if r["favorite"] else 0, "server_id": r["server_id"],
                 "kind": kind, "tags": mtags.get(r["id"], []), "created_at": r["added_at"]}
         rows["bookmarks"] = {r["id"]: pick("bookmarks", r) for r in q("SELECT * FROM bookmarks WHERE hidden=0")
-                             if r["media_id"] in rows["media"]}
+                             if r["media_id"] in rows["media"] and not r.get("is_test")}
         rows["attachments"] = {}
         self.att_paths = {}
         for r in q("SELECT * FROM attachments WHERE kind='image'"):
@@ -556,16 +572,20 @@ class Syncer:
         links = {}
         lp = lambda t, r: {k: r.get(k) for k in LINK_COLS[t]}
         for r in q("SELECT * FROM faction_members"):
+            if r["faction_id"] not in rows["factions"] or r["character_id"] not in rows["characters"]:
+                continue
             links[self.link_src("faction_members", r["faction_id"], r["character_id"])] = (
                 "faction_members", f"{r['faction_id'] + self.off}:{r['character_id'] + self.off}", lp("faction_members", r))
         for r in q("SELECT * FROM character_links WHERE source <> 'mention'"):
             tgt = CL_TARGET.get(r["target_type"])
-            if tgt and r["target_id"] in rows[tgt[0]]:
+            if tgt and r["target_id"] in rows[tgt[0]] and r["character_id"] in rows["characters"]:
                 links[self.link_src("character_links", r["id"])] = ("character_links", r["id"] + self.off, lp("character_links", r))
         for r in q("SELECT * FROM character_relations"):
+            if r["a_id"] not in rows["characters"] or r["b_id"] not in rows["characters"]:
+                continue
             links[self.link_src("character_relations", r["id"])] = ("character_relations", r["id"] + self.off, lp("character_relations", r))
         for r in q("SELECT * FROM event_links"):
-            if r["media_id"] in rows["media"]:
+            if r["media_id"] in rows["media"] and r["event_id"] in rows["events"]:
                 links[self.link_src("event_links", r["id"])] = ("event_links", r["id"] + self.off, lp("event_links", r))
         return rows, links
 
@@ -703,6 +723,8 @@ class Syncer:
                 table = TYPE_TABLE.get(r.get("type"))
                 if not table:
                     continue
+                if r.get("is_test") or (r.get("data") or {}).get("is_test") or (r.get("data") or {}).get("_test"):
+                    continue                          # test records on the web stay there
                 p = self.pub_by_remote(r["id"])
                 if p and p["local_type"] != table:
                     p = None
@@ -710,7 +732,8 @@ class Syncer:
                 if not p and stable == table:
                     p = self.pub(table, sid)
                     if not p:
-                        if not r.get("deleted") and self.row(table, sid) is not None:
+                        lr = self.row(table, sid)
+                        if not r.get("deleted") and lr is not None and not ("is_test" in lr.keys() and lr["is_test"]):
                             self._adopt(table, sid, r, local_rows)
                         continue
                 if table == "letters" and not self.letters and not p:
@@ -729,6 +752,8 @@ class Syncer:
                     continue
                 lid = p["local_id"]
                 local = self.row(table, lid)
+                if local is not None and "is_test" in local.keys() and local["is_test"]:
+                    continue                          # local test record: the web never changes or deletes it
                 lrow = local_rows.get(table, {}).get(lid)
                 local_changed = lrow is not None and not self._clean(table, lid, local_rows)
                 if (table, lid) in conflicts:
@@ -1445,6 +1470,8 @@ class Syncer:
         row = self.row(table, lid)
         if row is None:
             raise SyncError(tr("The record no longer exists."))
+        if row.get("is_test"):
+            raise SyncError(tr("Test records are never put on the web."))
         title = row.get("title") if table in ("events", "bookmarks") else row.get("name")
         via = None
         if table == "media":

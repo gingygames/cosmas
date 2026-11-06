@@ -1,46 +1,70 @@
 **English** · [Čeština](README.cs.md)
 
-<p align="center"><img src="docs/img/banner.png" alt="Kosmas" width="100%"></p>
+<p align="center"><img src="docs/img/banner.png" alt="Kosmas – the chronicle of your roleplay nights" width="100%"></p>
 
 <p align="center">
-  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Download the Windows installer</b></a> ·
-  <a href="#installation">Installation</a> · <a href="#ai-on-your-pc-or-a-paid-service">AI</a> · <a href="#for-developers">For developers</a>
+  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Download for Windows</b></a> ·
+  <a href="https://gingygames.com/kosmas/">Web chronicle</a> ·
+  <a href="#install">Install</a> · <a href="#sign-in-and-sync-with-the-web">Sync</a> ·
+  <a href="#ai-on-your-pc-or-a-paid-service">AI</a> · <a href="#privacy">Privacy</a> · <a href="#build-from-source">Build from source</a>
 </p>
 
-# Kosmas — RP chronicle for your Medal recordings
+# Kosmas — the chronicle of your roleplay nights
 
-**Kosmas** (formerly Kronikář, named after Cosmas of Prague, the oldest Czech chronicler) catalogs your [Medal](https://medal.tv) recordings for roleplay players. It gives you:
-- a video library;
-- events with a journal and attachments;
-- a database of characters, factions, places and players;
-- timelines;
-- a player that plays several audio tracks at once (game, Discord, microphone).
+**Kosmas** (formerly Kronikář, named after Cosmas of Prague, the oldest Czech chronicler) is a Windows app that turns your
+[Medal](https://medal.tv) recordings into a roleplay chronicle:
+- a **library** of your recordings and clips, grouped by game and evening;
+- **events** with a write-up, a dated journal and attachments, on a **timeline** (chronicle, Gantt, calendar, character lanes);
+- a database of **characters, factions and houses, places and players**, with relationships and portraits;
+- **moments** – marked points and segments in videos, attached to events and characters;
+- a **player** that plays several audio tracks at once (game, Discord, microphone);
+- optional **AI**: speech transcripts, frame descriptions, name tags read from the screen and a suggested chronicle of the evening;
+- optional **sync with the web chronicle** at [gingygames.com/kosmas](https://gingygames.com/kosmas/) – share a character or an event by link,
+  or use your characters with the community Discord bot.
 
-AI transcribes what was said and describes what's on screen. It reads the name tags above characters' heads and turns an evening of play into a chronicle, complete with suggested events and characters.
-
-The interface is in English, or in Czech if your system language is Czech or Slovak (you can switch it in Settings).
+The interface is in English, or in Czech when Windows is set to Czech or Slovak (Settings → Language: Automatic / English / Čeština).
 
 | | |
 |:-:|:-:|
-| ![Overview](docs/img/prehled.jpg) **Overview**: last session, videos in progress, games | ![Player](docs/img/prehravac.jpg) **Player**: multiple audio tracks, bookmarks, characters in the video |
-| ![Library](docs/img/knihovna.jpg) **Library**: videos by day, filters, search that includes what was said | ![Characters](docs/img/postavy.jpg) **Characters**: portraits, relationships, factions, appearances in recordings |
-| ![Kosmas AI](docs/img/kronikar-ai.jpg) **Kosmas AI**: suggested events, places and characters from the transcript | ![Where AI runs](docs/img/kde-bezi-ai.jpg) **Where AI runs**: recommendations for your PC and cost estimates |
-| ![Moments](docs/img/momenty.jpg) **Moments**: bookmarks and ranges from all your videos | ![Event](docs/img/udalost.jpg) **Event**: write-up, journal, attachments, characters and videos |
+| ![Library](docs/img/desktop-library.webp) **Library** – recordings and clips, filters, characters in each video | ![Player](docs/img/desktop-player.webp) **Player** – several audio tracks, moments, the event next to the video |
+| ![Characters](docs/img/desktop-characters.webp) **Characters** – profile, factions, relationships, events and moments | ![Timeline](docs/img/desktop-timeline.webp) **Timeline** – the story as a chronicle, Gantt chart, calendar or character lanes |
 
-## Installation
-1. Download **[Kronikar-Setup.exe](https://github.com/gingygames/kosmas/releases/latest)**. It runs on 64-bit Windows 10 and 11.
-2. Run it and click **Next → Install**.
-   - No admin rights, no Python, nothing else to install. The video player and ffmpeg are bundled.
-   - A shortcut is added to the Start menu, and to the desktop if you want one.
-3. On first launch, Kosmas finds your Medal folders by itself (`Videos\Medal`, `X:\Medal`). You can add more in Settings.
+<sub>Screenshots use made-up demo data.</sub>
 
-**Updating:** run a newer installer; your data stays put.
+## Download
+Get **Kosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
+(also linked from [gingygames.com/kosmas](https://gingygames.com/kosmas/)). 64-bit Windows 10 (1809 or newer) or Windows 11.
 
-**Uninstalling:** via *Windows Settings → Apps*. You'll be asked whether to delete your data as well.
+## Install
+1. Run the installer and click **Next → Install**.
+   - It installs for your user only (`%LOCALAPPDATA%\Programs\Kronikar`): no admin rights, no Python, nothing else needed –
+     the video player (libmpv) and ffmpeg are bundled.
+   - Shortcuts go to the Start menu and to the desktop (you can untick the desktop one).
+2. **Updating:** run a newer installer. It replaces the program and keeps your data; an existing 1.0 install (Kronikář) is updated
+   in place and its old shortcuts are replaced.
+3. **Uninstalling:** *Windows Settings → Apps → Kosmas*. You're asked whether to delete your catalogue too (default: keep it);
+   your videos are never deleted.
 
-**Data** lives in `%LOCALAPPDATA%\Kronikar` (catalog, settings, thumbnails, transcripts). Back this folder up.
+## First run
+- Kosmas looks for your Medal folders by itself (`Videos\Medal`, `X:\Medal`). Add other folders in **Settings → Recording folders**.
+  Medal's own database is only ever read, never written.
+- Your catalogue lives in `%LOCALAPPDATA%\Kronikar` (catalog.db, settings, thumbnails, attachments, transcripts). Back this folder up;
+  Settings → Catalog data shows the exact path and opens it.
+- If you used Kosmas before from a source checkout or a portable copy, the first start finds that catalogue and **asks** whether to copy
+  it in. The original folder is never moved or changed.
+- Want to try things out without cluttering your chronicle? Mark records as test data (⋯ → *Mark as test record*): they are hidden
+  unless **Settings → Test data → Show test data** is on, they never sync, and *Delete test data* removes them (after a backup).
 
-> If you used to run the app from source, the installed version picks up your existing data automatically on first launch.
+## Sign in and sync with the web
+The web chronicle at [gingygames.com/kosmas](https://gingygames.com/kosmas/) shows your characters, events, factions and places in the
+browser and lets you share them.
+1. **Settings → Web chronicle → Sign in with Discord.** Your browser opens; sign in with Discord and click **Allow**. Nothing to copy.
+   (If the browser can't return to the app, use the code shown instead.)
+2. **Sync now** – or tick *Sync after the app starts*. Changes go both ways; when both sides changed the same record you choose which wins.
+3. Everything on the web is **private** until you share it: the **Share** button on a character, faction, place, event or moment offers
+   *Only me*, *Anyone with the link* or *Public*.
+4. **Use on Discord** (in a character's Edit form) puts the character on the community Discord bot as a card.
+5. *Sign out / disconnect this device* revokes the device's access; you can also disconnect devices on the web (Settings → Sync).
 
 ## AI: on your PC, or a paid service
 The first time you transcribe something, you choose where the AI should run. The choice lives in **Transcripts → Where AI runs**, and you can change it at any time, even separately for each part (speech, vision, chronicle).
@@ -106,7 +130,7 @@ the character list hides itself.
   (generated in the background the first time you play a video and saved to `data/previews`).
 - Audio track presets (the sliders button, Ctrl+Shift+1…9) and default tracks for each game.
 - Videos resume where you left off (red progress bar on the card, "Continue watching" on the Overview).
-- `O` / the **Character** button tags who is in the video at this moment.
+- `C` / the **Character** button tags who is in the video at this moment.
 - Snapshots and images taken from videos have a "Play video from …" button.
 
 ## Screens
@@ -119,17 +143,17 @@ the character list hides itself.
 - **Characters** – a profile with portrait, faction, status, player, biography, relationships, events,
   videos and journal mentions.
 - **Timeline** – four views: Chronicle, Timeline (zoomable Gantt chart), Calendar, Characters (lanes).
-- **Moments** – all bookmarks and ranges (virtual clips) from your videos, grouped by recording,
-  with an unassigned / in events filter. Bookmarks you set in Medal with a hotkey are imported automatically
+- **Moments** – all moments and segments (virtual clips) from your videos, grouped by recording,
+  with an unassigned / in events filter. Moments you mark in Medal with a hotkey are imported automatically
   (automatic game moments such as "Double Kill" are hidden, but can be turned on).
 - **Gallery** – all screenshots and snapshots from videos.
 - **Settings** – language (Automatic / English / Čeština; Automatic means Czech when your system language is Czech or Slovak,
   English otherwise), appearance (7 themes, accent color, interface size, corner rounding, font, animations,
   player layout), folders, clip/recording rules, default audio tracks, game renaming.
 
-## Bookmarks and ranges
-`B` = bookmark at the current position, `Shift+B` = start and then end of a range, `P` = bookmark straight into an
-event. A bookmark has a name, note, color, characters and event; a range plays and then stops on its own.
+## Moments and segments
+`B` = moment at the current position, `Shift+B` = start and then end of a segment, `P` = moment straight into an
+event. A moment has a name, note, color, characters and event; a segment plays and then stops on its own.
 You'll find them in Moments, in the video inspector in the Library, on events (Recordings → Moments), on characters,
 and as little flags on the Timeline.
 
@@ -161,7 +185,7 @@ Video decoding runs on the GPU (libmpv, `hwdec=auto-safe`, `vo=gpu-next`).
 - **Players from a server:** Settings → Discord: bot token + server ID → "Load members and create players" (name and avatar),
   then "Link with Discord" on a player, and "Update names and avatars". The bot needs the *Server Members Intent* enabled.
 - **Pigeon post from the clipboard (DMs):** in Discord, select messages by dragging the mouse, press Ctrl+C, then Ctrl+V in Pigeon post
-  (or Add → Paste from clipboard). It recognizes the author, time and text, preselects messages containing the word "holub" (pigeon),
+  (or Add → Paste from clipboard). It recognizes the author, time and text, preselects messages containing the marker word ("holub" = pigeon by default),
   matches the author to a character via their player, and pasting the same thing twice won't create duplicates.
 - **Pigeon post:** letters (messages containing the word "holub"; the keyword can be changed) from a server channel via a bot
   (*Message Content Intent*), from Discord's official data export (your own messages only), or entered by hand.
@@ -219,7 +243,7 @@ Medal icons, a file, a URL, the clipboard or a frame from a video – all with c
   server, as well as new characters, events, factions and places (when a game is selected), get the default server.
 - A new character's type is "Character" (previously NPC). Bulk character editing: Ctrl/Shift + click, then right-click.
 
-## For developers
+## Build from source
 **Tech stack:**
 - Python 3.12 + PySide6. The UI lives in `rpcatalog/web/` and runs offline in Qt WebEngine.
 - The player is libmpv (`vendor/libmpv-2.dll`), icons are Lucide, and thumbnails are made with ffmpeg/ffprobe.
@@ -232,7 +256,7 @@ Medal icons, a file, a URL, the clipboard or a frame from a video – all with c
   - `keystore.py`: keys in Windows Credential Manager;
   - `ai_setup.py`: sign-in, Ollama installation and model downloads.
 
-**Running from source**
+**Run from source**
 1. Install Python 3.12 and run this in the project root:
    ```
    python -m venv .venv
@@ -241,11 +265,32 @@ Medal icons, a file, a URL, the clipboard or a frame from a video – all with c
 2. Download `mpv-dev-x86_64-…7z` from [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases) and put the `libmpv-2.dll` from it into the `vendor/` folder.
    It isn't committed to git because it's over 100 MB.
 3. Put ffmpeg/ffprobe on your PATH (`winget install Gyan.FFmpeg`).
-4. Run `Kronikar.bat`. Data is then stored in the `data/` folder next to the code.
+4. Run `Kronikar.bat`. Data is then stored in the `data/` folder next to the code; set `KRONIKAR_DATA` to use another (e.g. empty test) folder.
+5. Tests: `python -m unittest discover -s tests` (the sync tests need the local web backend, otherwise they are skipped).
 
 **Building the installer:** run `.venv\Scripts\python.exe installer\build.py`. The script:
 1. downloads an embeddable Python 3.12;
 2. bundles the packages from `installer/requirements-dist.txt`, libmpv, ffmpeg and the `Kronikar.exe` launcher with its icon;
-3. uses Inno Setup to create `build/Kronikar-Setup-<version>.exe`. The version is taken from `rpcatalog/__init__.py`.
+3. uses Inno Setup to create `build/Kosmas-Setup-<version>.exe`. The version is taken from `rpcatalog/__init__.py`.
 
 `installer/make_icon.py` regenerates the icon from `rpcatalog/web/icon.svg`.
+
+## Privacy
+Kosmas is **local first**: your catalogue is a SQLite file on your PC and everything works offline.
+- **Nothing is uploaded unless you sign in and sync.** Then only the chronicle goes to the web (characters, factions, places, players' names,
+  events, entries, moments, images you attached, video titles and YouTube links). Video files are never uploaded; for a local video only its
+  title, length and path relative to your recordings folder are sent. Player contacts and Discord bot tokens never leave your PC;
+  pigeon post only if you tick it. Test records never sync.
+- What you sync is private on the web until you share it.
+- **AI on this PC** keeps everything on the PC. With a **paid service**, only the audio (speech) or frames and transcript text go to the
+  service you picked; API keys are stored encrypted in Windows Credential Manager.
+- Medal's database is read-only for Kosmas; deleting a video moves it to the Recycle Bin.
+
+## Licence
+This repository doesn't have a licence file yet, so no licence is granted for the code. Bundled third-party components keep their own
+licences: libmpv (mpv), FFmpeg (GPL build), Qt/PySide6 (LGPL), Lucide icons (ISC).
+
+## Links
+- Web chronicle: https://gingygames.com/kosmas/
+- Download: https://github.com/gingygames/kosmas/releases/latest
+- Issues and ideas: https://github.com/gingygames/kosmas/issues

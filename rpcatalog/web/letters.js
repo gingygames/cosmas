@@ -4,6 +4,8 @@
 'use strict';
 
 (() => {
+/* the word that marks a letter in Discord messages (Settings → Discord; Czech servers use “holub”) */
+const letterWord = () => (App.settings && App.settings.holub_marker) || 'holub';
 document.head.appendChild(h('style', `
 .lt { display: flex; height: 100%; min-height: 0; }
 .lt-side { width: 360px; flex: none; display: flex; flex-direction: column; background: var(--bg-2); min-height: 0; }
@@ -57,7 +59,7 @@ function renderRows() {
   const t = q.toLowerCase();
   const items = list.filter(l => (!t || `${l.title} ${l.body} ${who(l)}`.toLowerCase().includes(t))
     && (!charFilter || l.sender_id === charFilter || (l.recipient_ids || []).includes(charFilter)));
-  if (!items.length) { box.appendChild(h('.faint.small', { style: { padding: '14px 8px' } }, list.length ? tr('Nothing matches.') : tr('No letters yet. Add one manually or import from Discord (messages containing the word “holub”).'))); return; }
+  if (!items.length) { box.appendChild(h('.faint.small', { style: { padding: '14px 8px' } }, list.length ? tr('Nothing matches.') : tr('No letters yet. Add one manually or import from Discord (messages containing the word “{word}”).', { word: letterWord() }))); return; }
   items.forEach(l => box.appendChild(h('.lt-row' + (cur && cur.id === l.id ? '.on' : ''), { onclick: () => open(l.id) },
     h('.row', h('.who.grow.ellipsis', l.title || who(l)), h('span.d', l.ingame_date || (l.sent_at ? fmt.date(l.sent_at) : ''))),
     l.title ? h('.d.ellipsis', who(l)) : null,
@@ -68,7 +70,7 @@ function open(id) { cur = list.find(l => l.id === id) || null; App.ui.letterId =
 
 function renderDetail() {
   const d = $('.lt-detail', root); clear(d);
-  if (!cur) { d.appendChild(emptyState('mail', tr('Pigeon post'), tr('Letters between characters – manual, or from Discord (messages containing the word “holub”).'))); Shell.header({ icon: 'mail', title: tr('pigeon post') }); return; }
+  if (!cur) { d.appendChild(emptyState('mail', tr('Pigeon post'), tr('Letters between characters – manual, or from Discord (messages containing the word “{word}”).', { word: letterWord() }))); Shell.header({ icon: 'mail', title: tr('pigeon post') }); return; }
   const l = cur;
   Shell.header({ icon: 'mail', title: l.title || who(l), topic: [l.ingame_date, l.sent_at ? fmt.dt(l.sent_at) : '', l.source !== 'manual' ? tr('from Discord') : ''].filter(Boolean).join(' · ') });
   const save = debounce(f => API.call('letter.update', { id: l.id, ...f }).then(load).then(renderRows), 350);
@@ -90,6 +92,7 @@ function renderDetail() {
     h('textarea.input.lt-paper', { rows: 14, onkeydown: e => e.stopPropagation(), oninput: e => { l.body = e.target.value; save({ body: l.body }); } }, l.body || ''),
     h('.row', { style: { marginTop: '14px' } },
       l.channel ? h('span.small.faint', tr('Source: {source}', { source: l.channel + (l.author ? ' · ' + l.author : '') })) : null, h('.grow'),
+      h('button.btn', { onclick: e => menu(e, [testMenuItem('letter', l)]) }, icon('flask-conical'), l.is_test ? tr('Test record') : tr('Test')),
       h('button.btn.danger', { onclick: async () => { if (!await confirmDialog(tr('Delete letter'), tr('Really delete this letter?'), { danger: true, okLabel: tr('Delete') })) return; await API.call('letter.delete', { id: l.id }); cur = null; await load(); renderRows(); renderDetail(); } }, icon('trash-2'), tr('Delete'))));
 }
 
@@ -115,7 +118,7 @@ function guessChar(author) {
 function hash(str) { let x = 5381; for (let i = 0; i < str.length; i++) x = (x * 33 + str.charCodeAt(i)) >>> 0; return x.toString(36); }
 
 function pasteDialog(text) {
-  const marker = (App.settings.holub_marker || 'holub').toLowerCase();
+  const marker = letterWord().toLowerCase();
   const ta = h('textarea.input', { rows: 5, placeholder: tr('In Discord, select the messages (drag the mouse over them), press Ctrl+C and paste them here with Ctrl+V.'), onkeydown: e => e.stopPropagation() }, text || '');
   const listBox = h('div'), authorsBox = h('div');
   let msgs = [], sel = new Set(), mode = 'each', recips = [];
@@ -159,7 +162,7 @@ function pasteDialog(text) {
   renderRec(); parse();
   modal({ title: tr('Letters from clipboard'), icon: 'clipboard-paste', wide: true,
     body: h('.col', { style: { gap: '8px' } }, ta, listBox, authorsBox, h('.row.wrap', { style: { gap: '12px', marginTop: '6px' } }, modeSeg, recBox),
-      h('.faint.small', tr('Tip: find the “Holub” messages in Discord via search (Ctrl+F → holub), then select them and copy them all at once.'))),
+      h('.faint.small', tr('Tip: find the “{word}” messages in Discord via search (Ctrl+F → {word}), then select them and copy them all at once.', { word: letterWord() }))),
     actions: [{ label: tr('Cancel') }, { label: tr('Save letters'), primary: true, icon: 'check', onClick: async () => {
       const chosen = msgs.filter((_, i) => sel.has(i));
       if (!chosen.length) { toast(tr('Nothing is selected'), 'err'); return false; }
@@ -189,14 +192,14 @@ async function runImport(method) {
   try {
     const r = await API.call(method);
     if (!r) return;
-    toast(trn(r.found, 'Found {n} message containing the word “holub”, {new} new', 'Found {n} messages containing the word “holub”, {new} new', { new: r.new }));
+    toast(trn(r.found, 'Found {n} message containing the word “{word}”, {new} new', 'Found {n} messages containing the word “{word}”, {new} new', { new: r.new, word: letterWord() }));
     await load(); renderRows();
   } catch (e) { /* toast already shown */ }
 }
 
 function help() {
   modal({ title: tr('Letters from Discord'), icon: 'circle-help', wide: true, body: h('.col', { style: { gap: '10px' } },
-    h('div', h('b', tr('From a server channel (recommended): ')), tr('if letters are written in a channel on a server where your bot is, fill in the channel ID in Settings → Discord. Messages containing the word “holub” (the word can be changed) are loaded – from all players.')),
+    h('div', h('b', tr('From a server channel (recommended): ')), tr('if letters are written in a channel on a server where your bot is, fill in the channel ID in Settings → Discord. Messages containing the word “{word}” (the word can be changed) are loaded – from all players.', { word: letterWord() })),
     h('div', h('b', tr('From a data export: ')), tr('Discord → User Settings → Data & Privacy → Request data (tick Messages). In a few days you get a link to package.zip – choose it here. The export only contains messages you wrote yourself.')),
     h('div', h('b', tr('From the clipboard (fastest for DMs): ')), tr('in Discord, select messages by dragging the mouse, Ctrl+C, then here Add → Paste from clipboard (or just Ctrl+V in Pigeon post). Author, time and text are recognized.')),
     h('.faint', tr('Discord does not hand out private messages others sent you automatically – bots have no access to them and downloading through a personal account is against Discord rules (risk of a ban). Add such letters manually (Add → Write / paste) – just copy the text.'))) });

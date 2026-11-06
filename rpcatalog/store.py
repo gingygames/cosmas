@@ -407,6 +407,9 @@ class Media(dict):
         return json.loads(self["sidecars"] or "[]")
 
 
+TEST_TABLES = ("media", "characters", "factions", "places", "events", "letters", "bookmarks", "players")
+
+
 class Store:
     def __init__(self, path):
         self.db = sqlite3.connect(str(path))
@@ -481,10 +484,55 @@ class Store:
             self.db.execute("ALTER TABLE media ADD COLUMN watched_at REAL")
         if "youtube" not in mcols:   # ID videa na YouTube (jen taková videa jdou na web)
             self.db.execute("ALTER TABLE media ADD COLUMN youtube TEXT")
+        for table in TEST_TABLES:     # test records: hidden unless "Show test data", never synced
+            if "is_test" not in {r[1] for r in self.db.execute(f"PRAGMA table_info({table})")}:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN is_test INTEGER DEFAULT 0")
         if fresh_bm:
             for mid, raw in self.db.execute("SELECT id, bookmarks FROM media").fetchall():
                 self.sync_medal_bookmarks(mid, json.loads(raw or "[]"), commit=False)
         self.db.commit()
+
+    # ---------- test records ----------
+    hide_test = True        # lists leave out test records; the "Show test data" setting turns this off
+
+    def _nt(self, alias=""):
+        """SQL condition 'not a test record' (always true while test data are shown)."""
+        return f"COALESCE({alias + '.' if alias else ''}is_test, 0)=0" if self.hide_test else "1=1"
+
+    def set_test(self, table, ids, value=True):
+        if table not in TEST_TABLES:
+            raise ValueError(table)
+        ids = [int(i) for i in (ids if isinstance(ids, (list, tuple, set)) else [ids])]
+        self.db.executemany(f"UPDATE {table} SET is_test=? WHERE id=?", [(1 if value else 0, i) for i in ids])
+        self.db.commit()
+
+    def test_ids(self, table):
+        return {r[0] for r in self.db.execute(f"SELECT id FROM {table} WHERE is_test=1")}
+
+    def test_counts(self):
+        return {t: self.db.execute(f"SELECT COUNT(*) FROM {t} WHERE is_test=1").fetchone()[0] for t in TEST_TABLES}
+
+    def delete_test_data(self):
+        """Deletes every record marked as test. Videos stay (a scan would only bring them back, and files on disk
+        are never touched): test videos remain marked and hidden."""
+        counts = self.test_counts()
+        counts.pop("media", None)
+        for t in ("bookmarks", "letters", "events", "characters", "factions", "places", "players"):
+            ids = self.test_ids(t)
+            if not ids:
+                continue
+            q = ",".join("?" * len(ids))
+            if t in ("events", "characters", "factions", "places", "players"):
+                owner = {"events": "event", "characters": "character", "factions": "faction", "places": "place",
+                         "players": "player"}[t]
+                self.db.execute(f"DELETE FROM attachments WHERE owner_type=? AND owner_id IN ({q})", [owner, *ids])
+            if t == "characters":
+                self.db.execute(f"DELETE FROM character_links WHERE character_id IN ({q})", list(ids))
+            if t == "events":
+                self.db.execute(f"DELETE FROM character_links WHERE target_type='event' AND target_id IN ({q})", list(ids))
+            self.db.execute(f"DELETE FROM {t} WHERE id IN ({q})", list(ids))
+        self.db.commit()
+        return counts
 
     # ---------- media ----------
     def upsert_media(self, rec):
@@ -532,7 +580,8 @@ class Store:
         return out
 
     def all_media(self, include_missing=False):
-        where = "" if include_missing else "WHERE missing=0"
+        conds = ([] if include_missing else ["missing=0"]) + ([self._nt()] if self.hide_test else [])
+        where = ("WHERE " + " AND ".join(conds)) if conds else ""
         return self._media_rows(f"SELECT * FROM media {where} ORDER BY start_time DESC")
 
     def media(self, media_id):
@@ -798,7 +847,7 @@ class Store:
 
     def games(self):
         rows = self.db.execute(
-            "SELECT game, COUNT(*) n FROM media WHERE missing=0 GROUP BY game ORDER BY game").fetchall()
+            f"SELECT game, COUNT(*) n FROM media WHERE missing=0 AND {self._nt()} GROUP BY game ORDER BY game").fetchall()
         return [(r["game"], r["n"]) for r in rows]
 
     # ---------- albums ----------
@@ -843,7 +892,7 @@ class Store:
 
     # ---------- events ----------
     def events(self):
-        rows = self.db.execute("SELECT * FROM events ORDER BY position, start_time, id").fetchall()
+        rows = self.db.execute(f"SELECT * FROM events WHERE {self._nt()} ORDER BY position, start_time, id").fetchall()
         tags = {}
         for r in self.db.execute("SELECT event_id, tag FROM event_tags ORDER BY tag"):
             tags.setdefault(r["event_id"], []).append(r["tag"])
@@ -904,7 +953,7 @@ class Store:
 
     def links(self, event_id=None, media_id=None):
         sql = ("SELECT l.*, e.title AS event_title FROM event_links l "
-               "JOIN events e ON e.id=l.event_id WHERE 1=1")
+               f"JOIN events e ON e.id=l.event_id WHERE {self._nt('e')}")
         args = []
         if event_id is not None:
             sql += " AND l.event_id=?"
@@ -940,7 +989,8 @@ class Store:
     # ---------- journal entries ----------
     def entries(self, event_id=None):
         if event_id is None:
-            return [dict(r) for r in self.db.execute("SELECT * FROM entries ORDER BY entry_time")]
+            return [dict(r) for r in self.db.execute(
+                f"SELECT * FROM entries WHERE event_id IN (SELECT id FROM events WHERE {self._nt()}) ORDER BY entry_time")]
         return [dict(r) for r in self.db.execute(
             "SELECT * FROM entries WHERE event_id=? ORDER BY COALESCE(entry_time, created_at), id",
             (event_id,))]
@@ -1023,7 +1073,7 @@ class Store:
                    "summary", "body_html"}
 
     def characters(self):
-        rows = [dict(r) for r in self.db.execute("SELECT * FROM characters ORDER BY name COLLATE NOCASE")]
+        rows = [dict(r) for r in self.db.execute(f"SELECT * FROM characters WHERE {self._nt()} ORDER BY name COLLATE NOCASE")]
         counts = {}
         for r in self.db.execute("SELECT character_id, target_type, COUNT(DISTINCT target_id) n "
                                  "FROM character_links GROUP BY character_id, target_type"):
@@ -1147,7 +1197,9 @@ class Store:
 
     def bookmarks(self, media_id=None, event_id=None, include_hidden=False, ids=None):
         sql = ("SELECT b.*, e.title AS event_title, e.color AS event_color FROM bookmarks b "
-               "LEFT JOIN events e ON e.id=b.event_id WHERE 1=1")
+               f"LEFT JOIN events e ON e.id=b.event_id WHERE {self._nt('b')}")
+        if self.hide_test:
+            sql += f" AND b.media_id NOT IN (SELECT id FROM media WHERE is_test=1)"
         args = []
         if not include_hidden:
             sql += " AND b.hidden=0"
@@ -1201,7 +1253,7 @@ class Store:
     def factions(self):
         return [dict(r) for r in self.db.execute(
             "SELECT f.*, (SELECT COUNT(*) FROM faction_members m WHERE m.faction_id=f.id) AS n "
-            "FROM factions f ORDER BY f.name COLLATE NOCASE")]
+            f"FROM factions f WHERE {self._nt('f')} ORDER BY f.name COLLATE NOCASE")]
 
     def faction(self, fid):
         r = self.db.execute("SELECT * FROM factions WHERE id=?", (fid,)).fetchone()
@@ -1258,7 +1310,7 @@ class Store:
     def players(self):
         return [dict(r) for r in self.db.execute(
             "SELECT p.*, (SELECT COUNT(*) FROM characters c WHERE c.player_id=p.id) AS n "
-            "FROM players p ORDER BY p.name COLLATE NOCASE")]
+            f"FROM players p WHERE {self._nt('p')} ORDER BY p.name COLLATE NOCASE")]
 
     def player(self, pid):
         r = self.db.execute("SELECT * FROM players WHERE id=?", (pid,)).fetchone()
@@ -1312,7 +1364,7 @@ class Store:
 
     def places(self):
         return self._rows("SELECT p.*, (SELECT COUNT(*) FROM events e WHERE e.place_id=p.id) AS n_events "
-                          "FROM places p ORDER BY p.name COLLATE NOCASE")
+                          f"FROM places p WHERE {self._nt('p')} ORDER BY p.name COLLATE NOCASE")
 
     def place(self, pid):
         r = self._rows("SELECT * FROM places WHERE id=?", (pid,))
@@ -1335,7 +1387,7 @@ class Store:
                      "author_discord_id", "channel", "source", "source_ref", "event_id", "place_id"}
 
     def letters(self):
-        return self._rows("SELECT * FROM letters ORDER BY COALESCE(sent_at, created_at) DESC")
+        return self._rows(f"SELECT * FROM letters WHERE {self._nt()} ORDER BY COALESCE(sent_at, created_at) DESC")
 
     def letter(self, lid):
         r = self._rows("SELECT * FROM letters WHERE id=?", (lid,))

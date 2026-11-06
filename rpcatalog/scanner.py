@@ -28,14 +28,20 @@ def filename_time(name):
     m = NAME_RE.match(name)
     if not m:
         return None, None
-    ts = m.group("ts")
-    try:
-        t = dt.datetime.strptime(ts[:14], "%Y%m%d%H%M%S")
-        if len(ts) > 14:
-            t += dt.timedelta(milliseconds=int(ts[14:].ljust(3, "0")[:3]))
-        return t.timestamp(), m.group("game") or None
-    except ValueError:
-        return None, m.group("game") or None
+    game, ts = m.group("game"), m.group("ts")
+    # a game name ending in a digit ("RedDeadRedemption2") runs into the timestamp: move digits back to the
+    # name until the rest parses as a date
+    while len(ts) >= 14:
+        try:
+            t = dt.datetime.strptime(ts[:14], "%Y%m%d%H%M%S")
+            if not 2000 <= t.year <= 2100:
+                raise ValueError(ts)
+            if len(ts) > 14:
+                t += dt.timedelta(milliseconds=int(ts[14:].ljust(3, "0")[:3]))
+            return t.timestamp(), game or None
+        except ValueError:
+            game, ts = game + ts[0], ts[1:]
+    return None, m.group("game") or None
 
 
 def ffprobe(path):

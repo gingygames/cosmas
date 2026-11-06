@@ -26,6 +26,7 @@ import urllib.request
 
 from . import i18n
 from .i18n import tr
+from . import __version__
 from .sync import DEFAULT_URL, NetworkError, SyncError, check_url
 
 LOGIN_TIMEOUT = 300          # seconds the app waits for the browser
@@ -156,7 +157,7 @@ class CallbackServer:
 # ------------------------------------------------------------------ HTTP to the server (no token needed)
 def _post(server, path, body, token=None, timeout=30):
     url = check_url(server or DEFAULT_URL) + "/kosmas/api" + path
-    headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "Kosmas-desktop/1.0",
+    headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": f"Kosmas-desktop/{__version__}",
                "Accept-Language": i18n.lang()}
     if token:
         headers["Authorization"] = f"Bearer {token}"

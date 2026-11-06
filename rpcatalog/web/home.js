@@ -112,7 +112,7 @@ async function render() {
 
   const bms = (await API.call('bm.list', { include_auto: false })).filter(b => !b.event_id).sort((a, b) => (b.abs || 0) - (a.abs || 0)).slice(0, 7);
   clear(momBox);
-  if (!bms.length) momBox.appendChild(h('.faint.small', { style: { padding: '8px' } }, tr('All bookmarks are assigned. Press B while playing.')));
+  if (!bms.length) momBox.appendChild(h('.faint.small', { style: { padding: '8px' } }, tr('All moments are assigned. Press B while playing.')));
   else bms.forEach(b => momBox.appendChild(bmRow(b, { showMedia: true, onChange: render })));
 }
 
