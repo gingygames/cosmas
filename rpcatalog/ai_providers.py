@@ -63,7 +63,7 @@ CATALOG = {
                 {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash – better", "in": 0.75, "out": 3.75, "think": 2000}]}},
     "openrouter": {
         "label": "OpenRouter", "kind": "openai", "base": "https://openrouter.ai/api/v1", "login": "oauth", "json": "schema",
-        "headers": {"HTTP-Referer": "https://github.com/gingygames/kronikar", "X-OpenRouter-Title": "Kronikar"},
+        "headers": {"HTTP-Referer": "https://github.com/gingygames/kronikar", "X-OpenRouter-Title": "Kosmas"},
         "key_url": "https://openrouter.ai/keys", "price_url": "https://openrouter.ai/models",
         "note": "One account for models from many companies. Just sign in in the browser and the key is set up automatically. Prices are the same as at the original companies.",
         "models": {

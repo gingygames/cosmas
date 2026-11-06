@@ -160,6 +160,7 @@ function bmRow(b, { showMedia = false, onChange, hideEvent = false } = {}) {
         const r = await pickEvent({ title: tr('Assign bookmark to an event'), moment: b.abs, withNote: false });
         if (r) { await API.call('bm.update', { id: b.id, event_id: r.id }); toast(tr('Assigned to event')); await bmChanged(); onChange && onChange(); }
       } }, icon('link')) : null,
+      window.shareButton ? shareButton('bookmark', b.id, { compact: true }) : null,
       h('button.btn.sm.ghost.icon', { title: tr('Edit'), onclick: e => { e.stopPropagation(); edit(); } }, icon('pencil'))));
 }
 

@@ -241,7 +241,8 @@ async function renderPage() {
   if (token !== pageToken) return;
   if (!ev) { current = null; renderDashboard(); return; }
   clear(main);
-  Shell.header({ icon: 'calendar-range', title: ev.title, topic: [fmt.range(ev.start_time, ev.end_time), ev.ingame_date, ev.location].filter(Boolean).join(' · ') });
+  Shell.header({ icon: 'calendar-range', title: ev.title, topic: [fmt.range(ev.start_time, ev.end_time), ev.ingame_date, ev.location].filter(Boolean).join(' · '),
+    actions: [shareButton('event', ev.id, { cls: 'button.tb-btn', compact: true })] });
   Shell.setContext({ label: tr('In this event'), chars: [...new Set(ev.char_links.map(l => l.character_id))] });
   const save = debounce(async fields => { await API.call('event.update', { id: ev.id, ...fields }); App.loadEvents(); }, 250);
   const saveNow = async fields => { await API.call('event.update', { id: ev.id, ...fields }); Object.assign(ev, fields); await App.loadEvents(); };

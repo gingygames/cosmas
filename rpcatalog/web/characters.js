@@ -428,6 +428,7 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
         ptagChips(c.player_tags), h('.grow'),
         h('button.btn.sm', { onclick: () => { state.editing = true; renderDetail(state.detail); } }, icon('pencil'), tr('Edit')),
         h('button.btn.sm', { onclick: () => addToEvent(c.id) }, icon('calendar-plus'), tr('Add to event')),
+        shareButton('character', c.id),
         h('button.btn.sm.ghost.icon', { title: tr('More actions'), onclick: e => menu(e, [
           { label: tr('Change portrait…'), icon: 'image-up', onClick: () => portrait.click() },
           c.portrait ? { label: tr('Remove portrait'), icon: 'image-off', onClick: async () => { await API.call('char.update', { id: c.id, portrait_id: null }); await App.loadChars(); loadDetail(c.id, true); } } : null,
@@ -515,8 +516,19 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
           [['', tr('— choose a world —')], ...DISCORD_WORLDS].map(([k, l]) => h('option', { value: k, selected: (c.discord_world || '') === k }, l)));
         return h('.col', { style: { gap: '6px' } },
           h('.row.wrap', { style: { gap: '14px' } },
-            h('label.check', h('input', { type: 'checkbox', checked: !!c.discord_use, onchange: e => {
-              c.discord_use = e.target.checked ? 1 : 0; update({ discord_use: c.discord_use }); world.disabled = !c.discord_use; } }), tr('Use on Discord')),
+            h('label.check', h('input', { type: 'checkbox', checked: !!c.discord_use, onchange: async e => {
+              const box = e.target;
+              if (box.checked) {   // the card in the bot comes from the web chronicle → needs the Discord sign-in
+                const st = await API.call('sync.status').catch(() => null);
+                if (st && !st.has_token) {
+                  box.checked = false;
+                  const ok = await confirmDialog(tr('Use on Discord'), tr('Characters get to the Discord bot through the web chronicle. Sign in with Discord first – it takes a moment.'), { okLabel: tr('Sign in with Discord') });
+                  if (!ok || !(await webSignIn())) return;
+                  box.checked = true;
+                }
+              }
+              c.discord_use = box.checked ? 1 : 0; update({ discord_use: c.discord_use }); world.disabled = !c.discord_use;
+            } }), tr('Use on Discord')),
             h('label.field', tr('World'), world)),
           h('.tiny.faint', tr('Private character = a card only for you in the bot; shared via link or public = a card in the 🧙│postavy channel.')));
       };

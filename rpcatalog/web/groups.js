@@ -183,7 +183,8 @@ function makeView(kind) {
     if (!cur) { d.appendChild(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } }, emptyState(C.icon, list.length ? tr('Select on the left') : tr('Nothing yet'), C.empty, h('button.btn.primary', { onclick: create }, icon('plus'), C.newLabel)))); return; }
     const g = cur;
     const kindLabel = kind === 'factions' ? (FK.get(g.kind || 'frakce') || [])[2] : kind === 'places' ? (PK.get(g.kind || 'jine') || PK.get('jine'))[2] : tr('Player');
-    Shell.header({ icon: C.icon, title: g.name, topic: kind === 'players' ? (g.discord_name || g.contact || tr('player')) : kindLabel });
+    Shell.header({ icon: C.icon, title: g.name, topic: kind === 'players' ? (g.discord_name || g.contact || tr('player')) : kindLabel,
+      actions: kind === 'players' ? [] : [shareButton(kind === 'factions' ? 'faction' : 'place', g.id, { cls: 'button.tb-btn', compact: true })] });
     d.style.setProperty('--gc', g.color || '#888');
     const imgEl = img(g, 132, '.gp-img'); imgEl.appendChild(h('.ov', tr('Change image'))); imgEl.onclick = imageMenu;
     const tags = splitTags(g.tags);
