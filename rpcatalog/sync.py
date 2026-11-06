@@ -46,7 +46,7 @@ COLS = {
     "players": "name color avatar_id summary body_html tags discord_id discord_name",
     "factions": "name kind color emblem_id summary body_html parent_id server_id",
     "characters": "name aliases kind status color portrait_id summary body_html gender player_id player status_date "
-                  "status_ingame status_event_id status_note own_style server_id",
+                  "status_ingame status_event_id status_note own_style server_id discord_use discord_world",
     "places": "name kind color image_id summary body_html parent_id owner_type owner_id ingame_location server_id",
     "events": "title description body_html start_time end_time color parent_id position location ingame_date cover_id "
               "status place_id server_id",

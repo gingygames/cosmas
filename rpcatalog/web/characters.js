@@ -2,6 +2,7 @@
    Postavy – character database
    ============================================================ */
 'use strict';
+const DISCORD_WORLDS = [['cechy-1403', 'Čechy 1403'], ['moderni-mesto', 'Moderní město'], ['postapo', 'Postapo'], ['horor', 'Horor']];
 
 (() => {
   const CSS = `
@@ -508,6 +509,17 @@
         update({ player_id: v ? Number(v) : null }); c.player_id = v ? Number(v) : null;
       } }, h('option', { value: '' }, '— nikdo / neznámý —'),
       (App.players || []).map(p => h('option', { value: p.id, selected: c.player_id === p.id }, p.name)), h('option', { value: '__new' }, '+ nový hráč…'));
+      // postava pro Discord (karta v botovi; synchronizuje se s webovou kronikou)
+      const discordBox = () => {
+        const world = h('select.input', { style: { width: '220px' }, disabled: !c.discord_use, onchange: e => { update({ discord_world: e.target.value }); c.discord_world = e.target.value; } },
+          [['', '— vyber svět —'], ...DISCORD_WORLDS].map(([k, l]) => h('option', { value: k, selected: (c.discord_world || '') === k }, l)));
+        return h('.col', { style: { gap: '6px' } },
+          h('.row.wrap', { style: { gap: '14px' } },
+            h('label.check', h('input', { type: 'checkbox', checked: !!c.discord_use, onchange: e => {
+              c.discord_use = e.target.checked ? 1 : 0; update({ discord_use: c.discord_use }); world.disabled = !c.discord_use; } }), 'Používat na Discordu'),
+            h('label.field', 'Svět', world)),
+          h('.tiny.faint', 'Soukromá postava = karta jen pro tebe v botovi; zveřejněná přes odkaz nebo veřejně = karta v kanálu 🧙│postavy.'));
+      };
       const swatches = h('.ch-swatches', PALETTE.map(col => h('span.ch-swatch' + (c.color === col ? '.on' : ''), {
         style: { background: col }, title: col,
         onclick: e => { update({ color: col, own_style: 1 }); c.color = col; $$('.ch-swatch', swatches).forEach(x => x.classList.remove('on')); e.currentTarget.classList.add('on'); d.style.setProperty('--ch-tint', hexA(col, .16)); if (!c.portrait) portrait.style.background = col; },
@@ -525,6 +537,7 @@
         fateBox,
         h('label.field', 'Frakce a rody', facBox),
         h('label.field', 'Server', serverPicker(c.server_id, id => { update({ server_id: id }); c.server_id = id; flushSave().then(() => loadDetail(c.id, true)); }, App.scope.game)),
+        discordBox(),
         h('.row', { style: { gap: '14px' } }, h('.small.faint', 'Barva'), swatches,
           (c.factions || []).length ? h('button.btn.sm' + (!c.own_style ? '.active' : ''), { title: 'Barva a pozadí se převezmou z erbu první frakce',
             onclick: async () => { update({ own_style: 0 }); await flushSave(); loadDetail(c.id, true); } }, icon('shield'), 'Podle frakce') : null));

@@ -488,6 +488,17 @@ class SyncTest(unittest.TestCase):
             sync.check_url("http://example.com")
         self.assertEqual(sync.check_url("http://127.0.0.1:8790/"), "http://127.0.0.1:8790")
 
+    def test_discord_fields_both_ways(self):
+        self.seed()
+        self.store.update_character(self.c1, discord_use=1, discord_world="cechy-1403")
+        self.run_sync()
+        rec = self.by_src()[f"characters:{self.c1}"]
+        self.assertEqual((rec["data"].get("discord_use"), rec["data"].get("discord_world")), (1, "cechy-1403"))
+        self.web("POST", "/ops", {"ops": [{"op": "update", "id": rec["id"], "data": {"discord_use": 0, "discord_world": "horor"}}]})
+        self.run_sync()
+        c = self.store.character(self.c1)
+        self.assertEqual((c["discord_use"], c["discord_world"]), (0, "horor"))
+
     @unittest.skipUnless(importlib.util.find_spec("PySide6"), "bez PySide6")
     def test_media_update_rejects_bad_youtube(self):
         from rpcatalog import api as apimod

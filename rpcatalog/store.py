@@ -358,6 +358,11 @@ class Store:
         for col in ("discord_id", "discord_name"):
             if col not in pcols:
                 self.db.execute(f"ALTER TABLE players ADD COLUMN {col} TEXT DEFAULT ''")
+        ccols = {r[1] for r in self.db.execute("PRAGMA table_info(characters)")}
+        if "discord_use" not in ccols:   # postava „pro Discord“ (karta v botovi) a její svět
+            self.db.execute("ALTER TABLE characters ADD COLUMN discord_use INTEGER DEFAULT 0")
+        if "discord_world" not in ccols:
+            self.db.execute("ALTER TABLE characters ADD COLUMN discord_world TEXT DEFAULT ''")
         if "own_style" not in {r[1] for r in self.db.execute("PRAGMA table_info(characters)")}:
             # 0 = look (colour, background) comes from the character's first faction
             self.db.execute("ALTER TABLE characters ADD COLUMN own_style INTEGER DEFAULT 0")
@@ -705,6 +710,7 @@ class Store:
     # ---------- characters ----------
     CHAR_FIELDS = {"name", "aliases", "kind", "faction", "player", "status", "color", "portrait_id", "gender", "player_id", "status_date",
                    "status_ingame", "status_event_id", "status_note", "own_style", "server_id",
+                   "discord_use", "discord_world",
                    "summary", "body_html"}
 
     def characters(self):
