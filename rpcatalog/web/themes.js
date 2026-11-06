@@ -12,17 +12,17 @@ function T(label, desc, accent, L, X, extra = {}) {
   return { label, desc, accent, vars: Object.assign(vars, extra.vars || {}), light: !!extra.light };
 }
 const THEMES = {
-  noc: T('Noc', 'grafit se zlatou', '#e3b341', ['#101216', '#15181d', '#1b1e24', '#20242b', '#262a32', '#2e333c', '#121418']),
-  grafit: T('Grafit', 'neutrální šedá', '#5aa9e6', ['#111111', '#171717', '#1d1d1e', '#232324', '#29292b', '#323234', '#121212'],
+  noc: T(tr('Night'), tr('graphite with gold'), '#e3b341', ['#101216', '#15181d', '#1b1e24', '#20242b', '#262a32', '#2e333c', '#121418']),
+  grafit: T(tr('Graphite'), tr('neutral grey'), '#5aa9e6', ['#111111', '#171717', '#1d1d1e', '#232324', '#29292b', '#323234', '#121212'],
     ['#ededed', '#b3b3b5', '#7e7e82']),
-  pulnoc: T('Půlnoc', 'hluboká modrá', '#8f7cf0', ['#0c0e1a', '#111425', '#161a2e', '#1c2138', '#222842', '#2b324f', '#0d1020'],
+  pulnoc: T(tr('Midnight'), tr('deep blue'), '#8f7cf0', ['#0c0e1a', '#111425', '#161a2e', '#1c2138', '#222842', '#2b324f', '#0d1020'],
     ['#e6e8f4', '#a9aecb', '#717898']),
-  les: T('Hvozd', 'tmavě zelená', '#7cc47f', ['#0c110e', '#111814', '#161e19', '#1b251f', '#212c25', '#29362e', '#0d130f'],
+  les: T(tr('Greenwood'), tr('dark green'), '#7cc47f', ['#0c110e', '#111814', '#161e19', '#1b251f', '#212c25', '#29362e', '#0d130f'],
     ['#e5ece6', '#a8b8ac', '#728276']),
-  krev: T('Krev', 'temná s rudou', '#d9534f', ['#110c0c', '#171111', '#1d1616', '#241b1b', '#2b2121', '#352828', '#120d0d'],
+  krev: T(tr('Blood'), tr('dark with crimson'), '#d9534f', ['#110c0c', '#171111', '#1d1616', '#241b1b', '#2b2121', '#352828', '#120d0d'],
     ['#efe6e4', '#bba9a6', '#85726f']),
-  oled: T('OLED', 'čistá černá', '#e3b341', ['#000000', '#000000', '#0a0a0b', '#111113', '#18181b', '#222226', '#000000']),
-  pergamen: T('Pergamen', 'světlá kronika', '#9a6a14', ['#d9cfbd', '#e9e1d2', '#f5f0e6', '#fbf8f2', '#efe8db', '#e4dac8', '#e6ddcc'],
+  oled: T('OLED', tr('pure black'), '#e3b341', ['#000000', '#000000', '#0a0a0b', '#111113', '#18181b', '#222226', '#000000']),
+  pergamen: T(tr('Parchment'), tr('light chronicle'), '#9a6a14', ['#d9cfbd', '#e9e1d2', '#f5f0e6', '#fbf8f2', '#efe8db', '#e4dac8', '#e6ddcc'],
     ['#2b2216', '#5b4e3d', '#8a7b66'], { light: true, vars: {
       '--hover': 'rgba(80,55,15,.07)', '--active': 'rgba(80,55,15,.12)', '--border': 'rgba(80,55,15,.12)', '--border-2': 'rgba(80,55,15,.2)',
       '--shadow': '0 8px 24px rgba(60,40,10,.18)', '--shadow-sm': '0 1px 3px rgba(60,40,10,.14)' } }),
@@ -120,9 +120,9 @@ function appearanceSection() {
     const accents = ['', '#e3b341', '#ef9a4b', '#d9534f', '#e06aa8', '#a77be8', '#5aa9e6', '#40c4c4', '#5cc98a', '#9aa3b2'];
     const accRow = h('.row', { style: { gap: '8px', alignItems: 'center' } },
       accents.map(c => h('span.look-sw' + ((look.accent || '') === c ? '.on' : ''), {
-        title: c ? c : 'Podle motivu', style: { background: c || th.accent, backgroundImage: c ? null : 'linear-gradient(135deg, transparent 45%, var(--surface) 45% 55%, transparent 55%)' },
+        title: c ? c : tr('From the theme'), style: { background: c || th.accent, backgroundImage: c ? null : 'linear-gradient(135deg, transparent 45%, var(--surface) 45% 55%, transparent 55%)' },
         onclick: () => { lookSet({ accent: c }); render(); } })),
-      h('input', { type: 'color', value: look.accent || th.accent, title: 'Vlastní barva', style: { width: '34px', height: '28px', border: 0, background: 'none', cursor: 'pointer' },
+      h('input', { type: 'color', value: look.accent || th.accent, title: tr('Custom colour'), style: { width: '34px', height: '28px', border: 0, background: 'none', cursor: 'pointer' },
         onchange: e => { lookSet({ accent: e.target.value }); render(); } }));
     const seg = (key, opts) => h('.seg', opts.map(([v, l]) => h('button' + (look[key] === v ? '.on' : ''), { onclick: () => { lookSet({ [key]: v }); render(); } }, l)));
     const zoom = h('input', { type: 'range', min: 80, max: 130, step: 5, value: look.zoom, style: { width: '220px' } });
@@ -137,17 +137,17 @@ function appearanceSection() {
     const pre = h('input.input', { type: 'number', min: 0, max: 30, value: look.preroll, style: { width: '80px' }, onchange: e => lookSet({ preroll: Math.max(0, +e.target.value || 0) }) });
 
     clear(box).append(
-      h('div', lab('Motiv'), themes),
-      h('div', lab('Barva zvýraznění'), accRow),
+      h('div', lab(tr('Theme')), themes),
+      h('div', lab(tr('Accent colour')), accRow),
       h('.row.wrap', { style: { gap: '34px', alignItems: 'flex-start' } },
-        h('div', lab('Velikost rozhraní'), h('.row', zoom, zoomLbl)),
-        h('div', lab('Zaoblení'), seg('radius', [['sharp', 'Ostré'], ['normal', 'Běžné'], ['round', 'Kulaté']])),
-        h('div', lab('Písmo nadpisů'), seg('font', [['sans', 'Moderní'], ['serif', 'Kronika']])),
-        h('div', lab('Animace'), seg('motion', [[true, 'Zapnuté'], [false, 'Vypnuté']]))),
-      h('div', lab('Přehrávač vpravo – informace o videu (přepneš i tlačítkem v hlavičce přehrávače)'),
-        h('.look-layout', layoutOpt('stack', 'Pod videem'), layoutOpt('row', 'Vedle videa'))),
-      h('div', lab('Záložky'), h('label.row', { style: { gap: '8px' } }, 'Přehrát záložku o', pre, 'sekund dřív (úseky hrají přesně)')),
-      h('div', h('button.btn.sm.ghost', { onclick: () => { App.ui.look = {}; applyAppearance(); App.saveUi(); render(); } }, icon('rotate-ccw'), 'Obnovit výchozí vzhled')));
+        h('div', lab(tr('Interface size')), h('.row', zoom, zoomLbl)),
+        h('div', lab(tr('Corner rounding')), seg('radius', [['sharp', tr('Sharp')], ['normal', tr('Standard')], ['round', tr('Round')]])),
+        h('div', lab(tr('Heading font')), seg('font', [['sans', tr('Modern')], ['serif', tr('Chronicle')]])),
+        h('div', lab(tr('Animations')), seg('motion', [[true, tr('On')], [false, tr('Off')]]))),
+      h('div', lab(tr('Player on the right – video information (you can also switch it with the button in the player header)')),
+        h('.look-layout', layoutOpt('stack', tr('Below the video')), layoutOpt('row', tr('Next to the video')))),
+      h('div', lab(tr('Bookmarks')), h('label.row', { style: { gap: '8px' } }, tr('Play bookmarks'), pre, tr('seconds early (ranges play exactly)'))),
+      h('div', h('button.btn.sm.ghost', { onclick: () => { App.ui.look = {}; applyAppearance(); App.saveUi(); render(); } }, icon('rotate-ccw'), tr('Restore default appearance'))));
   };
   render();
   return box;

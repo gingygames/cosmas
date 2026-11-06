@@ -11,59 +11,61 @@ import urllib.request
 import uuid
 
 from . import config, keystore
+from .i18n import tr
 
 OLLAMA = "http://localhost:11434"
 USAGE_LOG = config.DATA_DIR / "analysis" / "usage.jsonl"
 USD_CZK = 23.0     # rough, only for the estimates shown in the app
 
 # Prices in USD per 1M tokens (in / out), images in tokens per ~768x432 frame, speech in USD per hour of audio.
+# Labels and notes are English; ai_setup.info() translates them with tr().
 # Checked 2026-11-06; the settings page says they are estimates and links to each price list.
 CATALOG = {
-    "ollama": {"label": "Na tomto PC (Ollama)", "kind": "ollama", "local": True},
-    "local": {"label": "Na tomto PC (Whisper)", "kind": "whisper", "local": True},
+    "ollama": {"label": "On this PC (Ollama)", "kind": "ollama", "local": True},
+    "local": {"label": "On this PC (Whisper)", "kind": "whisper", "local": True},
     "anthropic": {
         "label": "Anthropic Claude", "kind": "anthropic", "login": "key",
         "key_url": "https://platform.claude.com/settings/keys", "price_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-        "note": "Platí se předem nabitý kredit. Velmi dobře rozumí češtině.",
+        "note": "Prepaid credit. Understands Czech very well.",
         "models": {
             "vision": [
-                {"id": "claude-opus-5-5", "label": "Claude Opus 5.5 – nejschopnější", "in": 4.0, "out": 20.0, "img": 450, "think": 300, "effort": "low", "fallbacks": True, "default": True},
-                {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5 – vyvážený", "in": 2.0, "out": 10.0, "img": 450, "think": 300, "effort": "low", "fallbacks": True},
-                {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5 – nejlevnější", "in": 0.10, "out": 0.50, "img": 450, "think": 300, "effort": "low"}],
+                {"id": "claude-opus-5-5", "label": "Claude Opus 5.5 – most capable", "in": 4.0, "out": 20.0, "img": 450, "think": 300, "effort": "low", "fallbacks": True, "default": True},
+                {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5 – balanced", "in": 2.0, "out": 10.0, "img": 450, "think": 300, "effort": "low", "fallbacks": True},
+                {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5 – cheapest", "in": 0.10, "out": 0.50, "img": 450, "think": 300, "effort": "low"}],
             "text": [
-                {"id": "claude-opus-5-5", "label": "Claude Opus 5.5 – nejschopnější", "in": 4.0, "out": 20.0, "think": 3000, "effort": "medium", "fallbacks": True, "default": True},
-                {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5 – vyvážený", "in": 2.0, "out": 10.0, "think": 3000, "effort": "medium", "fallbacks": True},
-                {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5 – nejlevnější", "in": 0.10, "out": 0.50, "think": 2000, "effort": "medium"}]}},
+                {"id": "claude-opus-5-5", "label": "Claude Opus 5.5 – most capable", "in": 4.0, "out": 20.0, "think": 3000, "effort": "medium", "fallbacks": True, "default": True},
+                {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5 – balanced", "in": 2.0, "out": 10.0, "think": 3000, "effort": "medium", "fallbacks": True},
+                {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5 – cheapest", "in": 0.10, "out": 0.50, "think": 2000, "effort": "medium"}]}},
     "openai": {
         "label": "OpenAI", "kind": "openai", "base": "https://api.openai.com/v1", "login": "key", "json": "schema", "closed": True,
         "max_param": "max_completion_tokens", "no_temperature": True, "extra_body": {"reasoning_effort": "low"},
         "key_url": "https://platform.openai.com/api-keys", "price_url": "https://developers.openai.com/api/docs/pricing",
-        "note": "Platí se předem nabitý kredit. Jako jediná nabízí i přepis řeči s časy (whisper-1).",
+        "note": "Prepaid credit. The only one that also offers speech transcription with timestamps (whisper-1).",
         "models": {
             "vision": [
-                {"id": "gpt-5.4-mini", "label": "GPT-5.4 mini – lepší", "in": 0.75, "out": 4.50, "img": 400, "think": 200, "default": True},
-                {"id": "gpt-5.4-nano", "label": "GPT-5.4 nano – nejlevnější", "in": 0.20, "out": 1.25, "img": 400, "think": 200}],
+                {"id": "gpt-5.4-mini", "label": "GPT-5.4 mini – better", "in": 0.75, "out": 4.50, "img": 400, "think": 200, "default": True},
+                {"id": "gpt-5.4-nano", "label": "GPT-5.4 nano – cheapest", "in": 0.20, "out": 1.25, "img": 400, "think": 200}],
             "text": [
-                {"id": "gpt-5.4-mini", "label": "GPT-5.4 mini – lepší", "in": 0.75, "out": 4.50, "think": 2000, "default": True},
-                {"id": "gpt-5.4-nano", "label": "GPT-5.4 nano – nejlevnější", "in": 0.20, "out": 1.25, "think": 2000}],
+                {"id": "gpt-5.4-mini", "label": "GPT-5.4 mini – better", "in": 0.75, "out": 4.50, "think": 2000, "default": True},
+                {"id": "gpt-5.4-nano", "label": "GPT-5.4 nano – cheapest", "in": 0.20, "out": 1.25, "think": 2000}],
             "speech": [
-                {"id": "whisper-1", "label": "Whisper (s časy vět)", "hour": 0.36, "default": True}]}},
+                {"id": "whisper-1", "label": "Whisper (with sentence timestamps)", "hour": 0.36, "default": True}]}},
     "gemini": {
         "label": "Google Gemini", "kind": "openai", "base": "https://generativelanguage.googleapis.com/v1beta/openai", "login": "key",
         "json": "schema", "key_url": "https://aistudio.google.com/apikey", "price_url": "https://aistudio.google.com/docs/pricing",
-        "note": "Klíč z Google AI Studia. Má i bezplatnou úroveň s denním limitem – data z ní ale Google smí použít ke zlepšování svých služeb.",
+        "note": "Key from Google AI Studio. It also has a free tier with a daily limit – but Google may use data from it to improve its services.",
         "models": {
             "vision": [
                 {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite", "in": 0.30, "out": 2.50, "img": 1120, "default": True},
-                {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash – lepší", "in": 0.75, "out": 3.75, "img": 1120}],
+                {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash – better", "in": 0.75, "out": 3.75, "img": 1120}],
             "text": [
                 {"id": "gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite", "in": 0.30, "out": 2.50, "think": 1500, "default": True},
-                {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash – lepší", "in": 0.75, "out": 3.75, "think": 2000}]}},
+                {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash – better", "in": 0.75, "out": 3.75, "think": 2000}]}},
     "openrouter": {
         "label": "OpenRouter", "kind": "openai", "base": "https://openrouter.ai/api/v1", "login": "oauth", "json": "schema",
-        "headers": {"HTTP-Referer": "https://github.com/gingygames/kronikar", "X-OpenRouter-Title": "Kronikar"},
+        "headers": {"HTTP-Referer": "https://github.com/gingygames/kosmas", "X-OpenRouter-Title": "Kosmas"},
         "key_url": "https://openrouter.ai/keys", "price_url": "https://openrouter.ai/models",
-        "note": "Jeden účet pro modely mnoha firem. Stačí se přihlásit v prohlížeči, klíč se nastaví sám. Ceny jsou stejné jako u původních firem.",
+        "note": "One account for models from many companies. Just sign in in the browser and the key is set up automatically. Prices are the same as at the original companies.",
         "models": {
             "vision": [
                 {"id": "google/gemini-3.5-flash-lite", "label": "Gemini 3.5 Flash-Lite", "in": 0.30, "out": 2.50, "img": 1120, "default": True},
@@ -75,16 +77,16 @@ CATALOG = {
     "groq": {
         "label": "Groq", "kind": "openai", "base": "https://api.groq.com/openai/v1", "login": "key", "json": "schema",
         "key_url": "https://console.groq.com/keys", "price_url": "https://groq.com/pricing",
-        "note": "Velmi rychlý a nejlevnější přepis řeči (Whisper large-v3). Má i bezplatnou úroveň s limity.",
+        "note": "Very fast and the cheapest speech transcription (Whisper large-v3). It also has a free tier with limits.",
         "models": {
             "vision": [
                 {"id": "qwen/qwen3.8-27b", "label": "Qwen 3.8 27B", "in": 0.80, "out": 4.00, "img": 2048, "extra": {"reasoning_format": "hidden"}, "default": True}],
             "text": [
                 {"id": "openai/gpt-oss-120b", "label": "GPT-OSS 120B", "in": 0.15, "out": 0.60, "think": 1500, "default": True},
-                {"id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B – nejlevnější", "in": 0.075, "out": 0.30, "think": 1500}],
+                {"id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B – cheapest", "in": 0.075, "out": 0.30, "think": 1500}],
             "speech": [
-                {"id": "whisper-large-v3", "label": "Whisper large-v3 – nejpřesnější", "hour": 0.111, "default": True},
-                {"id": "whisper-large-v3-turbo", "label": "Whisper large-v3 turbo – nejlevnější", "hour": 0.04}]}},
+                {"id": "whisper-large-v3", "label": "Whisper large-v3 – most accurate", "hour": 0.111, "default": True},
+                {"id": "whisper-large-v3-turbo", "label": "Whisper large-v3 turbo – cheapest", "hour": 0.04}]}},
 }
 TASKS = ("speech", "vision", "text")
 
@@ -136,26 +138,27 @@ def _http(url, body=None, headers=None, timeout=600, raw=None, method=None):
                 pass
             detail = str(detail)[:300]
             if e.code == 400 and "api key" in detail.lower():
-                raise AIError(f"Neplatný API klíč: {detail}", fatal=True) from None
+                raise AIError(tr("Invalid API key: {detail}", detail=detail), fatal=True) from None
             if e.code in (429, 500, 502, 503, 504, 529) and attempt < 3:
                 wait = float(e.headers.get("retry-after") or 0) or 5 * 2 ** attempt
                 time.sleep(min(wait, 60))
                 continue
-            msg = {401: "Neplatný API klíč nebo odhlášeno", 402: "Na účtu služby došel kredit",
-                   403: "Klíč k tomu nemá oprávnění", 404: "Model neexistuje (zkontroluj výběr modelu)",
-                   429: "Služba odmítá další požadavky (limit nebo kredit)"}.get(e.code, f"Chyba služby {e.code}")
+            msg = {401: tr("Invalid API key or signed out"), 402: tr("The service account is out of credit"),
+                   403: tr("The key does not have permission for this"), 404: tr("The model does not exist (check the model selection)"),
+                   429: tr("The service is refusing more requests (limit or credit)")}.get(e.code) or tr("Service error {code}", code=e.code)
             raise AIError(f"{msg}: {detail}", fatal=e.code in (401, 402, 403, 404)) from None
         except (urllib.error.URLError, TimeoutError) as e:
             if attempt < 3:
                 time.sleep(3 * 2 ** attempt)
                 continue
-            raise AIError(f"Služba nedostupná: {e}") from None
+            raise AIError(tr("Service unavailable: {error}", error=e)) from None
 
 
 def _key(pid):
     k = keystore.get(pid)
     if not k:
-        raise AIError(f"Chybí přihlášení k {provider(pid)['label']} – přihlas se v Přepisy → Nastavení → AI", fatal=True)
+        raise AIError(tr("Not signed in to {provider} – sign in under Transcripts → Settings → AI",
+                         provider=tr(provider(pid)["label"])), fatal=True)
     return k
 
 
@@ -290,21 +293,21 @@ def _ask_anthropic(pid, model, prompt, schema, image, max_tokens, task):
             resp = client.messages.create(model=model, max_tokens=max(max_tokens, 8000),
                                           messages=[{"role": "user", "content": content}], **kw)
     except anthropic.AuthenticationError:
-        raise AIError("Neplatný API klíč Anthropic", fatal=True) from None
+        raise AIError(tr("Invalid Anthropic API key"), fatal=True) from None
     except anthropic.PermissionDeniedError as e:
-        raise AIError(f"Klíč Anthropic k tomu nemá oprávnění: {e.message}", fatal=True) from None
+        raise AIError(tr("The Anthropic key does not have permission for this: {message}", message=e.message), fatal=True) from None
     except anthropic.NotFoundError:
-        raise AIError(f"Model {model} neexistuje", fatal=True) from None
+        raise AIError(tr("Model {model} does not exist", model=model), fatal=True) from None
     except anthropic.RateLimitError:
-        raise AIError("Anthropic odmítá další požadavky (limit účtu)") from None
+        raise AIError(tr("Anthropic is refusing more requests (account limit)")) from None
     except anthropic.APIStatusError as e:
-        raise AIError(f"Chyba Anthropic {e.status_code}: {e.message}") from None
+        raise AIError(tr("Anthropic error {code}: {message}", code=e.status_code, message=e.message)) from None
     except anthropic.APIConnectionError:
-        raise AIError("Anthropic je nedostupný (připojení k internetu?)") from None
+        raise AIError(tr("Anthropic is unavailable (internet connection?)")) from None
     u = resp.usage
     log_usage(pid, model, task, u.input_tokens + (u.cache_read_input_tokens or 0), u.output_tokens, images=int(image is not None))
     if resp.stop_reason == "refusal":
-        raise AIError("Model odmítl odpovědět")
+        raise AIError(tr("The model refused to answer"))
     text = next((b.text for b in resp.content if b.type == "text"), "")
     return _parse_json(text), {"stop_reason": resp.stop_reason}
 
@@ -353,7 +356,7 @@ def check_key(pid, key):
         try:
             anthropic.Anthropic(api_key=key, max_retries=1, timeout=20).models.list(limit=1)
         except anthropic.AuthenticationError:
-            raise AIError("Neplatný API klíč Anthropic") from None
+            raise AIError(tr("Invalid Anthropic API key")) from None
         except anthropic.APIError as e:
             raise AIError(f"Anthropic: {e}") from None
     elif pid == "openrouter":

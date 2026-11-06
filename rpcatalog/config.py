@@ -77,6 +77,8 @@ def _import_data(src):
 DEFAULTS = {
     # Folders that contain Medal recordings (each may have Clips/, Databases/, Thumbnails/)
     "roots": [],
+    # UI language: auto (Czech on a Czech/Slovak system, otherwise English) | en | cs
+    "lang": "auto",
     # Recordings without Medal metadata: anything up to this length counts as a clip
     "clip_max_seconds": 300,
     # Full recordings shorter than this are hidden unless "show short" is on

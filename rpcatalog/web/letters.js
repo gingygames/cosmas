@@ -35,18 +35,18 @@ async function load() { list = await API.call('letters.list'); }
 function renderSide() {
   const side = $('.lt-side', root);
   const imp = e => menu(e, [
-    { label: 'Vložit ze schránky (zkopírované zprávy z Discordu)', icon: 'clipboard-paste', onClick: pasteFromClipboard },
-    { label: 'Napsat dopis ručně', icon: 'pencil', onClick: newLetter },
+    { label: tr('Paste from clipboard (messages copied from Discord)'), icon: 'clipboard-paste', onClick: pasteFromClipboard },
+    { label: tr('Write a letter manually'), icon: 'pencil', onClick: newLetter },
     { sep: true },
-    { label: 'Import z exportu dat Discordu (.zip)…', icon: 'file-archive', onClick: () => runImport('letters.import_export') },
-    { label: 'Import z rozbalené složky exportu…', icon: 'folder-open', onClick: () => runImport('letters.import_folder') },
-    { label: 'Import z kanálu na serveru (bot)', icon: 'message-circle', onClick: () => runImport('letters.import_channel') },
+    { label: tr('Import from Discord data export (.zip)…'), icon: 'file-archive', onClick: () => runImport('letters.import_export') },
+    { label: tr('Import from an unpacked export folder…'), icon: 'folder-open', onClick: () => runImport('letters.import_folder') },
+    { label: tr('Import from a server channel (bot)'), icon: 'message-circle', onClick: () => runImport('letters.import_channel') },
     { sep: true },
-    { label: 'Jak na import z Discordu?', icon: 'circle-help', onClick: help },
+    { label: tr('How to import from Discord?'), icon: 'circle-help', onClick: help },
   ]);
   clear(side).append(
-    h('.top', h('.row', h('b.grow', 'Holubí pošta'), h('button.btn.sm.primary', { onclick: imp }, icon('plus'), 'Přidat')),
-      h('.search', icon('search'), h('input.input', { placeholder: 'Hledat v dopisech…', value: q, onkeydown: e => e.stopPropagation(), oninput: debounce(e => { q = e.target.value; renderRows(); }, 150) })),
+    h('.top', h('.row', h('b.grow', tr('Pigeon post')), h('button.btn.sm.primary', { onclick: imp }, icon('plus'), tr('Add'))),
+      h('.search', icon('search'), h('input.input', { placeholder: tr('Search letters…'), value: q, onkeydown: e => e.stopPropagation(), oninput: debounce(e => { q = e.target.value; renderRows(); }, 150) })),
       charFilter ? h('.row', h('span.chip.on', charName(charFilter), h('span.x', { onclick: () => { charFilter = null; renderSide(); } }, icon('x')))) : null),
     h('.lt-list'));
   renderRows();
@@ -57,7 +57,7 @@ function renderRows() {
   const t = q.toLowerCase();
   const items = list.filter(l => (!t || `${l.title} ${l.body} ${who(l)}`.toLowerCase().includes(t))
     && (!charFilter || l.sender_id === charFilter || (l.recipient_ids || []).includes(charFilter)));
-  if (!items.length) { box.appendChild(h('.faint.small', { style: { padding: '14px 8px' } }, list.length ? 'Nic neodpovídá.' : 'Zatím žádné dopisy. Přidej ručně nebo importuj z Discordu (zprávy se slovem „holub“).')); return; }
+  if (!items.length) { box.appendChild(h('.faint.small', { style: { padding: '14px 8px' } }, list.length ? tr('Nothing matches.') : tr('No letters yet. Add one manually or import from Discord (messages containing the word “holub”).'))); return; }
   items.forEach(l => box.appendChild(h('.lt-row' + (cur && cur.id === l.id ? '.on' : ''), { onclick: () => open(l.id) },
     h('.row', h('.who.grow.ellipsis', l.title || who(l)), h('span.d', l.ingame_date || (l.sent_at ? fmt.date(l.sent_at) : ''))),
     l.title ? h('.d.ellipsis', who(l)) : null,
@@ -68,29 +68,29 @@ function open(id) { cur = list.find(l => l.id === id) || null; App.ui.letterId =
 
 function renderDetail() {
   const d = $('.lt-detail', root); clear(d);
-  if (!cur) { d.appendChild(emptyState('mail', 'Holubí pošta', 'Dopisy mezi postavami – ručně, nebo z Discordu (zprávy se slovem „holub“).')); Shell.header({ icon: 'mail', title: 'holubí pošta' }); return; }
+  if (!cur) { d.appendChild(emptyState('mail', tr('Pigeon post'), tr('Letters between characters – manual, or from Discord (messages containing the word “holub”).'))); Shell.header({ icon: 'mail', title: tr('pigeon post') }); return; }
   const l = cur;
-  Shell.header({ icon: 'mail', title: l.title || who(l), topic: [l.ingame_date, l.sent_at ? fmt.dt(l.sent_at) : '', l.source !== 'manual' ? 'z Discordu' : ''].filter(Boolean).join(' · ') });
+  Shell.header({ icon: 'mail', title: l.title || who(l), topic: [l.ingame_date, l.sent_at ? fmt.dt(l.sent_at) : '', l.source !== 'manual' ? tr('from Discord') : ''].filter(Boolean).join(' · ') });
   const save = debounce(f => API.call('letter.update', { id: l.id, ...f }).then(load).then(renderRows), 350);
   const charChips = ids => h('.row.wrap', { style: { gap: '6px' } }, ids.map(id => App.charsById.get(id)).filter(Boolean).map(c => charChip(c)));
   const ev = l.event_id && App.eventsById.get(l.event_id);
   const pl = l.place_id && (App.places || []).find(p => p.id === l.place_id);
   d.append(
     h('.lt-meta',
-      h('.k', 'Název'), h('input.input', { value: l.title || '', placeholder: 'např. Dopis o zradě', onkeydown: e => e.stopPropagation(), oninput: e => { l.title = e.target.value; save({ title: l.title }); } }),
-      h('.k', 'Od'), h('.row', l.sender_id ? charChips([l.sender_id]) : h('span.faint', l.author || 'nevybráno'),
-        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters([], { title: 'Kdo dopis poslal?', multi: false }); if (ids && ids[0]) { l.sender_id = ids[0]; await API.call('letter.update', { id: l.id, sender_id: ids[0] }); await load(); open(l.id); } } }, 'Vybrat')),
-      h('.k', 'Komu'), h('.row', charChips(l.recipient_ids || []),
-        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(l.recipient_ids || [], { title: 'Komu dopis patří?' }); if (ids) { await API.call('letter.update', { id: l.id, recipient_ids: ids }); await load(); open(l.id); } } }, 'Vybrat')),
-      h('.k', 'Datum ve hře'), h('input.input', { value: l.ingame_date || '', placeholder: 'např. 3. den po žních', onkeydown: e => e.stopPropagation(), oninput: e => { l.ingame_date = e.target.value; save({ ingame_date: l.ingame_date }); } }),
-      h('.k', 'Událost'), h('.row', ev ? h('span.chip.on', { onclick: () => App.go('events', { id: ev.id }) }, h('span.dot', { style: { background: ev.color } }), ev.title) : h('span.faint', '—'),
-        h('button.btn.sm', { onclick: async () => { const r = await pickEvent({ title: 'K jaké události dopis patří?', moment: l.sent_at, withNote: false }); if (r) { await API.call('letter.update', { id: l.id, event_id: r.id }); await load(); open(l.id); } } }, 'Vybrat')),
-      h('.k', 'Místo'), h('.row', pl ? h('span.chip.on', { onclick: () => App.go('places', { id: pl.id }) }, pl.name) : h('span.faint', '—'),
-        h('button.btn.sm', { onclick: async () => { const id = await pickPlace('Odkud / kam?'); if (id) { await API.call('letter.update', { id: l.id, place_id: id }); App.places = await API.call('places.list'); await load(); open(l.id); } } }, 'Vybrat'))),
+      h('.k', tr('Title')), h('input.input', { value: l.title || '', placeholder: tr('e.g. Letter about the betrayal'), onkeydown: e => e.stopPropagation(), oninput: e => { l.title = e.target.value; save({ title: l.title }); } }),
+      h('.k', tr('From')), h('.row', l.sender_id ? charChips([l.sender_id]) : h('span.faint', l.author || tr('not selected')),
+        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters([], { title: tr('Who sent the letter?'), multi: false }); if (ids && ids[0]) { l.sender_id = ids[0]; await API.call('letter.update', { id: l.id, sender_id: ids[0] }); await load(); open(l.id); } } }, 'Vybrat')),
+      h('.k', tr('Addressed to')), h('.row', charChips(l.recipient_ids || []),
+        h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(l.recipient_ids || [], { title: tr('Who is the letter for?') }); if (ids) { await API.call('letter.update', { id: l.id, recipient_ids: ids }); await load(); open(l.id); } } }, 'Vybrat')),
+      h('.k', tr('In-game date')), h('input.input', { value: l.ingame_date || '', placeholder: tr('e.g. 3rd day after the harvest'), onkeydown: e => e.stopPropagation(), oninput: e => { l.ingame_date = e.target.value; save({ ingame_date: l.ingame_date }); } }),
+      h('.k', tr('Event')), h('.row', ev ? h('span.chip.on', { onclick: () => App.go('events', { id: ev.id }) }, h('span.dot', { style: { background: ev.color } }), ev.title) : h('span.faint', '—'),
+        h('button.btn.sm', { onclick: async () => { const r = await pickEvent({ title: tr('Which event does the letter belong to?'), moment: l.sent_at, withNote: false }); if (r) { await API.call('letter.update', { id: l.id, event_id: r.id }); await load(); open(l.id); } } }, 'Vybrat')),
+      h('.k', tr('Place')), h('.row', pl ? h('span.chip.on', { onclick: () => App.go('places', { id: pl.id }) }, pl.name) : h('span.faint', '—'),
+        h('button.btn.sm', { onclick: async () => { const id = await pickPlace(tr('From where / to where?')); if (id) { await API.call('letter.update', { id: l.id, place_id: id }); App.places = await API.call('places.list'); await load(); open(l.id); } } }, 'Vybrat'))),
     h('textarea.input.lt-paper', { rows: 14, onkeydown: e => e.stopPropagation(), oninput: e => { l.body = e.target.value; save({ body: l.body }); } }, l.body || ''),
     h('.row', { style: { marginTop: '14px' } },
-      l.channel ? h('span.small.faint', `Zdroj: ${l.channel}${l.author ? ' · ' + l.author : ''}`) : null, h('.grow'),
-      h('button.btn.danger', { onclick: async () => { if (!await confirmDialog('Smazat dopis', 'Opravdu smazat tento dopis?', { danger: true, okLabel: 'Smazat' })) return; await API.call('letter.delete', { id: l.id }); cur = null; await load(); renderRows(); renderDetail(); } }, icon('trash-2'), 'Smazat')));
+      l.channel ? h('span.small.faint', tr('Source: {source}', { source: l.channel + (l.author ? ' · ' + l.author : '') })) : null, h('.grow'),
+      h('button.btn.danger', { onclick: async () => { if (!await confirmDialog(tr('Delete letter'), tr('Really delete this letter?'), { danger: true, okLabel: tr('Delete') })) return; await API.call('letter.delete', { id: l.id }); cur = null; await load(); renderRows(); renderDetail(); } }, icon('trash-2'), tr('Delete'))));
 }
 
 /* ---- paste messages copied from Discord ---- */
@@ -116,14 +116,14 @@ function hash(str) { let x = 5381; for (let i = 0; i < str.length; i++) x = (x *
 
 function pasteDialog(text) {
   const marker = (App.settings.holub_marker || 'holub').toLowerCase();
-  const ta = h('textarea.input', { rows: 5, placeholder: 'V Discordu označ zprávy (tažením myši přes ně), Ctrl+C, a vlož sem Ctrl+V.', onkeydown: e => e.stopPropagation() }, text || '');
+  const ta = h('textarea.input', { rows: 5, placeholder: tr('In Discord, select the messages (drag the mouse over them), press Ctrl+C and paste them here with Ctrl+V.'), onkeydown: e => e.stopPropagation() }, text || '');
   const listBox = h('div'), authorsBox = h('div');
   let msgs = [], sel = new Set(), mode = 'each', recips = [];
   const map = new Map();          // author -> character id
   const recBox = h('.row.wrap', { style: { gap: '6px' } });
   const renderRec = () => clear(recBox).append(
     ...recips.map(id => App.charsById.get(id)).filter(Boolean).map(c => charChip(c, { onRemove: () => { recips = recips.filter(x => x !== c.id); renderRec(); } })),
-    h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(recips, { title: 'Komu dopisy patří?' }); if (ids) { recips = ids; renderRec(); } } }, icon('user-plus'), 'Adresáti'));
+    h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(recips, { title: tr('Who are the letters for?') }); if (ids) { recips = ids; renderRec(); } } }, icon('user-plus'), tr('Recipients')));
   const parse = () => {
     msgs = parseDiscordCopy(ta.value);
     const marked = msgs.map((m, i) => (m.body.toLowerCase().includes(marker) || m.body.includes('🕊')) ? i : -1).filter(i => i >= 0);
@@ -133,8 +133,8 @@ function pasteDialog(text) {
   };
   const render = () => {
     clear(listBox);
-    if (!msgs.length) { listBox.appendChild(h('.faint.small', 'Zatím nic – vlož zkopírované zprávy.')); clear(authorsBox); return; }
-    listBox.appendChild(h('.small.muted', { style: { margin: '6px 0' } }, `Rozpoznáno ${msgs.length} ${fmt.plural(msgs.length, 'zpráva', 'zprávy', 'zpráv')} – zaškrtnuté se uloží (předvybrané jsou ty se slovem „${marker}“).`));
+    if (!msgs.length) { listBox.appendChild(h('.faint.small', tr('Nothing yet – paste the copied messages.'))); clear(authorsBox); return; }
+    listBox.appendChild(h('.small.muted', { style: { margin: '6px 0' } }, trn(msgs.length, 'Recognized {n} message – checked ones will be saved (those containing the word “{marker}” are preselected).', 'Recognized {n} messages – checked ones will be saved (those containing the word “{marker}” are preselected).', { marker })));
     listBox.appendChild(h('.picker-list', { style: { maxHeight: '32vh' } }, msgs.map((m, i) => h('.list-row' + (sel.has(i) ? '.sel' : ''), {
       style: { alignItems: 'flex-start' },
       onclick: () => { sel.has(i) ? sel.delete(i) : sel.add(i); render(); },
@@ -144,25 +144,25 @@ function pasteDialog(text) {
     const authors = [...new Set(msgs.filter((_, i) => sel.has(i)).map(m => m.author).filter(Boolean))];
     clear(authorsBox);
     if (authors.length) {
-      authorsBox.appendChild(h('.small.muted', { style: { margin: '10px 0 6px' } }, 'Kdo je kdo (autor zprávy → postava, která dopis psala):'));
+      authorsBox.appendChild(h('.small.muted', { style: { margin: '10px 0 6px' } }, tr('Who is who (message author → character who wrote the letter):')));
       authors.forEach(a => {
         const selEl = h('select.input', { style: { width: '240px' }, onchange: e => map.set(a, e.target.value ? Number(e.target.value) : null) },
-          h('option', { value: '' }, '— jen jméno z Discordu —'),
+          h('option', { value: '' }, tr('— Discord name only —')),
           App.chars.map(c => h('option', { value: c.id, selected: map.get(a) === c.id }, c.name)));
         authorsBox.appendChild(h('.row', { style: { marginBottom: '4px' } }, h('span', { style: { width: '160px' } }, a), icon('arrow-right', 'faint'), selEl));
       });
     }
   };
   ta.addEventListener('input', debounce(parse, 250));
-  const modeSeg = h('.seg', [['each', 'Každá zpráva = dopis'], ['one', 'Vše jako jeden dopis']].map(([k, l]) =>
+  const modeSeg = h('.seg', [['each', tr('Each message = a letter')], ['one', tr('All as one letter')]].map(([k, l]) =>
     h('button' + (mode === k ? '.on' : ''), { onclick: e => { mode = k; $$('button', e.currentTarget.parentNode).forEach(b => b.classList.toggle('on', b === e.currentTarget)); } }, l)));
   renderRec(); parse();
-  modal({ title: 'Dopisy ze schránky', icon: 'clipboard-paste', wide: true,
+  modal({ title: tr('Letters from clipboard'), icon: 'clipboard-paste', wide: true,
     body: h('.col', { style: { gap: '8px' } }, ta, listBox, authorsBox, h('.row.wrap', { style: { gap: '12px', marginTop: '6px' } }, modeSeg, recBox),
-      h('.faint.small', 'Tip: zprávu „Holub“ najdeš v Discordu přes hledání (Ctrl+F → holub), pak je označ a zkopíruj najednou.')),
-    actions: [{ label: 'Zrušit' }, { label: 'Uložit dopisy', primary: true, icon: 'check', onClick: async () => {
+      h('.faint.small', tr('Tip: find the “Holub” messages in Discord via search (Ctrl+F → holub), then select them and copy them all at once.'))),
+    actions: [{ label: tr('Cancel') }, { label: tr('Save letters'), primary: true, icon: 'check', onClick: async () => {
       const chosen = msgs.filter((_, i) => sel.has(i));
-      if (!chosen.length) { toast('Nic není vybráno', 'err'); return false; }
+      if (!chosen.length) { toast(tr('Nothing is selected'), 'err'); return false; }
       const items = mode === 'one'
         ? [{ author: [...new Set(chosen.map(m => m.author).filter(Boolean))].join(', '), sent_at: chosen[0].sent_at,
           body: chosen.map(m => chosen.length > 1 && m.author ? `${m.author}:\n${m.body}` : m.body).join('\n\n'), sender: map.get(chosen[0].author) || null }]
@@ -170,11 +170,11 @@ function pasteDialog(text) {
       let first = null, n = 0;
       for (const it of items) {
         const id = await API.call('letter.create', { author: it.author || '', sent_at: it.sent_at || undefined, body: it.body,
-          sender_id: it.sender, recipient_ids: recips, source: 'discord-paste', channel: 'Discord (schránka)',
+          sender_id: it.sender, recipient_ids: recips, source: 'discord-paste', channel: tr('Discord (clipboard)'),
           source_ref: 'dp:' + hash(`${it.author}|${it.sent_at}|${it.body}`) });
         if (id) { n++; first = first || id; }
       }
-      toast(n ? `Uloženo ${n} ${fmt.plural(n, 'dopis', 'dopisy', 'dopisů')}` : 'Tyhle dopisy už v poště jsou');
+      toast(n ? trn(n, 'Saved {n} letter', 'Saved {n} letters') : tr('These letters are already in the post'));
       await load(); renderRows(); if (first) open(first);
     } }] });
 }
@@ -185,25 +185,25 @@ async function newLetter() {
 }
 
 async function runImport(method) {
-  toast('Načítám…');
+  toast(tr('Loading…'));
   try {
     const r = await API.call(method);
     if (!r) return;
-    toast(`Nalezeno ${r.found} zpráv se slovem „holub“, nových ${r.new}`);
+    toast(trn(r.found, 'Found {n} message containing the word “holub”, {new} new', 'Found {n} messages containing the word “holub”, {new} new', { new: r.new }));
     await load(); renderRows();
   } catch (e) { /* toast already shown */ }
 }
 
 function help() {
-  modal({ title: 'Dopisy z Discordu', icon: 'circle-help', wide: true, body: h('.col', { style: { gap: '10px' } },
-    h('div', h('b', 'Z kanálu na serveru (doporučeno): '), 'pokud se dopisy píšou do kanálu na serveru, kde je tvůj bot, vyplň v Nastavení → Discord ID kanálu. Načtou se zprávy obsahující slovo „holub“ (slovo jde změnit) – od všech hráčů.'),
-    h('div', h('b', 'Z exportu dat: '), 'Discord → Uživatelská nastavení → Data a soukromí → Požádat o data (zaškrtni Zprávy). Za pár dní přijde odkaz na package.zip – ten tady vyber. Export obsahuje jen zprávy, které jsi napsal ty.'),
-    h('div', h('b', 'Ze schránky (nejrychlejší pro PM): '), 'v Discordu označ zprávy tažením myši, Ctrl+C, tady Přidat → Vložit ze schránky (nebo jen Ctrl+V v Holubí poště). Rozpozná autora, čas a text.'),
-    h('.faint', 'Soukromé zprávy, které ti poslali ostatní, Discord nikomu automaticky nevydá – boti k nim nemají přístup a stahování přes osobní účet je proti pravidlům Discordu (hrozí ban). Takové dopisy přidej ručně (Přidat → Napsat / vložit) – stačí zkopírovat text.')) });
+  modal({ title: tr('Letters from Discord'), icon: 'circle-help', wide: true, body: h('.col', { style: { gap: '10px' } },
+    h('div', h('b', tr('From a server channel (recommended): ')), tr('if letters are written in a channel on a server where your bot is, fill in the channel ID in Settings → Discord. Messages containing the word “holub” (the word can be changed) are loaded – from all players.')),
+    h('div', h('b', tr('From a data export: ')), tr('Discord → User Settings → Data & Privacy → Request data (tick Messages). In a few days you get a link to package.zip – choose it here. The export only contains messages you wrote yourself.')),
+    h('div', h('b', tr('From the clipboard (fastest for DMs): ')), tr('in Discord, select messages by dragging the mouse, Ctrl+C, then here Add → Paste from clipboard (or just Ctrl+V in Pigeon post). Author, time and text are recognized.')),
+    h('.faint', tr('Discord does not hand out private messages others sent you automatically – bots have no access to them and downloading through a personal account is against Discord rules (risk of a ban). Add such letters manually (Add → Write / paste) – just copy the text.'))) });
 }
 
 Views.register('letters', {
-  title: 'holubí pošta', short: 'Pošta', icon: 'mail', order: 45, members: false,
+  title: tr('pigeon post'), short: tr('Post'), icon: 'mail', order: 45, members: false,
   async mount(el, params = {}) {
     root = el; charFilter = params.char || null;
     el.appendChild(h('.lt', h('.lt-side'), h('.lt-detail')));

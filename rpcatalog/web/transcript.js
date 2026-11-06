@@ -7,15 +7,21 @@
 
 const TR = {
   COLORS: { 'Já': 'var(--accent)', Discord: 'var(--blue)', Hra: 'var(--ok)', Obraz: 'var(--violet)', Zvuk: 'var(--text-2)' },
-  PHASE: { queued: 'Ve frontě', speech: 'Řeč', vision: 'Obraz', chapters: 'Kronika', paused: 'Pozastaveno',
-    done: 'Hotovo', error: 'Chyba', skipped: 'Přerušeno', canceled: 'Zrušeno' },
-  KIND: { event: ['calendar-plus', 'Událost'], character: ['user-round-plus', 'Postava'], place: ['map-pin-plus', 'Místo'], faction: ['shield-plus', 'Frakce'] },
+  PHASE: { queued: tr('Queued'), speech: tr('Speech'), vision: tr('Picture'), chapters: tr('Chronicle'), paused: tr('Paused'),
+    done: tr('Done'), error: tr('Error'), skipped: tr('Interrupted'), canceled: tr('Canceled') },
+  KIND: { event: ['calendar-plus', tr('Event')], character: ['user-round-plus', tr('Character')], place: ['map-pin-plus', tr('Place')], faction: ['shield-plus', tr('Faction')] },
+  /** Display name of a speaker / track; the stored names ('Já', 'Hra', 'Obraz', 'Zvuk' + optional suffix) stay Czech. */
+  label(s) {
+    const [w, ...rest] = (s || '').split(' ');
+    const L = { 'Já': tr('Me'), Hra: tr('Game'), Obraz: tr('Picture'), Zvuk: tr('Audio') }[w];
+    return L ? [L, ...rest].join(' ') : s;
+  },
   queue: null,
   _subs: new Set(),
   color(s) { return TR.COLORS[(s || '').split(' ')[0]] || 'var(--text-2)'; },
   on(fn) { TR._subs.add(fn); return () => TR._subs.delete(fn); },
   play(id, t) { API.call('media.play', { id, offset: Math.max(0, (t || 0) - 1) }); },
-  eta(s) { return s == null ? '' : s < 90 ? `zbývá ~${Math.max(5, Math.round(s / 5) * 5)} s` : `zbývá ~${fmt.durHuman(s)}`; },
+  eta(s) { return s == null ? '' : s < 90 ? tr('~{s} s left', { s: Math.max(5, Math.round(s / 5) * 5) }) : tr('~{time} left', { time: fmt.durHuman(s) }); },
   fold(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); },
   running(st) { return !!st && ['queued', 'speech', 'vision', 'chapters', 'paused'].includes(st.phase); },
   async refreshQueue() { TR.queue = await API.call('analysis.queue').catch(() => TR.queue); TR._subs.forEach(fn => fn({ phase: 'queue' })); AIQ.update(); },
@@ -52,12 +58,12 @@ const AIQ = {
     const paused = q.paused || q.auto_paused;
     this.el.classList.toggle('paused', !!paused);
     const pct = cur && cur.p != null ? Math.round(cur.p * 100) : 0;
-    $('.aiq-t', this.el).textContent = paused ? (q.auto_paused ? `Pauza – běží ${q.auto_paused}` : 'Přepisy pozastaveny')
-      : cur ? `${TR.PHASE[cur.phase] || 'Přepis'} · ${pct} %` : `Přepisy · ${waiting} ve frontě`;
-    $('.aiq-s', this.el).textContent = cur ? [cur.title, TR.eta(cur.eta), waiting ? `+${waiting} ve frontě` : ''].filter(Boolean).join(' · ') : '';
+    $('.aiq-t', this.el).textContent = paused ? (q.auto_paused ? tr('Paused – {game} running', { game: q.auto_paused }) : tr('Transcriptions paused'))
+      : cur ? `${TR.PHASE[cur.phase] || tr('Transcript')} · ${pct} %` : tr('Transcripts · {n} queued', { n: waiting });
+    $('.aiq-s', this.el).textContent = cur ? [cur.title, TR.eta(cur.eta), waiting ? tr('+{n} queued', { n: waiting }) : ''].filter(Boolean).join(' · ') : '';
     $('.aiq-bar i', this.el).style.width = pct + '%';
     $('.aiq-pause', this.el).replaceChildren(icon(q.paused ? 'play' : 'pause'));
-    $('.aiq-pause', this.el).title = q.paused ? 'Pokračovat' : 'Pozastavit přepisy';
+    $('.aiq-pause', this.el).title = q.paused ? tr('Resume') : tr('Pause transcriptions');
   },
 };
 (function waitForShell() { if (AIQ.mount()) TR.refreshQueue(); else setTimeout(waitForShell, 400); })();
@@ -72,25 +78,30 @@ function proposalCard(p, { onDone } = {}) {
   const unknown = (d.who || []).filter(n => !who.some(c => TR.fold(c.name).startsWith(TR.fold(n).split(' ')[0])));
   const card = h('.tprop.' + p.kind,
     h('.prop-head', h('span.prop-kind', icon(ic), label), name,
-      h('button.btn.sm.ghost', { title: 'Přehrát od tohoto místa', onclick: () => TR.play(p.media_id, d.t) }, icon('play'),
+      h('button.btn.sm.ghost', { title: tr('Play from here'), onclick: () => TR.play(p.media_id, d.t) }, icon('play'),
         fmt.clock(d.t) + (d.t_end && p.kind === 'event' ? '–' + fmt.clock(d.t_end) : ''))),
     text,
     p.kind === 'event' ? h('.row.wrap.small', { style: { gap: '6px' } },
-      d.place ? h('span.chip', icon('map-pin'), d.place, d.place_id ? null : h('span.faint', ' (nové)')) : null,
-      who.map(c => charChip(c)), unknown.map(n => h('span.chip.faint', { title: 'Neznámá postava' }, icon('user'), n))) : null,
+      d.place ? h('span.chip', icon('map-pin'), d.place, d.place_id ? null : h('span.faint', ' ' + tr('(new)'))) : null,
+      who.map(c => charChip(c)), unknown.map(n => h('span.chip.faint', { title: tr('Unknown character') }, icon('user'), n))) : null,
     h('.row.prop-act',
       h('.grow'),
-      h('button.btn.sm.ghost', { onclick: async () => { await API.call('analysis.proposal_reject', { id: p.id }); card.classList.add('gone'); onDone && onDone(p, false); } }, icon('x'), 'Zamítnout'),
+      h('button.btn.sm.ghost', { onclick: async () => { await API.call('analysis.proposal_reject', { id: p.id }); card.classList.add('gone'); onDone && onDone(p, false); } }, icon('x'), tr('Reject')),
       h('button.btn.sm.primary', { onclick: async () => {
         const edits = { text: text.value.trim() };
         edits[p.kind === 'event' ? 'title' : 'name'] = name.value.trim();
         const r = await API.call('analysis.proposal_accept', { id: p.id, edits });
         card.classList.add('gone');
-        toast(`${label} „${name.value.trim()}“ přidán${p.kind === 'event' || p.kind === 'faction' ? 'a' : p.kind === 'place' ? 'o' : 'a'} do kroniky`, 'ok',
-          r ? { label: 'Otevřít', onClick: () => App.go({ event: 'events', character: 'characters', place: 'places', faction: 'factions' }[r.kind], { id: r.id }) } : null);
+        const nm = { name: name.value.trim() };
+        toast(p.kind === 'event' ? tr('Event “{name}” added to the chronicle', nm)
+          : p.kind === 'character' ? tr('Character “{name}” added to the chronicle', nm)
+          : p.kind === 'place' ? tr('Place “{name}” added to the chronicle', nm)
+          : p.kind === 'faction' ? tr('Faction “{name}” added to the chronicle', nm)
+          : tr('“{name}” added to the chronicle', nm), 'ok',
+          r ? { label: tr('Open'), onClick: () => App.go({ event: 'events', character: 'characters', place: 'places', faction: 'factions' }[r.kind], { id: r.id }) } : null);
         App.refresh('events', 'chars', 'media');
         onDone && onDone(p, true);
-      } }, icon('check'), 'Přijmout')));
+      } }, icon('check'), tr('Accept'))));
   return card;
 }
 
@@ -98,13 +109,13 @@ async function reviewProposals(mediaId) {
   const props = await API.call('analysis.proposals', { media_id: mediaId });
   const body = h('.prop-list');
   const left = h('span.faint');
-  const count = () => { left.textContent = `${body.querySelectorAll('.tprop:not(.gone)').length} zbývá`; };
+  const count = () => { left.textContent = tr('{n} left', { n: body.querySelectorAll('.tprop:not(.gone)').length }); };
   const order = { event: 0, character: 1, place: 2, faction: 3 };
   props.sort((a, b) => (order[a.kind] - order[b.kind]) || (a.data.t - b.data.t)).forEach(p => body.appendChild(proposalCard(p, { onDone: count })));
   count();
-  modal({ title: 'Návrhy Kronikáře AI', icon: 'sparkles', xwide: true,
+  modal({ title: tr('Kosmas AI suggestions'), icon: 'sparkles', xwide: true,
     body: h('div', h('.small.muted', { style: { marginBottom: '10px' } },
-      'Z přepisu tohoto záznamu. Přijetím vznikne událost napojená na video (s časem, místem a postavami) nebo nová postava, místo či frakce. Text a název můžeš před přijetím upravit.', ' ', left), body) });
+      tr('From the transcript of this recording. Accepting creates an event linked to the video (with time, place and characters) or a new character, place or faction. You can edit the text and name before accepting.'), ' ', left), body) });
 }
 window.reviewProposals = reviewProposals;
 
@@ -112,20 +123,20 @@ window.reviewProposals = reviewProposals;
 function transcriptSection(m) {
   const st = { data: null, q: '', hidden: new Set(), charFilter: null, limit: 400, sel: null, state: null };
   const status = h('.trs-pills');
-  const actions = h('button.btn.sm.ghost.icon', { title: 'Další možnosti', onclick: e => moreMenu(e) }, icon('ellipsis'));
+  const actions = h('button.btn.sm.ghost.icon', { title: tr('More options'), onclick: e => moreMenu(e) }, icon('ellipsis'));
   const cov = h('.trs-cov');
   const covInfo = h('.trs-covinfo.tiny.faint');
   const selBar = h('.trs-selbar.hidden');
   const prog = buildProgress();
   const meta = h('.trs-meta');
-  const search = h('input.input', { placeholder: 'Hledat v přepisu…', onkeydown: e => e.stopPropagation(),
+  const search = h('input.input', { placeholder: tr('Search the transcript…'), onkeydown: e => e.stopPropagation(),
     oninput: debounce(e => { st.q = e.target.value; st.limit = 400; renderList(); }, 180) });
   const chips = h('.row.wrap.trs-chips');
   const count = h('.tiny.faint.trs-count');
   const list = h('.trs-list');
   const empty = h('.trs-empty.hidden');
   const root = h('.trs',
-    h('.section-title', icon('captions'), 'Přepis', h('.line'), status, actions),
+    h('.section-title', icon('captions'), tr('Transcript'), h('.line'), status, actions),
     empty, h('.trs-covwrap', cov, selBar, covInfo), prog.el, meta,
     h('.trs-tools', search, chips, count), list);
 
@@ -155,23 +166,25 @@ function transcriptSection(m) {
     const d = st.data || {};
     const has = what => d.done && d.done[what];
     menu(e, [
-      { label: 'Přepsat řeč', icon: 'audio-lines', onClick: () => start({ speech: true, chapters: false }) },
-      { label: 'Popsat obraz v rozhovorech', icon: 'scan-eye', onClick: () => start({ speech: true, vision: true, chapters: false }) },
-      { label: 'Kronikář AI – kapitoly, události, návrhy', icon: 'sparkles', onClick: () => start({ speech: true, chapters: true }) },
-      { label: 'Všechno (řeč, obraz, kronika)', icon: 'wand-sparkles', onClick: () => start({ speech: true, vision: true, chapters: true }) },
+      { label: tr('Transcribe speech'), icon: 'audio-lines', onClick: () => start({ speech: true, chapters: false }) },
+      { label: tr('Describe the picture in conversations'), icon: 'scan-eye', onClick: () => start({ speech: true, vision: true, chapters: false }) },
+      { label: tr('Kosmas AI – chapters, events, suggestions'), icon: 'sparkles', onClick: () => start({ speech: true, chapters: true }) },
+      { label: tr('Everything (speech, picture, chronicle)'), icon: 'wand-sparkles', onClick: () => start({ speech: true, vision: true, chapters: true }) },
       { sep: true },
-      { label: 'Celý přepis jako text', icon: 'file-text', disabled: !d.timeline, onClick: () => API.call('analysis.open_timeline', { id: m.id }) },
-      { label: 'Fronta a nastavení přepisů', icon: 'settings-2', onClick: () => App.go('transcripts') },
+      { label: tr('Full transcript as text'), icon: 'file-text', disabled: !d.timeline, onClick: () => API.call('analysis.open_timeline', { id: m.id }) },
+      { label: tr('Transcription queue and settings'), icon: 'settings-2', onClick: () => App.go('transcripts') },
       { sep: true },
-      { label: 'Smazat a udělat znovu', icon: 'rotate-ccw', submenu: [
-        { label: 'Řeč', onClick: () => redo('speech') }, { label: 'Obraz', onClick: () => redo('vision') },
-        { label: 'Kroniku (kapitoly, návrhy)', onClick: () => redo('chapters') }, { label: 'Všechno', danger: true, onClick: () => redo('all') }] },
+      { label: tr('Delete and redo'), icon: 'rotate-ccw', submenu: [
+        { label: tr('Speech'), onClick: () => redo('speech') }, { label: tr('Picture'), onClick: () => redo('vision') },
+        { label: tr('Chronicle (chapters, suggestions)'), onClick: () => redo('chapters') }, { label: tr('Everything'), danger: true, onClick: () => redo('all') }] },
     ].filter(Boolean));
     void has;
   }
   async function redo(what) {
-    if (!await confirmDialog(`Smazat ${{ speech: 'přepis řeči', vision: 'popisy obrazu', chapters: 'kroniku', all: 'všechny výsledky' }[what]} tohoto videa?`,
-      'Výsledky se pak vytvoří znovu podle aktuálního nastavení.', { danger: true, okLabel: 'Smazat a zpracovat' })) return;
+    const q = { speech: () => tr('Delete the speech transcript of this video?'), vision: () => tr('Delete the picture descriptions of this video?'),
+      chapters: () => tr('Delete the chronicle of this video?'), all: () => tr('Delete all results of this video?') }[what]();
+    if (!await confirmDialog(q,
+      tr('The results will then be recreated with the current settings.'), { danger: true, okLabel: tr('Delete and reprocess') })) return;
     await API.call('analysis.delete', { id: m.id, what });
     await load();
     start({ speech: true, vision: what === 'vision' || what === 'all' ? true : false, chapters: what === 'chapters' || what === 'all' ? true : undefined });
@@ -184,10 +197,10 @@ function transcriptSection(m) {
     const rows = d.rows, nSpeech = rows.filter(r => r.speaker !== 'Obraz').length, nImg = rows.length - nSpeech;
     const pill = (ic, text, cls, title) => h('span.trs-pill' + (cls ? '.' + cls : ''), { title }, icon(ic), text);
     clear(status).append(
-      nSpeech ? pill('audio-lines', nSpeech, 'ok', `${nSpeech} promluv`) : null,
-      nImg ? pill('scan-eye', nImg, 'vio', `${nImg} popsaných snímků`) : null,
-      d.coverage.chapters.length ? pill('book-open', d.coverage.chapters.length, 'acc', `${d.coverage.chapters.length} kapitol`) : null,
-      d.proposals ? h('span.trs-pill.hot', { title: 'Návrhy Kronikáře AI', onclick: () => reviewProposals(m.id).then(load) }, icon('sparkles'), d.proposals) : null);
+      nSpeech ? pill('audio-lines', nSpeech, 'ok', trn(nSpeech, '{n} utterance', '{n} utterances')) : null,
+      nImg ? pill('scan-eye', nImg, 'vio', trn(nImg, '{n} described frame', '{n} described frames')) : null,
+      d.coverage.chapters.length ? pill('book-open', d.coverage.chapters.length, 'acc', trn(d.coverage.chapters.length, '{n} chapter', '{n} chapters')) : null,
+      d.proposals ? h('span.trs-pill.hot', { title: tr('Kosmas AI suggestions'), onclick: () => reviewProposals(m.id).then(load) }, icon('sparkles'), d.proposals) : null);
   }
 
   function renderEmpty() {
@@ -196,12 +209,12 @@ function transcriptSection(m) {
     empty.classList.toggle('hidden', !nothing);
     if (!nothing) return;
     clear(empty).append(
-      h('.small.muted', d.available ? 'Přepis řeči (mikrofon, hra, Discord), popis obrazu v rozhovorech a Kronikář AI, který z toho poskládá kapitoly, události a návrhy do databáze. Běží na tvém PC, nebo přes placenou službu (Přepisy → Kde běží AI).'
-        : 'Přepis řeči na tomto PC tu není k dispozici – v Přepisy → Kde běží AI vyber pro řeč placenou službu.'),
+      h('.small.muted', d.available ? tr('Speech transcription (microphone, game, Discord), picture descriptions in conversations and Kosmas AI, which turns it into chapters, events and suggestions for the database. Runs on your PC or through a paid service (Transcripts → Where AI runs).')
+        : tr('Speech transcription on this PC is not available here – choose a paid service for speech in Transcripts → Where AI runs.')),
       d.available ? h('.row.wrap',
-        h('button.btn.sm.primary', { onclick: () => start({ speech: true }) }, icon('audio-lines'), 'Přepsat řeč'),
-        h('button.btn.sm', { onclick: () => start({ speech: true, vision: true }) }, icon('scan-eye'), 'Řeč + obraz'),
-        h('.tiny.faint', `~${fmt.durHuman((m.duration || 0) / 45)} řeč`)) : null);
+        h('button.btn.sm.primary', { onclick: () => start({ speech: true }) }, icon('audio-lines'), tr('Transcribe speech')),
+        h('button.btn.sm', { onclick: () => start({ speech: true, vision: true }) }, icon('scan-eye'), tr('Speech + picture')),
+        h('.tiny.faint', tr('~{time} speech', { time: fmt.durHuman((m.duration || 0) / 45) }))) : null);
   }
 
   /* ---- live progress (updated in place, fixed height) */
@@ -231,19 +244,19 @@ function transcriptSection(m) {
         const ai = order.indexOf(cur ? cur.phase : '');
         clear(steps).append(order.map((p, i) => h('span.trs-step' + (i < ai ? '.done' : i === ai ? '.on' : ''), icon({ speech: 'audio-lines', vision: 'scan-eye', chapters: 'sparkles' }[p]), TR.PHASE[p])));
         clear(btns).append(
-          h('button.btn.sm.ghost', { onclick: () => API.call('analysis.pause', { paused: !(TR.queue && TR.queue.paused) }).then(TR.refreshQueue) }, icon('pause'), 'Pozastavit / pokračovat'),
-          cur ? h('button.btn.sm.ghost', { title: 'Zastavit toto video – hotové části zůstanou', onclick: () => API.call('analysis.skip') }, icon('skip-forward'), 'Přeskočit')
-            : h('button.btn.sm.ghost', { onclick: () => API.call('analysis.remove', { key: waiting.key }).then(TR.refreshQueue) }, icon('x'), 'Odebrat z fronty'),
+          h('button.btn.sm.ghost', { onclick: () => API.call('analysis.pause', { paused: !(TR.queue && TR.queue.paused) }).then(TR.refreshQueue) }, icon('pause'), tr('Pause / resume')),
+          cur ? h('button.btn.sm.ghost', { title: tr('Stop this video – finished parts are kept'), onclick: () => API.call('analysis.skip') }, icon('skip-forward'), tr('Skip'))
+            : h('button.btn.sm.ghost', { onclick: () => API.call('analysis.remove', { key: waiting.key }).then(TR.refreshQueue) }, icon('x'), tr('Remove from queue')),
           h('.grow'),
-          h('button.btn.sm.ghost', { onclick: () => App.go('transcripts') }, icon('list-ordered'), 'Fronta'));
+          h('button.btn.sm.ghost', { onclick: () => App.go('transcripts') }, icon('list-ordered'), tr('Queue')));
       }
       el.classList.toggle('paused', phase === 'paused');
       const p = cur && cur.p != null ? cur.p : 0;
       $('i', bar).style.width = Math.round(p * 100) + '%';
       pct.textContent = cur ? Math.round(p * 100) + ' %' : '';
-      msg.textContent = phase === 'paused' ? (q.auto_paused ? `Pozastaveno – běží ${q.auto_paused}` : 'Pozastaveno')
-        : cur ? (cur.msg || 'Pracuji…') : `Ve frontě (${q.queue.indexOf(waiting) + 1}. na řadě)`;
-      eta.textContent = cur ? [TR.eta(cur.eta), cur.speed ? `${Math.round(cur.speed)}× rychleji než reálný čas` : ''].filter(Boolean).join(' · ') : '';
+      msg.textContent = phase === 'paused' ? (q.auto_paused ? tr('Paused – {game} is running', { game: q.auto_paused }) : tr('Paused'))
+        : cur ? (cur.msg || tr('Working…')) : tr('Queued (position {n})', { n: q.queue.indexOf(waiting) + 1 });
+      eta.textContent = cur ? [TR.eta(cur.eta), cur.speed ? tr('{x}× faster than real time', { x: Math.round(cur.speed) }) : ''].filter(Boolean).join(' · ') : '';
     } };
   }
 
@@ -270,21 +283,21 @@ function transcriptSection(m) {
       const n = Math.ceil(dur / cv.chunk_s);
       for (let k = 0; k < n; k++) lane.appendChild(h(done.has(k) ? 'b.cov-done' : 'b.cov-todo', { style: { left: pc(k * cv.chunk_s), width: `calc(${pc(Math.min(cv.chunk_s, dur - k * cv.chunk_s))} + 1px)` } }));
       for (const r of d.rows) if (r.speaker === sp) lane.appendChild(h('i', { style: { left: pc(r.t), width: `max(2px, ${pc((r.t_end || r.t + 2) - r.t)})`, background: TR.color(sp) } }));
-      lanes.push(h('.cov-row', h('span.cov-lbl', { style: { color: TR.color(sp) } }, sp), lane));
+      lanes.push(h('.cov-row', h('span.cov-lbl', { style: { color: TR.color(sp) } }, TR.label(sp)), lane));
     }
     const img = h('.cov-lane');
     const seen = d.frames.filter(f => !f.skip), skipped = d.frames.filter(f => f.skip);
     const spans = conversations(d.rows);
     const covered = t => d.frames.some(f => Math.abs(f.t - t) < 25);
     for (const [a, b] of spans) {        // conversations without any look at the picture yet
-      if (!covered((a + b) / 2) && !d.frames.some(f => f.t >= a && f.t <= b)) img.appendChild(h('b.cov-todo', { style: { left: pc(a), width: `max(2px, ${pc(b - a)})` }, title: 'Rozhovor bez popisu obrazu' }));
+      if (!covered((a + b) / 2) && !d.frames.some(f => f.t >= a && f.t <= b)) img.appendChild(h('b.cov-todo', { style: { left: pc(a), width: `max(2px, ${pc(b - a)})` }, title: tr('Conversation without picture description') }));
     }
     for (const f of skipped) img.appendChild(h('i.cov-skip', { style: { left: pc(f.t) } }));
     for (const f of seen) img.appendChild(h('i.cov-tick' + (f.names.length ? '.named' : '') + (f.faces.length ? '.face' : ''), { style: { left: pc(f.t) } }));
-    lanes.push(h('.cov-row', h('span.cov-lbl', { style: { color: TR.color('Obraz') } }, 'Obraz'), img));
+    lanes.push(h('.cov-row', h('span.cov-lbl', { style: { color: TR.color('Obraz') } }, tr('Picture')), img));
     const chap = h('.cov-lane.chap');
     cv.chapters.forEach((c, i) => chap.appendChild(h('b.cov-ch' + (i % 2 ? '.alt' : ''), { style: { left: pc(c.t), width: pc((c.t_end || c.t + 600) - c.t) }, title: `${fmt.clock(c.t)} ${c.title}` }, c.title)));
-    lanes.push(h('.cov-row', h('span.cov-lbl', 'Kronika'), chap));
+    lanes.push(h('.cov-row', h('span.cov-lbl', tr('Chronicle')), chap));
     const ph = h('.cov-ph');
     const selEl = h('.cov-sel.hidden');
     const area = h('.cov-area', lanes, ph, selEl);
@@ -295,11 +308,11 @@ function transcriptSection(m) {
     const convS = spans.reduce((a, [x, y]) => a + (y - x), 0);
     const convSeen = spans.filter(([a, b]) => d.frames.some(f => f.t >= a && f.t <= b)).reduce((a, [x, y]) => a + (y - x), 0);
     clear(covInfo).append(
-      h('span', icon('audio-lines'), ` řeč ${speechAll ? Math.round(speechDone / speechAll * 100) : 0} %`),
-      h('span', icon('scan-eye'), ` obraz v rozhovorech ${convS ? Math.round(convSeen / convS * 100) : 0} % · ${seen.length} popsáno, ${skipped.length} beze změny`),
-      d.frames.some(f => f.names.length) ? h('span', icon('tag'), ` jmenovky ${d.frames.filter(f => f.names.length).length}×`) : null,
-      d.frames.some(f => f.faces.length) ? h('span', icon('scan-face'), ` tváře ${d.frames.reduce((a, f) => a + f.faces.length, 0)}`) : null,
-      h('span.grow'), h('span', 'tažením vyber úsek'));
+      h('span', icon('audio-lines'), ' ' + tr('speech {pct} %', { pct: speechAll ? Math.round(speechDone / speechAll * 100) : 0 })),
+      h('span', icon('scan-eye'), ' ' + tr('picture in conversations {pct} % · {seen} described, {skipped} unchanged', { pct: convS ? Math.round(convSeen / convS * 100) : 0, seen: seen.length, skipped: skipped.length })),
+      d.frames.some(f => f.names.length) ? h('span', icon('tag'), ' ' + tr('name tags {n}×', { n: d.frames.filter(f => f.names.length).length })) : null,
+      d.frames.some(f => f.faces.length) ? h('span', icon('scan-face'), ' ' + tr('faces {n}', { n: d.frames.reduce((a, f) => a + f.faces.length, 0) })) : null,
+      h('span.grow'), h('span', tr('drag to select a section')));
     // interaction: hover = time, click = play, drag = select a range for picture processing
     const tAt = e => { const r = area.getBoundingClientRect(); return Math.max(0, Math.min(dur, (e.clientX - r.left - 58) / (r.width - 58) * dur)); };
     area.onmousemove = e => { area.title = fmt.clock(tAt(e)); };
@@ -321,15 +334,15 @@ function transcriptSection(m) {
   function renderSelBar() {
     if (!st.sel) { selBar.classList.add('hidden'); return; }
     const [a, b] = st.sel;
-    const step = h('select.input.sm', [4, 8, 15, 30, 60].map(s => h('option', { value: s, selected: s === 8 ? 'selected' : null }, `každých ${s} s`)));
+    const step = h('select.input.sm', [4, 8, 15, 30, 60].map(s => h('option', { value: s, selected: s === 8 ? 'selected' : null }, tr('every {s} s', { s }))));
     const n = () => Math.ceil((b - a) / +step.value);
     const info = h('span.tiny.faint');
-    const upd = () => { info.textContent = `${n()} snímků · ~${fmt.durHuman(n() * 3.2)}`; };
+    const upd = () => { info.textContent = trn(n(), '{n} frame · ~{time}', '{n} frames · ~{time}', { time: fmt.durHuman(n() * 3.2) }); };
     step.onchange = upd; upd();
     selBar.classList.remove('hidden');
     clear(selBar).append(icon('scan-eye'), h('b', `${fmt.clock(a)}–${fmt.clock(b)}`), step, info, h('.grow'),
       h('button.btn.sm.ghost', { onclick: () => TR.play(m.id, a) }, icon('play')),
-      h('button.btn.sm.primary', { onclick: () => { start({ speech: false, vision: false, chapters: false, ranges: [[a, b, +step.value]] }); st.sel = null; renderSelBar(); $('.cov-sel', cov)?.classList.add('hidden'); toast('Úsek přidán do fronty'); } }, 'Popsat obraz'),
+      h('button.btn.sm.primary', { onclick: () => { start({ speech: false, vision: false, chapters: false, ranges: [[a, b, +step.value]] }); st.sel = null; renderSelBar(); $('.cov-sel', cov)?.classList.add('hidden'); toast(tr('Section added to the queue')); } }, tr('Describe picture')),
       h('button.btn.sm.ghost.icon', { onclick: () => { st.sel = null; renderSelBar(); $('.cov-sel', cov)?.classList.add('hidden'); } }, icon('x')));
   }
   function drawPlayhead() {
@@ -346,42 +359,42 @@ function transcriptSection(m) {
     const d = st.data, cv = d.coverage;
     clear(meta);
     if (d.proposals) meta.appendChild(h('.trs-banner', icon('sparkles'),
-      h('.grow', h('b', `Kronikář AI navrhuje ${d.proposals} ${fmt.plural(d.proposals, 'záznam', 'záznamy', 'záznamů')}`),
-        h('.tiny.faint', 'události, nové postavy, místa a frakce z tohoto záznamu')),
-      h('button.btn.sm.primary', { onclick: () => reviewProposals(m.id).then(load) }, 'Projít návrhy')));
+      h('.grow', h('b', trn(d.proposals, 'Kosmas AI suggests {n} entry', 'Kosmas AI suggests {n} entries')),
+        h('.tiny.faint', tr('events, new characters, places and factions from this recording'))),
+      h('button.btn.sm.primary', { onclick: () => reviewProposals(m.id).then(load) }, tr('Review suggestions'))));
     if (cv.summary && cv.summary.text) {
-      meta.appendChild(h('details.trs-sum', { open: true }, h('summary', icon('book-open'), 'Shrnutí záznamu'),
+      meta.appendChild(h('details.trs-sum', { open: true }, h('summary', icon('book-open'), tr('Recording summary')),
         h('p', cv.summary.text),
         (cv.summary.moments || []).length ? h('ul', cv.summary.moments.map(x => h('li', x))) : null));
     }
     if (cv.chapters.length) {
-      meta.appendChild(h('details.trs-chaps', h('summary', icon('list'), `Kapitoly · ${cv.chapters.length}`),
+      meta.appendChild(h('details.trs-chaps', h('summary', icon('list'), `${tr('Chapters')} · ${cv.chapters.length}`),
         cv.chapters.map(c => h('.trs-chap-row', { onclick: () => { jumpTo(c.t); TR.play(m.id, c.t); } },
           h('span.kbd', fmt.clock(c.t)), h('.grow', h('b', c.title), h('.tiny.faint', c.summary))))));
     }
     if ((d.groups || []).length) {
       meta.appendChild(h('details.trs-groups', { open: true },
-        h('summary', icon('users-round'), `Nepoznané postavy · ${d.groups.length} ${fmt.plural(d.groups.length, 'skupina', 'skupiny', 'skupin')} podle vzhledu`),
-        h('.tiny.faint', { style: { margin: '4px 0 6px' } }, 'Stejné oblečení a vlasy = nejspíš stejná postava. Jedna odpověď označí celou skupinu a vytvoří vzory pro další videa.'),
+        h('summary', icon('users-round'), `${tr('Unrecognised characters')} · ${trn(d.groups.length, '{n} group by appearance', '{n} groups by appearance')}`),
+        h('.tiny.faint', { style: { margin: '4px 0 6px' } }, tr('Same clothes and hair = most likely the same character. One answer tags the whole group and creates references for other videos.')),
         d.groups.map(g => h('.trs-group',
           h('.trs-group-imgs', g.urls.filter(Boolean).map(u => h('img', { src: u, loading: 'lazy' }))),
-          h('.grow', { style: { minWidth: 0 } }, h('b', `${g.members.length}× v záznamu`),
-            g.names.length ? h('.tiny.faint.ellipsis', 'jmenovky: ' + g.names.map(([n, k]) => `${n} (${k}×)`).join(', ')) : null),
+          h('.grow', { style: { minWidth: 0 } }, h('b', tr('{n}× in the recording', { n: g.members.length })),
+            g.names.length ? h('.tiny.faint.ellipsis', tr('name tags: {list}', { list: g.names.map(([n, k]) => `${n} (${k}×)`).join(', ') })) : null),
           h('button.btn.sm', { onclick: async () => {
-            const ids = await pickCharacters([], { title: g.names.length ? `Kdo to je? (jmenovka: ${g.names[0][0]})` : 'Kdo to je?', multi: false });
+            const ids = await pickCharacters([], { title: g.names.length ? tr('Who is it? (name tag: {name})', { name: g.names[0][0] }) : tr('Who is it?'), multi: false });
             const id = Array.isArray(ids) ? ids[0] : ids;
             if (!id) return;
             const n = await API.call('analysis.group_label', { media_id: m.id, members: g.members, character_id: id });
-            toast(`${n}× označeno jako ${App.charsById.get(id)?.name || 'postava'} – vzory uloženy`);
+            toast(tr('{n}× tagged as {name} – references saved', { n, name: App.charsById.get(id)?.name || tr('character') }));
             load();
-          } }, icon('user-search'), 'Kdo to je…')))));
+          } }, icon('user-search'), tr('Who is it…'))))));
     }
     const byChar = new Map();
     for (const x of d.mentions) { if (!byChar.has(x.character_id)) byChar.set(x.character_id, []); byChar.get(x.character_id).push(x); }
     if (byChar.size) {
-      meta.appendChild(h('.trs-chars', h('span.tiny.faint', 'V záznamu:'),
+      meta.appendChild(h('.trs-chars', h('span.tiny.faint', tr('In the recording:')),
         [...byChar.entries()].map(([id, xs]) => [App.charsById.get(id), xs]).filter(([c]) => c).sort((a, b) => b[1].length - a[1].length).map(([c, xs]) =>
-          h('span.chip' + (st.charFilter === c.id ? '.on' : ''), { title: `${xs.length}× – ${[...new Set(xs.map(x => ({ speech: 'zmíněn v řeči', seen: 'jmenovka / potvrzeno v obraze', look: 'poznán podle vzhledu', ai: 'podle kroniky' }[x.kind])))].join(', ')}. Klik = jen tato místa`,
+          h('span.chip' + (st.charFilter === c.id ? '.on' : ''), { title: tr('{n}× – {kinds}. Click = only these places', { n: xs.length, kinds: [...new Set(xs.map(x => ({ speech: tr('mentioned in speech'), seen: tr('name tag / confirmed in picture'), look: tr('recognised by appearance'), ai: tr('from the chronicle') }[x.kind])))].join(', ') }),
             onclick: () => { st.charFilter = st.charFilter === c.id ? null : c.id; renderMeta(); renderList(); } },
           avatar(c, 18), c.name, h('span.faint', xs.length), xs.some(x => x.kind === 'seen') ? icon('eye') : null,
           xs.some(x => x.kind === 'look') ? icon('scan-face') : null))));
@@ -398,7 +411,7 @@ function transcriptSection(m) {
     const speakers = [...new Set(rows.map(r => r.speaker))];
     clear(chips).append(speakers.map(s => h('span.chip' + (st.hidden.has(s) ? '' : '.on'), {
       onclick: () => { st.hidden.has(s) ? st.hidden.delete(s) : st.hidden.add(s); renderChips(); renderList(); },
-    }, h('span.dot', { style: { background: TR.color(s) } }), `${s} · ${rows.filter(r => r.speaker === s).length}`)));
+    }, h('span.dot', { style: { background: TR.color(s) } }), `${TR.label(s)} · ${rows.filter(r => r.speaker === s).length}`)));
   }
   function nameMarker() {
     // characters found in this video: highlight their names (Czech endings) in the text
@@ -444,37 +457,37 @@ function transcriptSection(m) {
         frag.appendChild(h('.trs-chap', h('span.kbd', fmt.clock(chapters[ci].t)), h('b', chapters[ci].title)));
         ci++;
       }
-      if (lastEnd != null && !words.length && r.t - lastEnd >= 60) frag.appendChild(h('.trs-gap', `pauza ${fmt.durHuman(r.t - lastEnd)}`));
+      if (lastEnd != null && !words.length && r.t - lastEnd >= 60) frag.appendChild(h('.trs-gap', tr('pause {time}', { time: fmt.durHuman(r.t - lastEnd) })));
       lastEnd = Math.max(lastEnd || 0, r.t_end || r.t);
       const f = r.speaker === 'Obraz' ? frames.get(Math.round(r.t * 10)) : null;
       frag.appendChild(h('.trs-row' + (f ? '.img' : ''), { 'data-t': r.t, onclick: () => TR.play(m.id, r.t) },
         h('span.kbd', fmt.clock(r.t)),
-        h('span.trs-who', { style: { color: TR.color(r.speaker) } }, r.speaker),
+        h('span.trs-who', { style: { color: TR.color(r.speaker) } }, TR.label(r.speaker)),
         h('.trs-body',
           f && f.thumb ? h('img.trs-thumb', { src: f.thumb, loading: 'lazy' }) : null,
           h('span.trs-text', richText(r.text, stems, words)),
           f && (f.names.length || f.faces.length || (f.persons || []).length) ? h('.trs-extra',
             (f.persons || []).map(p => personChip(r.t, p)),
             f.names.filter(n => !(f.persons || []).some(p => p.name === n)).map(n => h('span.trs-tag', icon('tag'), n)),
-            f.faces.map(x => h('img.trs-face', { src: x.url, title: 'Tvář – klik: použít jako portrét postavy', onclick: e => { e.stopPropagation(); facePortrait(r.t, x); } }))) : null),
+            f.faces.map(x => h('img.trs-face', { src: x.url, title: tr('Face – click: use as character portrait'), onclick: e => { e.stopPropagation(); facePortrait(r.t, x); } }))) : null),
         h('.trs-act',
-          h('button.npb', { title: 'Záložka na tomto místě', onclick: async e => { e.stopPropagation(); await API.call('bm.create', { media_id: m.id, t: r.t, title: r.text.slice(0, 70) }); toast('Záložka přidána'); } }, icon('bookmark-plus')))));
+          h('button.npb', { title: tr('Bookmark here'), onclick: async e => { e.stopPropagation(); await API.call('bm.create', { media_id: m.id, t: r.t, title: r.text.slice(0, 70) }); toast(tr('Bookmark added')); } }, icon('bookmark-plus')))));
     }
-    if (shown.length > st.limit) frag.appendChild(h('button.btn.sm.ghost', { onclick: () => { st.limit += 600; renderList(); } }, `Zobrazit další (${shown.length - st.limit})`));
-    if (!shown.length && d.rows.length) frag.appendChild(h('.faint.small', { style: { padding: '12px' } }, 'Nic neodpovídá filtru.'));
+    if (shown.length > st.limit) frag.appendChild(h('button.btn.sm.ghost', { onclick: () => { st.limit += 600; renderList(); } }, tr('Show more ({n})', { n: shown.length - st.limit })));
+    if (!shown.length && d.rows.length) frag.appendChild(h('.faint.small', { style: { padding: '12px' } }, tr('Nothing matches the filter.')));
     clear(list).appendChild(frag);
     list.classList.toggle('hidden', !d.rows.length);
     list.scrollTop = top;
-    count.textContent = (words.length || near) ? `${shown.length} ${fmt.plural(shown.length, 'výsledek', 'výsledky', 'výsledků')}` : '';
+    count.textContent = (words.length || near) ? trn(shown.length, '{n} result', '{n} results') : '';
     $('.trs-tools', root).classList.toggle('hidden', !d.rows.length);
   }
   /** One person on a frame: crop + who it is (name tag, confirmed, or recognised by clothing/hair/face). */
   function personChip(t, p) {
     const hit = p.hit, c = hit && App.charsById.get(hit.character_id);
-    const how = hit ? { tag: ['tag', 'jmenovka nad hlavou'], user: ['user-check', 'potvrzeno tebou'], look: ['scan-face', 'podle vzhledu'] }[hit.source] : null;
-    const label = c ? c.name : p.name || 'neznámý';
+    const how = hit ? { tag: ['tag', tr('name tag above the head')], user: ['user-check', tr('confirmed by you')], look: ['scan-face', tr('by appearance')] }[hit.source] : null;
+    const label = c ? c.name : p.name || tr('unknown');
     return h('span.trs-person' + (hit ? '.' + hit.source : '.unknown'), {
-      title: [label, how ? how[1] + (hit.source === 'look' ? ` (shoda ${Math.round(hit.score * 100)} %)` : '') : 'nepoznáno – klikni a řekni kdo to je',
+      title: [label, how ? how[1] + (hit.source === 'look' ? ' ' + tr('(match {pct} %)', { pct: Math.round(hit.score * 100) }) : '') : tr('not recognised – click and say who it is'),
         p.look].filter(Boolean).join('\n'),
       onclick: e => { e.stopPropagation(); personMenu(e, t, p, c); },
     }, p.url ? h('img', { src: p.url, loading: 'lazy' }) : null,
@@ -484,28 +497,28 @@ function transcriptSection(m) {
   function personMenu(e, t, p, c) {
     const label = async (cid, verdict) => {
       await API.call('analysis.person_label', { media_id: m.id, t, idx: p.idx, character_id: cid, verdict });
-      toast(verdict === 'yes' ? 'Uloženo – podle tohoto vzoru se postava pozná i jinde' : 'Uloženo – tady to není');
+      toast(verdict === 'yes' ? tr('Saved – the character will be recognised elsewhere by this reference') : tr('Saved – not them here'));
       load();
     };
     const pick = async () => {
-      const ids = await pickCharacters([], { title: 'Kdo to je?', multi: false });
+      const ids = await pickCharacters([], { title: tr('Who is it?'), multi: false });
       const id = Array.isArray(ids) ? ids[0] : ids;
       if (id) label(id, 'yes');
     };
     menu(e, [
-      c && p.hit.source === 'look' ? { label: `Ano, je to ${c.name}`, icon: 'check', onClick: () => label(c.id, 'yes') } : null,
-      c ? { label: `Není to ${c.name}`, icon: 'x', onClick: () => label(c.id, 'no') } : null,
-      { label: c ? 'Je to někdo jiný…' : 'Kdo to je…', icon: 'user-search', onClick: pick },
+      c && p.hit.source === 'look' ? { label: tr('Yes, it is {name}', { name: c.name }), icon: 'check', onClick: () => label(c.id, 'yes') } : null,
+      c ? { label: tr('It is not {name}', { name: c.name }), icon: 'x', onClick: () => label(c.id, 'no') } : null,
+      { label: c ? tr('It is someone else…') : tr('Who is it…'), icon: 'user-search', onClick: pick },
       c ? { sep: true } : null,
-      c ? { label: `Otevřít postavu ${c.name}`, icon: 'user', onClick: () => App.go('characters', { id: c.id }) } : null,
+      c ? { label: tr('Open character {name}', { name: c.name }), icon: 'user', onClick: () => App.go('characters', { id: c.id }) } : null,
     ].filter(Boolean));
   }
   async function facePortrait(t, face) {
-    const ids = await pickCharacters([], { title: 'Čí je to tvář?', multi: false });
+    const ids = await pickCharacters([], { title: tr('Whose face is this?'), multi: false });
     const id = Array.isArray(ids) ? ids[0] : ids;
     if (!id) return;
     await API.call('analysis.face_portrait', { media_id: m.id, t, file: face.file, character_id: id });
-    toast('Portrét nastaven'); App.refresh('chars');
+    toast(tr('Portrait set')); App.refresh('chars');
   }
 
   load();
@@ -514,12 +527,12 @@ function transcriptSection(m) {
 window.transcriptSection = transcriptSection;
 
 /** "Zmínky v záznamech" for a character / place / faction page. */
-function mentionsSection(type, id, { title = 'V záznamech (přepis)' } = {}) {
-  const box = h('.ch-sec.trm', h('.section-title', icon('captions'), title, h('.line')), h('.faint.small', 'Načítám…'));
+function mentionsSection(type, id, { title = tr('In recordings (transcript)') } = {}) {
+  const box = h('.ch-sec.trm', h('.section-title', icon('captions'), title, h('.line')), h('.faint.small', tr('Loading…')));
   API.call('analysis.entity_mentions', { type, id }).then(groups => {
     if (!box.isConnected && !groups) return;
     box.lastChild.remove();
-    if (!groups.length) { box.appendChild(h('.faint.small', 'Zatím se neobjevil v žádném přepsaném záznamu.')); return; }
+    if (!groups.length) { box.appendChild(h('.faint.small', tr('Has not appeared in any transcribed recording yet.'))); return; }
     const total = groups.reduce((a, g) => a + g.hits.length, 0);
     $('.section-title', box).insertBefore(h('span.faint', total), $('.line', box));
     for (const g of groups) {
@@ -528,8 +541,8 @@ function mentionsSection(type, id, { title = 'V záznamech (přepis)' } = {}) {
           h('.grow', h('.ellipsis', g.media.name), h('.tiny.faint', fmt.dt(g.media.start)))),
         h('.trm-hits', g.hits.slice(0, 12).map(x => h('.trm-hit', { onclick: () => TR.play(g.media.id, x.t - 2), title: x.text || '' },
           h('span.kbd', fmt.clock(x.t)), icon({ speech: 'audio-lines', seen: 'eye', look: 'scan-face', ai: 'sparkles' }[x.kind] || 'dot'),
-          h('span.ellipsis', x.text || { seen: 'jmenovka / potvrzeno v obraze', look: 'poznán podle vzhledu', speech: 'zmínka v řeči', ai: 'podle kroniky' }[x.kind] || ''))),
-          g.hits.length > 12 ? h('.tiny.faint', `+ ${g.hits.length - 12} dalších`) : null)));
+          h('span.ellipsis', x.text || { seen: tr('name tag / confirmed in picture'), look: tr('recognised by appearance'), speech: tr('mention in speech'), ai: tr('from the chronicle') }[x.kind] || ''))),
+          g.hits.length > 12 ? h('.tiny.faint', tr('+ {n} more', { n: g.hits.length - 12 })) : null)));
     }
   }).catch(() => {});
   return box;
@@ -538,22 +551,22 @@ window.mentionsSection = mentionsSection;
 
 /** "Vzhled v záznamech": how a character looked over time (references from name tags and confirmations). */
 function looksSection(charId) {
-  const box = h('.ch-sec.trl', h('.section-title', icon('scan-face'), 'Vzhled v záznamech', h('.line')), h('.faint.small', 'Načítám…'));
+  const box = h('.ch-sec.trl', h('.section-title', icon('scan-face'), tr('Appearance in recordings'), h('.line')), h('.faint.small', tr('Loading…')));
   const render = async () => {
     const refs = await API.call('analysis.char_looks', { id: charId }).catch(() => []);
     while (box.childNodes.length > 1) box.lastChild.remove();
     if (!refs.length) {
-      box.appendChild(h('.faint.small', 'Zatím žádné vzory. Vzniknou samy, když je nad postavou ve videu vidět jmenovka, nebo když u postavy na snímku potvrdíš, kdo to je – podle nich se pak pozná i bez jmenovky (oblečení, vlasy, obličej).'));
+      box.appendChild(h('.faint.small', tr('No references yet. They are created automatically when a name tag is visible above the character in a video, or when you confirm who a character on a frame is – then the character is recognised even without a name tag (clothes, hair, face).')));
       return;
     }
     box.appendChild(h('.tiny.faint', { style: { marginBottom: '6px' } },
-      `${refs.length} ${fmt.plural(refs.length, 'vzor', 'vzory', 'vzorů')} · podle nich se postava pozná i bez jmenovky. Novější vzory mají přednost (oblečení se mění).`));
+      trn(refs.length, '{n} reference · the character is recognised by it even without a name tag. Newer references take priority (clothes change).', '{n} references · the character is recognised by them even without a name tag. Newer references take priority (clothes change).')));
     box.appendChild(h('.trl-grid', refs.slice().reverse().map(r => h('.trl-item', {
-      title: [fmt.dt(r.abs_time) || r.media, r.look, r.source === 'tag' ? 'ze jmenovky' : 'potvrzeno tebou'].filter(Boolean).join('\n'),
+      title: [fmt.dt(r.abs_time) || r.media, r.look, r.source === 'tag' ? tr('from a name tag') : tr('confirmed by you')].filter(Boolean).join('\n'),
       onclick: () => TR.play(r.media_id, r.t),
       oncontextmenu: e => menu(e, [
-        { label: 'Přehrát toto místo', icon: 'play', onClick: () => TR.play(r.media_id, r.t) },
-        { label: 'Není to tato postava – odebrat vzor', icon: 'trash-2', danger: true, onClick: async () => { await API.call('analysis.ref_delete', { id: r.id }); render(); } },
+        { label: tr('Play this moment'), icon: 'play', onClick: () => TR.play(r.media_id, r.t) },
+        { label: tr('Not this character – remove reference'), icon: 'trash-2', danger: true, onClick: async () => { await API.call('analysis.ref_delete', { id: r.id }); render(); } },
       ]),
     }, r.url ? h('img', { src: r.url, loading: 'lazy' }) : icon('user'),
       h('span.trl-src', icon(r.source === 'tag' ? 'tag' : 'user-check'), r.face ? icon('smile') : null),

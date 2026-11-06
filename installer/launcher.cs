@@ -7,9 +7,9 @@ using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("Kronikář")]
-[assembly: AssemblyDescription("Kronikář – katalog herních záznamů")]
-[assembly: AssemblyProduct("Kronikář")]
+[assembly: AssemblyTitle("Kosmas")]
+[assembly: AssemblyDescription("Kosmas – catalogue of game recordings")]
+[assembly: AssemblyProduct("Kosmas")]
 [assembly: AssemblyCompany("gingygames")]
 [assembly: AssemblyCopyright("gingygames")]
 [assembly: AssemblyVersion("@VERSION@.0")]
@@ -41,8 +41,11 @@ static class Launcher
         string py = Path.Combine(dir, "python", "pythonw.exe");
         if (!File.Exists(py))
         {
-            MessageBox.Show("Instalace Kronikáře je poškozená (chybí " + py + ").\nNainstaluj aplikaci znovu.",
-                            "Kronikář", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            string lang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+            bool cs = lang == "cs" || lang == "sk";
+            MessageBox.Show(cs ? "Instalace Kosmase je poškozená (chybí " + py + ").\nNainstaluj aplikaci znovu."
+                               : "The Kosmas installation is damaged (" + py + " is missing).\nPlease install the app again.",
+                            "Kosmas", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
         var sb = new StringBuilder("-m rpcatalog");

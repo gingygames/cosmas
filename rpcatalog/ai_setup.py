@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import ai_providers as ai
 from . import config, hardware, keystore
+from .i18n import tr
 
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 OLLAMA_SETUP = "https://ollama.com/download/OllamaSetup.exe"
@@ -75,9 +76,9 @@ def info(api):
             continue
         models = {}
         for task, ms in p.get("models", {}).items():
-            models[task] = [{"id": m["id"], "label": m["label"], "default": bool(m.get("default")),
+            models[task] = [{"id": m["id"], "label": tr(m["label"]), "default": bool(m.get("default")),
                              "czk_hour": round(ai.estimate(pid, task, m["id"], s) * ai.USD_CZK, 2)} for m in ms]
-        provs.append({"id": pid, "label": p["label"], "note": p.get("note", ""), "key_url": p.get("key_url"),
+        provs.append({"id": pid, "label": tr(p["label"]), "note": tr(p.get("note", "")), "key_url": p.get("key_url"),
                       "price_url": p.get("price_url"), "login": p.get("login", "key"), "has_key": keystore.has(pid),
                       "models": models})
     media = [m for m in api.store.all_media() if m.duration]
@@ -113,7 +114,7 @@ def login_openrouter(api):
             if "code" in q:
                 got["code"] = q["code"][0]
             body = ("<html><meta charset='utf-8'><body style='font-family:sans-serif;padding:40px'>"
-                    "<h2>Hotovo, můžeš se vrátit do Kronikáře.</h2></body></html>").encode()
+                    "<h2>" + tr("Done, you can go back to Kosmas.") + "</h2></body></html>").encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
@@ -130,15 +131,15 @@ def login_openrouter(api):
         except OSError:
             continue
     if srv is None:
-        raise RuntimeError("Nenašel jsem volný port pro přihlášení")
+        raise RuntimeError(tr("Couldn't find a free port for signing in"))
     srv.timeout = 1
     cb = f"http://localhost:{srv.server_port}/callback"
 
     def run():
         api.emit("ai", {"task": "login", "state": "waiting", "provider": "openrouter",
-                        "msg": "Přihlas se v otevřeném prohlížeči…"})
+                        "msg": tr("Sign in in the browser that just opened…")})
         webbrowser.open("https://openrouter.ai/auth?" + urllib.parse.urlencode(
-            {"callback_url": cb, "code_challenge": challenge, "code_challenge_method": "S256", "key_label": "Kronikář"}))
+            {"callback_url": cb, "code_challenge": challenge, "code_challenge_method": "S256", "key_label": "Kosmas"}))
         end = time.time() + 600
         try:
             while "code" not in got and time.time() < end:
@@ -146,16 +147,16 @@ def login_openrouter(api):
         finally:
             srv.server_close()
         if "code" not in got:
-            raise RuntimeError("Přihlášení vypršelo")
+            raise RuntimeError(tr("Sign-in timed out"))
         req = urllib.request.Request("https://openrouter.ai/api/v1/auth/keys", json.dumps(
             {"code": got["code"], "code_verifier": verifier, "code_challenge_method": "S256"}).encode(),
             {"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=30) as r:
             key = json.loads(r.read()).get("key")
         if not key:
-            raise RuntimeError("OpenRouter nevrátil klíč")
+            raise RuntimeError(tr("OpenRouter did not return a key"))
         keystore.set("openrouter", key)
-        api.emit("ai", {"task": "login", "state": "done", "provider": "openrouter", "msg": "Přihlášeno k OpenRouteru"})
+        api.emit("ai", {"task": "login", "state": "done", "provider": "openrouter", "msg": tr("Signed in to OpenRouter")})
     return _bg(api, "login", run)
 
 
@@ -172,8 +173,8 @@ def install_ollama(api):
                     f.write(chunk)
                     done += len(chunk)
                     api.emit("ai", {"task": "ollama", "state": "progress", "p": done / total if total else None,
-                                    "msg": f"Stahuji Ollamu… {done >> 20} MB"})
-            api.emit("ai", {"task": "ollama", "state": "progress", "p": None, "msg": "Instaluji Ollamu…"})
+                                    "msg": tr("Downloading Ollama… {mb} MB", mb=done >> 20)})
+            api.emit("ai", {"task": "ollama", "state": "progress", "p": None, "msg": tr("Installing Ollama…")})
             subprocess.run([str(dst), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"], check=True)
             dst.unlink(missing_ok=True)
             exe = ollama_exe()
@@ -187,7 +188,7 @@ def install_ollama(api):
                 time.sleep(1)
         ok = ollama_state()["running"]
         api.emit("ai", {"task": "ollama", "state": "done" if ok else "error",
-                        "msg": "Ollama běží" if ok else "Ollama se nespustila – spusť ji z nabídky Start"})
+                        "msg": tr("Ollama is running") if ok else tr("Ollama did not start – start it from the Start menu")})
     return _bg(api, "ollama", run)
 
 
@@ -209,7 +210,7 @@ def pull_model(api, model):
                     tot, comp = d.get("total"), d.get("completed")
                     api.emit("ai", {"task": "pull:" + model, "state": "progress", "p": comp / tot if tot and comp else None,
                                     "msg": f"{model}: {(comp or 0) / 2**30:.1f} / {tot / 2**30:.1f} GB" if tot else f"{model}: {d.get('status', '')}"})
-        api.emit("ai", {"task": "pull:" + model, "state": "done", "msg": f"Model {model} je stažený"})
+        api.emit("ai", {"task": "pull:" + model, "state": "done", "msg": tr("Model {model} is downloaded", model=model)})
     return _bg(api, "pull:" + model, run)
 
 
@@ -220,7 +221,7 @@ def install_cuda(api):
         config.PYLIBS_DIR.mkdir(parents=True, exist_ok=True)
         cmd = [py, "-m", "pip", "install", "--target", str(config.PYLIBS_DIR), "--upgrade", "--no-warn-script-location",
                "--disable-pip-version-check", "--progress-bar", "off", "nvidia-cublas-cu12", "nvidia-cudnn-cu12==9.*"]
-        api.emit("ai", {"task": "cuda", "state": "progress", "p": None, "msg": "Stahuji knihovny NVIDIA (~1,5 GB)…"})
+        api.emit("ai", {"task": "cuda", "state": "progress", "p": None, "msg": tr("Downloading NVIDIA libraries (~1.5 GB)…")})
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                              errors="replace", creationflags=NO_WINDOW)
         tail = []
@@ -231,6 +232,6 @@ def install_cuda(api):
                 if line.startswith(("Collecting", "Downloading", "Installing")):
                     api.emit("ai", {"task": "cuda", "state": "progress", "p": None, "msg": line[:120]})
         if p.wait():
-            raise RuntimeError("Instalace se nepovedla: " + " ".join(tail)[-300:])
-        api.emit("ai", {"task": "cuda", "state": "done", "msg": "Přepis řeči teď poběží na grafické kartě"})
+            raise RuntimeError(tr("Installation failed: {details}", details=" ".join(tail)[-300:]))
+        api.emit("ai", {"task": "cuda", "state": "done", "msg": tr("Speech transcription will now run on the graphics card")})
     return _bg(api, "cuda", run)

@@ -1,243 +1,251 @@
-<p align="center"><img src="docs/img/banner.png" alt="Kronikář" width="100%"></p>
+**English** · [Čeština](README.cs.md)
+
+<p align="center"><img src="docs/img/banner.png" alt="Kosmas" width="100%"></p>
 
 <p align="center">
-  <a href="https://github.com/gingygames/kronikar/releases/latest"><b>⬇ Stáhnout instalátor pro Windows</b></a> ·
-  <a href="#instalace">Instalace</a> · <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#pro-vývojáře">Pro vývojáře</a>
+  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Download the Windows installer</b></a> ·
+  <a href="#installation">Installation</a> · <a href="#ai-on-your-pc-or-a-paid-service">AI</a> · <a href="#for-developers">For developers</a>
 </p>
 
-**Kronikář** je katalog záznamů z [Medalu](https://medal.tv) pro hráče RP. Obsahuje:
-- knihovnu videí;
-- události s deníkem a přílohami;
-- databázi postav, frakcí, míst a hráčů;
-- časové osy;
-- přehrávač, který hraje víc zvukových stop najednou (hra, Discord, mikrofon).
+# Kosmas — RP chronicle for your Medal recordings
 
-AI přepíše, co zaznělo, a popíše obraz. Přečte jmenovky nad hlavami a sepíše z večera kroniku s návrhy událostí a postav.
+**Kosmas** (formerly Kronikář, named after Cosmas of Prague, the oldest Czech chronicler) catalogs your [Medal](https://medal.tv) recordings for roleplay players. It gives you:
+- a video library;
+- events with a journal and attachments;
+- a database of characters, factions, places and players;
+- timelines;
+- a player that plays several audio tracks at once (game, Discord, microphone).
+
+AI transcribes what was said and describes what's on screen. It reads the name tags above characters' heads and turns an evening of play into a chronicle, complete with suggested events and characters.
+
+The interface is in English, or in Czech if your system language is Czech or Slovak (you can switch it in Settings).
 
 | | |
 |:-:|:-:|
-| ![Přehled](docs/img/prehled.jpg) **Přehled**: poslední večer, rozkoukaná videa, hry | ![Přehrávač](docs/img/prehravac.jpg) **Přehrávač**: víc zvukových stop, záložky, postavy ve videu |
-| ![Knihovna](docs/img/knihovna.jpg) **Knihovna**: videa po dnech, filtry, hledání i v tom, co zaznělo | ![Postavy](docs/img/postavy.jpg) **Postavy**: portréty, vztahy, frakce, výskyty v záznamech |
-| ![Kronikář AI](docs/img/kronikar-ai.jpg) **Kronikář AI**: návrhy událostí, míst a postav z přepisu | ![Kde běží AI](docs/img/kde-bezi-ai.jpg) **Kde běží AI**: doporučení podle tvého PC a odhad ceny |
-| ![Momenty](docs/img/momenty.jpg) **Momenty**: záložky a úseky ze všech videí | ![Událost](docs/img/udalost.jpg) **Událost**: zápis, deník, přílohy, postavy a videa |
+| ![Overview](docs/img/prehled.jpg) **Overview**: last session, videos in progress, games | ![Player](docs/img/prehravac.jpg) **Player**: multiple audio tracks, bookmarks, characters in the video |
+| ![Library](docs/img/knihovna.jpg) **Library**: videos by day, filters, search that includes what was said | ![Characters](docs/img/postavy.jpg) **Characters**: portraits, relationships, factions, appearances in recordings |
+| ![Kosmas AI](docs/img/kronikar-ai.jpg) **Kosmas AI**: suggested events, places and characters from the transcript | ![Where AI runs](docs/img/kde-bezi-ai.jpg) **Where AI runs**: recommendations for your PC and cost estimates |
+| ![Moments](docs/img/momenty.jpg) **Moments**: bookmarks and ranges from all your videos | ![Event](docs/img/udalost.jpg) **Event**: write-up, journal, attachments, characters and videos |
 
-## Instalace
-1. Stáhni **[Kronikar-Setup.exe](https://github.com/gingygames/kronikar/releases/latest)**. Funguje na 64bitových Windows 10 a 11.
-2. Spusť ho a klikni na **Další → Instalovat**.
-   - Nepotřebuje práva správce ani Python a nic dalšího se instalovat nemusí. Přehrávač i ffmpeg jsou uvnitř.
-   - Zástupce se objeví v nabídce Start, pokud chceš, i na ploše.
-3. Při prvním spuštění Kronikář sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v Nastavení.
+## Installation
+1. Download **[Kronikar-Setup.exe](https://github.com/gingygames/kosmas/releases/latest)**. It runs on 64-bit Windows 10 and 11.
+2. Run it and click **Next → Install**.
+   - No admin rights, no Python, nothing else to install. The video player and ffmpeg are bundled.
+   - A shortcut is added to the Start menu, and to the desktop if you want one.
+3. On first launch, Kosmas finds your Medal folders by itself (`Videos\Medal`, `X:\Medal`). You can add more in Settings.
 
-**Aktualizace:** spusť novější instalátor, data zůstanou.
+**Updating:** run a newer installer; your data stays put.
 
-**Odinstalace:** přes *Nastavení Windows → Aplikace*. Zeptá se, jestli smazat i data.
+**Uninstalling:** via *Windows Settings → Apps*. You'll be asked whether to delete your data as well.
 
-**Data** jsou v `%LOCALAPPDATA%\Kronikar` (katalog, nastavení, náhledy, přepisy). Tuhle složku zálohuj.
+**Data** lives in `%LOCALAPPDATA%\Kronikar` (catalog, settings, thumbnails, transcripts). Back this folder up.
 
-> Pokud jsi Kronikáře dřív spouštěl ze zdrojových kódů, nainstalovaná verze si při prvním spuštění tvoje data sama převezme.
+> If you used to run the app from source, the installed version picks up your existing data automatically on first launch.
 
-## AI: na tvém PC, nebo placená služba
-Při prvním přepisu si vybereš, kde má AI běžet. Najdeš to v **Přepisy → Kde běží AI**. Volbu jde kdykoli změnit, i zvlášť pro každou část.
+## AI: on your PC, or a paid service
+The first time you transcribe something, you choose where the AI should run. The choice lives in **Transcripts → Where AI runs**, and you can change it at any time, even separately for each part (speech, vision, chronicle).
 
-**Na tomto PC: zdarma a soukromě.**
-- Kronikář zjistí grafickou kartu, paměť a procesor. Doporučí modely, které tvoje PC zvládne (v nabídce jsou označené ★).
-- Ollamu (pro obraz a kroniku) nainstaluje a modely stáhne jedním klikem.
+**On this PC: free and private.**
+- Kosmas detects your graphics card, memory and CPU and recommends models your PC can handle (marked with ★ in the list).
+- It installs Ollama (used for vision and the chronicle) and downloads models with a single click.
 
-**Placená služba: rychlé i na slabém PC.**
-- U OpenRouteru se jen **přihlásíš v prohlížeči**. U ostatních vložíš **API klíč**; odkaz „Získat klíč“ vede rovnou na správnou stránku.
-- Klíče se ukládají šifrovaně do Správce přihlašovacích údajů Windows.
-- U každého modelu vidíš **odhad ceny za hodinu záznamu** i za celou nepřepsanou knihovnu.
-- Stránka ukazuje i skutečnou útratu za posledních 30 dní.
+**Paid service: fast, even on a weak PC.**
+- With OpenRouter you just **sign in through your browser**. For the others you paste an **API key**; the "Get key" link takes you straight to the right page.
+- Keys are stored encrypted in Windows Credential Manager.
+- Each model shows an **estimated cost per hour of recording**, as well as for your entire untranscribed library.
+- The page also shows what you actually spent over the last 30 days.
 
-| Služba | Řeč | Obraz | Kronikář AI | Poznámka |
+| Service | Speech | Vision | Kosmas AI | Notes |
 |---|---|---|---|---|
-| **Tento počítač** | Whisper (NVIDIA nebo procesor) | Ollama | Ollama | zdarma |
-| **Groq** | Whisper large-v3 ≈ 7,7 Kč/h · turbo ≈ 2,8 Kč/h | Qwen 3.8 ≈ 12 Kč/h | GPT-OSS 120B ≈ 0,3 Kč/h | nejlevnější přepis řeči, má i bezplatnou úroveň |
-| **Anthropic Claude** | – | Haiku 5.5 ≈ 1,4 · Sonnet 5.5 ≈ 28 · Opus 5.5 ≈ 57 Kč/h | Haiku ≈ 0,3 · Sonnet ≈ 6,7 · Opus ≈ 13 Kč/h | výborná čeština |
-| **Google Gemini** | – | 3.5 Flash-Lite ≈ 4,4 Kč/h | ≈ 1,1 Kč/h | bezplatná úroveň s denním limitem |
-| **OpenAI** | whisper-1 ≈ 25 Kč/h | GPT-5.4 nano ≈ 2,9 · mini ≈ 10 Kč/h | nano ≈ 0,7 · mini ≈ 2,5 Kč/h | |
-| **OpenRouter** | – | modely Gemini a GPT | modely Gemini a GPT | přihlášení v prohlížeči, jeden účet pro víc firem |
+| **This computer** | Whisper (NVIDIA or CPU) | Ollama | Ollama | free |
+| **Groq** | Whisper large-v3 ≈ $0.33/h · turbo ≈ $0.12/h | Qwen 3.8 ≈ $0.52/h | GPT-OSS 120B ≈ $0.01/h | cheapest speech transcription, also has a free tier |
+| **Anthropic Claude** | – | Haiku 5.5 ≈ $0.06 · Sonnet 5.5 ≈ $1.20 · Opus 5.5 ≈ $2.50/h | Haiku ≈ $0.01 · Sonnet ≈ $0.29 · Opus ≈ $0.57/h | excellent Czech |
+| **Google Gemini** | – | 3.5 Flash-Lite ≈ $0.19/h | ≈ $0.05/h | free tier with a daily limit |
+| **OpenAI** | whisper-1 ≈ $1.10/h | GPT-5.4 nano ≈ $0.13 · mini ≈ $0.43/h | nano ≈ $0.03 · mini ≈ $0.11/h | |
+| **OpenRouter** | – | Gemini and GPT models | Gemini and GPT models | browser sign-in, one account for several providers |
 
-<sub>Jsou to odhady za hodinu záznamu podle ceníků z listopadu 2026 (23 Kč/$). Počítají se 3 zvukovými stopami
-a zhruba 150 popsanými snímky za hodinu. Řeč se platí za každou stopu zvlášť. Skutečná cena se liší podle nastavení a obsahu.</sub>
+<sub>Estimates per hour of recording, based on November 2026 price lists (the app shows prices in CZK; converted here at 23 CZK/$).
+They assume 3 audio tracks and roughly 150 described frames per hour. Speech is billed per track. Actual cost depends on your settings and content.</sub>
 
-**Doporučení pro lokální AI podle grafické karty** (Kronikář vybere sám):
+**Recommended local AI by graphics card** (Kosmas picks this for you):
 
-| Paměť grafické karty | Obraz i kronika (Ollama) | Řeč (Whisper) |
+| Graphics memory (VRAM) | Vision and chronicle (Ollama) | Speech (Whisper) |
 |---|---|---|
-| 24 GB a víc | `qwen3.8:27b` (18 GB) | large-v3 na GPU, hodina za pár minut |
-| 16 GB | `gemma4:12b-it-q8_0` | large-v3 na GPU |
-| 10–12 GB | `gemma4:12b-it-qat` | large-v3 na GPU |
-| 8 GB | `qwen3.5:9b` | large-v3 na GPU |
-| 6 GB | `qwen3.5:4b` | large-v3 na GPU (NVIDIA) |
-| 4 GB | `qwen3.5:2b` + `qwen3.5:4b` | large-v3-turbo na GPU (NVIDIA) |
-| bez samostatné karty | malé modely, velmi pomalé, doporučena placená služba | medium/small na procesoru |
+| 24 GB or more | `qwen3.8:27b` (18 GB) | large-v3 on GPU, an hour of recording in a few minutes |
+| 16 GB | `gemma4:12b-it-q8_0` | large-v3 on GPU |
+| 10–12 GB | `gemma4:12b-it-qat` | large-v3 on GPU |
+| 8 GB | `qwen3.5:9b` | large-v3 on GPU |
+| 6 GB | `qwen3.5:4b` | large-v3 on GPU (NVIDIA) |
+| 4 GB | `qwen3.5:2b` + `qwen3.5:4b` | large-v3-turbo on GPU (NVIDIA) |
+| no dedicated card | small models, very slow; a paid service is recommended | medium/small on CPU |
 
-- Přepis řeči na grafické kartě umí jen NVIDIA. Knihovny CUDA (~1,5 GB) si Kronikář stáhne jedním klikem, když je potřeba.
-- Na kartách AMD a Intel běží Ollama přes Vulkan. Řeč pak jde přes procesor nebo placenou službu.
+- GPU speech transcription works on NVIDIA only. Kosmas downloads the CUDA libraries (~1.5 GB) with one click when needed.
+- On AMD and Intel cards, Ollama runs via Vulkan; speech then goes through the CPU or a paid service.
 
-## Rozložení
-Jako v chatovacích aplikacích pro hráče: vlevo pruh s ikonami her (klik = knihovna hry s bannerem
-a nahraným časem, nahoře „RP“ = celý katalog), vedle sloupec s kanály (Katalog / Příběh / Postavy,
-strom událostí, filtry knihovny) a dole panel „Přehrává se“ s ovládáním přehrávače. Vpravo seznam
-postav (klik = karta postavy); na stránce události jsou nahoře postavy z té události. Při úzkém
-okně se seznam postav sám schová.
+## Layout
+It's laid out like the chat apps gamers use: on the left, a strip of game icons (click = that game's library with its banner
+and total recorded time; "RP" at the top = the whole catalog); next to it, a channel column (Catalog / Story / Characters,
+the event tree, library filters), with a "Now playing" panel and player controls at the bottom. On the right is the character
+list (click = character card); on an event page, that event's characters are listed at the top. When the window gets narrow,
+the character list hides itself.
 
-## Postavy, frakce a hráči
-- **Profil postavy** se zobrazuje jen pro čtení, základní údaje upravíš tlačítkem **Upravit** (typ, rod muž/žena,
-  stav, přezdívky, hráč, frakce, barva). U mrtvé nebo zmizelé postavy jde zadat datum (reálné i herní),
-  poznámku a událost, kde se to stalo.
-- **Vztahy** mají typy, které se skloňují podle rodu (milenec/milenka, manžel/manželka, otec/matka ↔ syn/dcera,
-  lenní pán ↔ vazal, věřitel ↔ dlužník…), poznámku a jdou upravit. Vlastní text funguje dál.
-- **Frakce a rody** – samostatné záznamy s erbem, typem (rod, frakce, cech, řád, město), historií a členy s rolí.
-- **Hráči** – lidé za postavami, jeden hráč může mít víc postav. Štítky hráče (např. admin) se ukazují
-  i u jeho postav a u momentů, kde jeho postavy jsou.
-- **Hromadné úpravy** – Ctrl/Shift + klik v seznamu postav: typ, stav, frakce, hráč, barva, do události, smazat.
+## Characters, factions and players
+- **Character profiles** are read-only by default; edit the basics with the **Edit** button (type, gender male/female,
+  status, nicknames, player, faction, color). For a dead or missing character you can record the date (real-world and in-game),
+  a note, and the event where it happened.
+- **Relationships** have types that adapt to gender (lover, husband/wife, father/mother ↔ son/daughter,
+  liege ↔ vassal, creditor ↔ debtor…), can carry a note and can be edited. Free-form text still works too.
+- **Factions and houses** are records of their own, with a coat of arms, a type (house, faction, guild, order, town), a history and members with roles.
+- **Players** are the people behind the characters; one player can have several characters. A player's tags (e.g. admin) also show up
+  on their characters and on moments those characters appear in.
+- **Bulk editing**: Ctrl/Shift + click in the character list to change type, status, faction, player or color, add to an event, or delete.
 
-## Přehrávač – novinky
-- Pod přehrávačem je panel s informacemi o přehrávaném videu (tlačítko se zápisníkem v hlavičce ho skryje).
-- Najetí na časovou osu ukáže náhled snímku, pod osou je průběh hlasitosti každé zvukové stopy
-  (vygeneruje se na pozadí při prvním přehrání, uloží se do `data/previews`).
-- Předvolby zvukových stop (tlačítko s posuvníky, Ctrl+Shift+1…9) a výchozí stopy pro každou hru.
-- Video pokračuje tam, kde jsi skončil (červený proužek na kartě, „Pokračovat ve sledování“ na Přehledu).
-- `O` / tlačítko **Postava** označí, kdo je ve videu v tomto momentu.
-- Snímky a obrázky z videí mají tlačítko „Přehrát video od …“.
+## Player – what's new
+- Below the player there's a panel with details about the current video (the notebook button in the header hides it).
+- Hovering over the timeline shows a frame preview; under the timeline you see the volume waveform of each audio track
+  (generated in the background the first time you play a video and saved to `data/previews`).
+- Audio track presets (the sliders button, Ctrl+Shift+1…9) and default tracks for each game.
+- Videos resume where you left off (red progress bar on the card, "Continue watching" on the Overview).
+- `O` / the **Character** button tags who is in the video at this moment.
+- Snapshots and images taken from videos have a "Play video from …" button.
 
-## Obrazovky
-- **Knihovna** – videa po dnech, filtry podle her/typu/alb/štítků/postav, hledání (Ctrl+F),
-  vícenásobný výběr (Ctrl/Shift), přetažení na album nebo na událost, boční panel s úpravami.
-- **Události** – strom událostí (přetahováním), stránka události: obálka, čas reálný i herní,
-  místo, štítky, postavy s rolemi, **Zápis** (bohatý text), **Deník** (datované zápisy s přílohami),
-  **Záznamy** (připojená videa + chytré návrhy), **Přílohy**, **Podudálosti**.
-  „Navrhnout ze záznamů“ seskupí neroztříděná videa do herních večerů.
-- **Postavy** – profil s portrétem, frakcí, stavem, hráčem, životopisem, vztahy, událostmi,
-  videi a zmínkami v deníku.
-- **Osa** – čtyři pohledy: Kronika, Osa (zoomovatelný Gantt), Kalendář, Postavy (dráhy).
-- **Momenty** – všechny záložky a úseky (virtuální klipy) z videí, seskupené podle záznamu,
-  filtr nepřiřazené / v událostech. Záložky udělané v Medalu klávesou se načtou samy
-  (automatické herní momenty typu „Double Kill“ jsou skryté, dají se zapnout).
-- **Galerie** – všechny screenshoty a snímky z videí.
-- **Nastavení** – vzhled (7 motivů, barva zvýraznění, velikost rozhraní, zaoblení, písmo, animace,
-  rozložení přehrávače), složky, pravidla klip/záznam, výchozí zvukové stopy, přejmenování her.
+## Screens
+- **Library** – videos grouped by day, filters by game/type/album/tag/character, search (Ctrl+F),
+  multi-select (Ctrl/Shift), drag onto an album or event, side panel for editing.
+- **Events** – an event tree (rearrange by dragging) and the event page: cover image, real-world and in-game time,
+  place, tags, characters with roles, **Write-up** (rich text), **Journal** (dated entries with attachments),
+  **Recordings** (attached videos + smart suggestions), **Attachments**, **Sub-events**.
+  "Suggest from recordings" groups unsorted videos into game sessions.
+- **Characters** – a profile with portrait, faction, status, player, biography, relationships, events,
+  videos and journal mentions.
+- **Timeline** – four views: Chronicle, Timeline (zoomable Gantt chart), Calendar, Characters (lanes).
+- **Moments** – all bookmarks and ranges (virtual clips) from your videos, grouped by recording,
+  with an unassigned / in events filter. Bookmarks you set in Medal with a hotkey are imported automatically
+  (automatic game moments such as "Double Kill" are hidden, but can be turned on).
+- **Gallery** – all screenshots and snapshots from videos.
+- **Settings** – language (Automatic / English / Čeština; Automatic means Czech when your system language is Czech or Slovak,
+  English otherwise), appearance (7 themes, accent color, interface size, corner rounding, font, animations,
+  player layout), folders, clip/recording rules, default audio tracks, game renaming.
 
-## Záložky a úseky
-`B` = záložka v aktuálním místě, `Shift+B` = začátek a pak konec úseku, `P` = záložka rovnou do
-události. Záložka má název, poznámku, barvu, postavy a událost; úsek se přehraje a sám zastaví.
-Najdeš je v Momentech, v inspektoru videa v Knihovně, u události (Záznamy → Momenty), u postavy
-a na Ose jako praporky.
+## Bookmarks and ranges
+`B` = bookmark at the current position, `Shift+B` = start and then end of a range, `P` = bookmark straight into an
+event. A bookmark has a name, note, color, characters and event; a range plays and then stops on its own.
+You'll find them in Moments, in the video inspector in the Library, on events (Recordings → Moments), on characters,
+and as little flags on the Timeline.
 
-## Snímky a portréty
-`S` / **Snímek** v přehrávači nabídne: celý snímek do události, výřez do události, nebo
-**portrét postavy** (ořez 4:5 / 1:1 / 16:9 / volně). Portrét jde vyříznout i z profilu postavy.
+## Snapshots and portraits
+`S` / **Snapshot** in the player offers: the whole frame into an event, a cropped area into an event, or a
+**character portrait** (crop 4:5 / 1:1 / 16:9 / free). You can also crop a portrait from the character profile.
 
-## Editor textu
-`@` označí postavu (nebo rovnou vytvoří novou), `Ctrl+V` vloží screenshot, tlačítka pro nadpisy,
-citace, seznamy, datum a **snímek z přehrávače**.
+## Text editor
+`@` mentions a character (or creates a new one on the spot), `Ctrl+V` pastes a screenshot, and there are buttons for headings,
+quotes, lists, the date and a **snapshot from the player**.
 
-## Přehrávač
-Zvukové stopy jako přepínače (kolečko = hlasitost stopy, pravé tlačítko = posuvník / jen tato stopa),
-posuvník se značkami momentů z Medalu (zlaté) a odkazů z událostí (červené).
-**Snímek** uloží aktuální obraz do události, **Připnout** připojí okamžik videa k události.
-Tlačítko vedle otevře přehrávač ve vlastním okně, F / dvojklik = celá obrazovka.
-Další tlačítko přepne rozložení: přehrávač vedle obsahu, nebo nahoře s obsahem pod ním.
-Dekódování videa běží na GPU (libmpv, `hwdec=auto-safe`, `vo=gpu-next`).
+## Player
+Audio tracks are toggles (scroll wheel = track volume, right-click = slider / solo this track),
+and the seek bar carries markers for Medal moments (gold) and event links (red).
+**Snapshot** saves the current frame to an event; **Pin** attaches the current moment of the video to an event.
+The button next to them pops the player out into its own window; F / double-click = full screen.
+Another button switches the layout: player beside the content, or on top with the content below.
+Video decoding runs on the GPU (libmpv, `hwdec=auto-safe`, `vo=gpu-next`).
 
 ## Data
-- Vše, co upravíš, je v datové složce: po instalaci `%LOCALAPPDATA%\Kronikar`, při spuštění ze zdrojových kódů `data/`.
-  Jsou v ní catalog.db, settings.json, thumbs/, attachments/ a analysis/. Zálohuj ji.
-- Databázi Medalu aplikace jen čte. Mazání videí posílá soubory do Koše.
-- `extras/multitrack-mix.lua` – samostatný skript pro obyčejné mpv.
+- Everything you edit is stored in the data folder: `%LOCALAPPDATA%\Kronikar` when installed, `data/` when running from source.
+  It holds catalog.db, settings.json, thumbs/, attachments/ and analysis/. Back it up.
+- Medal's database is only ever read. Deleting videos moves the files to the Recycle Bin.
+- `extras/multitrack-mix.lua` – a standalone script for plain mpv.
 
 ## Discord
-- **Hráči bez serveru:** stačí token bota (bot nemusí být nikde pozvaný) a u hráče „Propojit podle ID“ – stáhne jméno
-  a avatar z veřejného profilu. Discord ID: Nastavení → Pokročilé → Režim vývojáře, pravý klik → Kopírovat ID uživatele.
-- **Hráči ze serveru:** Nastavení → Discord: token bota + ID serveru → „Načíst členy a vytvořit hráče“ (jméno a avatar),
-  u hráče „Propojit s Discordem“, „Aktualizovat jména a avatary“. Bot potřebuje zapnutý *Server Members Intent*.
-- **Holubí pošta ze schránky (PM):** v Discordu označ zprávy tažením myši, Ctrl+C, v Holubí poště Ctrl+V
-  (nebo Přidat → Vložit ze schránky). Rozpozná autora, čas a text, předvybere zprávy se slovem „holub“,
-  autora přiřadí k postavě podle hráče, opakované vložení nevytvoří duplikáty.
-- **Holubí pošta:** dopisy (zprávy se slovem „holub“, slovo jde změnit) z kanálu na serveru přes bota
-  (*Message Content Intent*), z oficiálního exportu dat Discordu (jen tvé vlastní zprávy), nebo ručně.
-  Cizí soukromé zprávy Discord automaticky nevydá – boti k nim nemají přístup a automatizace osobního účtu
-  je proti pravidlům Discordu.
+- **Players without a server:** all you need is a bot token (the bot doesn't have to be invited anywhere) and "Link by ID" on the player – it pulls
+  the name and avatar from the public profile. To get a Discord ID: Settings → Advanced → Developer Mode, then right-click → Copy User ID.
+- **Players from a server:** Settings → Discord: bot token + server ID → "Load members and create players" (name and avatar),
+  then "Link with Discord" on a player, and "Update names and avatars". The bot needs the *Server Members Intent* enabled.
+- **Pigeon post from the clipboard (DMs):** in Discord, select messages by dragging the mouse, press Ctrl+C, then Ctrl+V in Pigeon post
+  (or Add → Paste from clipboard). It recognizes the author, time and text, preselects messages containing the word "holub" (pigeon),
+  matches the author to a character via their player, and pasting the same thing twice won't create duplicates.
+- **Pigeon post:** letters (messages containing the word "holub"; the keyword can be changed) from a server channel via a bot
+  (*Message Content Intent*), from Discord's official data export (your own messages only), or entered by hand.
+  Discord won't hand over other people's private messages automatically – bots have no access to them, and automating a personal account
+  is against Discord's rules.
 
-## Svět, servery a klipy
-- **Servery:** pod každou hrou (levý pruh) jde přidat servery s obdobím, kdy se na nich hrálo – videa se přiřadí
-  sama; výběr serveru filtruje knihovnu, události, postavy, frakce, místa i osu. Nové věci se zakládají
-  do vybraného serveru.
-- **Místa:** hrady, města, krčmy… s vlastníkem (postava / frakce = državy), nadřazeným místem a událostmi.
-- **Vzhled podle frakce:** postava bez vlastní barvy převezme barvu a erb první frakce.
-- **Klipování:** `I` začátek, `O` konec (okraje jdou táhnout na ose) → Přehrát výběr / Uložit klip /
-  Export MP4 (všechny zvukové stopy, do `data/clips`). `T` = aktuální snímek jako náhled videa.
-  Označení postavy v momentu je teď `C`.
+## World, servers and clips
+- **Servers:** under each game (left strip) you can add servers along with the period you played on them – videos are assigned
+  automatically; selecting a server filters the library, events, characters, factions, places and the timeline. New items are created
+  in the selected server.
+- **Places:** castles, towns, taverns… with an owner (character / faction = holdings), a parent place, and events.
+- **Faction styling:** a character without its own color takes the color and coat of arms of its first faction.
+- **Clipping:** `I` start, `O` end (the edges can be dragged on the timeline) → Play selection / Save clip /
+  Export MP4 (all audio tracks, into `data/clips`). `T` = use the current frame as the video thumbnail.
+  Tagging a character at a moment is now `C`.
 
-## Přepisy, obraz a Kronikář AI podrobně
-Když AI běží na tvém PC, nic se nikam neposílá. S placenou službou jde zvuk (řeč) nebo snímky a text přepisu jen té zvolené službě.
-- **Spuštění:** v panelu videa sekce **Přepis**, pro víc videí pravý klik → Přepis, pro celou knihovnu stránka
-  **Přepisy** → „Přepsat chybějící“. Fronta běží na pozadí jedno video po druhém; po přerušení (i zavření aplikace)
-  naváže, kde skončilo.
-- **Řeč:** každá zvuková stopa zvlášť – **Já** (mikrofon), **Hra** (hlasový chat ve hře, NPC), **Discord**.
-- **Obraz:** hlavně během rozhovorů – když se scéna mění (chůze po světě), snímek každých ~8 s; když postavy sedí
-  a obraz se nemění, jen občas. Model čte **jmenovky nad postavami** (propojí je s postavami a hráči) a při rozhovorech
-  se hledají **tváře** – klik na tvář ji nastaví jako portrét postavy. Jakýkoli úsek jde dopracovat ručně:
-  na pruhu pokrytí v panelu videa táhni myší → „Popsat obraz“.
-- **Poznávání postav podle vzhledu:** model obrazu označí každou postavu na snímku (rámeček, jmenovka nad hlavou,
-  popis oblečení a vlasů); z výřezu se spočítá otisk oblečení/vlasů (DINOv2) a obličeje (SFace). Postavy se jmenovkou
-  nebo potvrzené tebou (klik na postavu u snímku → „Ano, je to…“ / „Kdo to je…“) jsou vzory, ostatní se poznají
-  podle podobnosti – vzory ze stejného večera mají přednost, starší váží méně (oblečení se mění). U postavy je galerie
-  „Vzhled v záznamech“. Modely (~130 MB) se stáhnou do `data/models` při prvním použití a běží na procesoru.
-- **Kronikář AI:** po přepisu projde záznam silnější textový model po blocích (dělených v pauzách mezi rozhovory,
-  pauzy jsou v textu vyznačené) s průběžnou pamětí děje, se shrnutím předchozího večera stejné hry a se znalostí
-  postav, míst a frakcí z databáze. Vytvoří kapitoly, shrnutí večera, zmínky (uloží se rovnou k postavám, místům,
-  frakcím) a **návrhy** nových událostí, postav, míst a frakcí – přijímají se jedním klikem (stránka Přepisy → Návrhy,
-  nebo v panelu videa); událost dostane odkaz do videa s časem, místo a postavy.
-- **Kde to je vidět:** pruh pokrytí (co je přepsané / popsané / nezpracované), přepis s kapitolami, pauzami,
-  zvýrazněnými jmény, náhledy snímků, jmenovkami a tvářemi; na kartách v Knihovně ikony řeči a obrazu; hledání
-  v Knihovně podle toho, co zaznělo; u postav, míst a frakcí sekce „V záznamech (přepis)“; titulky v přehrávači (V).
-- **Fronta a výkon:** stránka **Přepisy** – aktuální video s krokem, průběhem, odhadem času a rychlostí, pořadí fronty
-  (přetažením), historie, vytížení GPU/VRAM/teploty/CPU/RAM. Ukazatel v levém sloupci. Když hraješ (hra ze Steamu,
-  Epicu, Xboxu, GOG… nebo z nastaveného seznamu), přepisy se samy pozastaví a po hře pokračují.
-- **Nastavení:** Přepisy → Kde běží AI (služby, modely, účty, ceny) a Přepisy → Nastavení (jazyk, stopy, hustota snímků, citlivost, jmenovky, tváře, model a délka
-  bloků Kronikáře, kontext o hře a serveru, priorita, pauza při hraní).
-- Výsledky: `analysis/<id>/` v datové složce (přepis po částech, snímky, tváře, `chronicle.json`, `timeline.md` – celý večer jako text).
-- Rychlost na RTX 4090: řeč ~45× rychleji než reálný čas, popis snímku 3–9 s, Kronikář ~1 min na blok.
+## Transcripts, vision and Kosmas AI in detail
+When AI runs on your PC, nothing leaves it. With a paid service, only the audio (speech) or frames and transcript text go to the service you picked.
+- **Starting:** the **Transcript** section in the video panel; for several videos, right-click → Transcript; for the whole library, the
+  **Transcripts** page → "Transcribe missing". The queue runs in the background, one video at a time; if it's interrupted (even by closing the app),
+  it picks up where it left off.
+- **Speech:** each audio track separately – **Me** (microphone), **Game** (in-game voice chat, NPCs), **Discord**.
+- **Vision:** focused on conversations – when the scene keeps changing (walking around the world), a frame every ~8 s; when characters are sitting
+  and the picture doesn't change, only occasionally. The model reads **name tags above characters** (linking them to characters and players), and during
+  conversations it looks for **faces** – click a face to set it as the character's portrait. Any stretch can be refined by hand:
+  drag across the coverage bar in the video panel → "Describe frames".
+- **Recognizing characters by appearance:** the vision model marks every character in a frame (bounding box, name tag above the head,
+  description of clothing and hair); from each crop, a clothing/hair fingerprint (DINOv2) and a face fingerprint (SFace) are computed. Characters with a name tag
+  or confirmed by you (click a character next to a frame → "Yes, it's…" / "Who is this…") serve as references; everyone else is recognized
+  by similarity – references from the same evening take priority, older ones count for less (outfits change). Each character has an
+  "Appearance in recordings" gallery. The models (~130 MB) are downloaded to `data/models` on first use and run on the CPU.
+- **Kosmas AI:** after transcription, a stronger text model works through the recording in blocks (split at pauses between conversations;
+  the pauses are marked in the text), keeping a running memory of the story, a summary of the previous session of the same game, and knowledge of
+  the characters, places and factions in your database. It produces chapters, a session summary, mentions (saved straight onto characters, places and
+  factions) and **suggestions** for new events, characters, places and factions – each accepted with one click (Transcripts page → Suggestions,
+  or in the video panel); the event gets a timestamped link into the video, a place and characters.
+- **Where you see it:** the coverage bar (what's transcribed / described / unprocessed), the transcript with chapters, pauses,
+  highlighted names, frame thumbnails, name tags and faces; speech and vision icons on Library cards; Library search
+  by what was said; an "In recordings (transcript)" section on characters, places and factions; subtitles in the player (V).
+- **Queue and performance:** the **Transcripts** page – the current video with its step, progress, time estimate and speed, the queue order
+  (drag to reorder), history, and GPU/VRAM/temperature/CPU/RAM load. There's also an indicator in the left column. While you're playing (a game from Steam,
+  Epic, Xbox, GOG… or from a list you set), transcription pauses itself and resumes after you finish.
+- **Settings:** Transcripts → Where AI runs (services, models, accounts, prices) and Transcripts → Settings (language, tracks, frame density, sensitivity, name tags, faces, Kosmas AI model and
+  block length, context about the game and server, priority, pause while gaming).
+- Output: `analysis/<id>/` in the data folder (transcript in parts, frames, faces, `chronicle.json`, `timeline.md` – the whole session as text).
+- Speed on an RTX 4090: speech ~45× faster than real time, 3–9 s to describe a frame, Kosmas AI ~1 min per block.
 
-## Obrázky her
-Ikony v levém pruhu a bannery knihovny se při prvním spuštění samy doplní ze Steamu v tomto PC.
-Jinak pravý klik na ikonu hry → „Ikona a banner hry…“: Steam v PC (obal, logo, hero), obchod Steam (hledání),
-ikony z Medalu, soubor, URL, schránka nebo snímek z videa – vše s ořezem.
+## Game artwork
+Icons in the left strip and library banners are filled in automatically from Steam on this PC the first time you launch the app.
+Otherwise, right-click a game icon → "Game icon and banner…": Steam on this PC (cover, logo, hero), the Steam store (search),
+Medal icons, a file, a URL, the clipboard or a frame from a video – all with cropping.
 
-## Výchozí hodnoty
-- Server: když má hra jediný server, je výchozí; jinak pravý klik na server → „Nastavit jako výchozí“. Videa bez
-  serveru i nové postavy, události, frakce a místa (když je vybraná hra) dostanou výchozí server.
-- Nová postava má typ „Postava“ (dřív NPC). Hromadné úpravy postav: Ctrl/Shift + klik a pravé tlačítko.
+## Defaults
+- Server: if a game has only one server, it's the default; otherwise right-click a server → "Set as default". Videos without a
+  server, as well as new characters, events, factions and places (when a game is selected), get the default server.
+- A new character's type is "Character" (previously NPC). Bulk character editing: Ctrl/Shift + click, then right-click.
 
-## Pro vývojáře
-**Technika:**
-- Python 3.12 + PySide6. Rozhraní je v `rpcatalog/web/` a běží offline v Qt WebEngine.
-- Přehrávač je libmpv (`vendor/libmpv-2.dll`), ikony jsou Lucide, na náhledy slouží ffmpeg/ffprobe.
-- Most mezi Pythonem a webem: `rpcatalog/api.py` (QWebChannel).
+## For developers
+**Tech stack:**
+- Python 3.12 + PySide6. The UI lives in `rpcatalog/web/` and runs offline in Qt WebEngine.
+- The player is libmpv (`vendor/libmpv-2.dll`), icons are Lucide, and thumbnails are made with ffmpeg/ffprobe.
+- Bridge between Python and the web UI: `rpcatalog/api.py` (QWebChannel).
+- Translations: `rpcatalog/i18n.py` and `rpcatalog/web/i18n.js`; Czech strings live in `rpcatalog/web/i18n/cs.js`, keyed by the English source text.
 - AI:
-  - `rpcatalog/analysis.py`: zpracování videí, běží jako samostatný proces;
-  - `ai_providers.py`: lokální i placené služby a ceník;
-  - `hardware.py`: zjištění hardwaru a doporučení modelů;
-  - `keystore.py`: klíče ve Správci přihlašovacích údajů;
-  - `ai_setup.py`: přihlášení, instalace Ollamy a stahování modelů.
+  - `rpcatalog/analysis.py`: video processing, runs as a separate process;
+  - `ai_providers.py`: local and paid services, plus the price list;
+  - `hardware.py`: hardware detection and model recommendations;
+  - `keystore.py`: keys in Windows Credential Manager;
+  - `ai_setup.py`: sign-in, Ollama installation and model downloads.
 
-**Spuštění ze zdrojových kódů**
-1. Nainstaluj Python 3.12 a v kořeni projektu spusť:
+**Running from source**
+1. Install Python 3.12 and run this in the project root:
    ```
    python -m venv .venv
    .venv\Scripts\pip install -r requirements.txt -r requirements-ai.txt anthropic
    ```
-2. Stáhni `mpv-dev-x86_64-…7z` z [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases) a soubor `libmpv-2.dll` z něj dej do složky `vendor/`.
-   Do gitu se nenahrává, má přes 100 MB.
-3. Dej ffmpeg/ffprobe na PATH (`winget install Gyan.FFmpeg`).
-4. Spusť `Kronikar.bat`. Data jsou pak ve složce `data/` vedle kódu.
+2. Download `mpv-dev-x86_64-…7z` from [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases) and put the `libmpv-2.dll` from it into the `vendor/` folder.
+   It isn't committed to git because it's over 100 MB.
+3. Put ffmpeg/ffprobe on your PATH (`winget install Gyan.FFmpeg`).
+4. Run `Kronikar.bat`. Data is then stored in the `data/` folder next to the code.
 
-**Sestavení instalátoru:** spusť `.venv\Scripts\python.exe installer\build.py`. Skript:
-1. stáhne vestavěný Python 3.12;
-2. přibalí balíčky z `installer/requirements-dist.txt`, libmpv, ffmpeg a spouštěč `Kronikar.exe` s ikonou;
-3. přes Inno Setup vytvoří `build/Kronikar-Setup-<verze>.exe`. Verze se bere z `rpcatalog/__init__.py`.
+**Building the installer:** run `.venv\Scripts\python.exe installer\build.py`. The script:
+1. downloads an embeddable Python 3.12;
+2. bundles the packages from `installer/requirements-dist.txt`, libmpv, ffmpeg and the `Kronikar.exe` launcher with its icon;
+3. uses Inno Setup to create `build/Kronikar-Setup-<version>.exe`. The version is taken from `rpcatalog/__init__.py`.
 
-Ikonu z `rpcatalog/web/icon.svg` přegeneruje `installer/make_icon.py`.
+`installer/make_icon.py` regenerates the icon from `rpcatalog/web/icon.svg`.

@@ -4,16 +4,19 @@ import datetime as dt
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
 
+from ..i18n import tr, lang
+
+# English labels – pass them through tr() where they are shown (the language may change after import)
 ROLE_LABEL = {
-    "all": "Vše (mix)",
-    "game": "Hra",
-    "system": "Systém / ostatní",
+    "all": "All (mix)",
+    "game": "Game",
+    "system": "System / other",
     "discord": "Discord",
-    "mic": "Mikrofon",
-    "other": "Stopa",
+    "mic": "Microphone",
+    "other": "Track",
 }
-KIND_LABEL = {"clip": "Klip", "session": "Záznam", "manual": "Nahrávka"}
-KIND_LABEL_PLURAL = {"clip": "Klipy", "session": "Celé záznamy", "manual": "Ruční nahrávky"}
+KIND_LABEL = {"clip": "Clip", "session": "Recording", "manual": "Manual recording"}
+KIND_LABEL_PLURAL = {"clip": "Clips", "session": "Full recordings", "manual": "Manual recordings"}
 KIND_COLOR = {"clip": "#4f9dde", "session": "#c9a227", "manual": "#9b6dd6"}
 MEDIA_MIME = "application/x-rpcatalog-media"
 
@@ -39,19 +42,19 @@ def fmt_size(n):
         return "—"
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if n < 1024 or unit == "TB":
-            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}".replace(".", ",")
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}".replace(".", "," if lang() == "cs" else ".")
         n /= 1024
 
 
 def track_label(track, index):
     role = track.get("role") or "other"
     name = track.get("name") or ""
-    label = ROLE_LABEL.get(role, "Stopa")
+    label = tr(ROLE_LABEL.get(role, "Track"))
     if role == "game" and name and not name.lower().startswith("game"):
         short = name.replace("-Win64-Shipping", "").replace(".exe", "")
-        label = f"Hra ({short})"
+        label = tr("Game ({name})", name=short)
     if role == "other":
-        label = name or f"Stopa {index}"
+        label = name or tr("Track {n}", n=index)
     return label
 
 

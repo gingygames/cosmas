@@ -43,7 +43,7 @@ function playerKeys(e) {
   else if (e.key === 'o' && !e.ctrlKey) act = 'clip_out';
   else if (e.key === 't' && !e.ctrlKey) act = 'thumb';
   else if (e.ctrlKey && /^[1-9]$/.test(e.key)) act = 't' + e.key;
-  else if (e.key === 'F5') { API.call('rescan'); toast('Hledám nové záznamy…'); e.preventDefault(); return; }
+  else if (e.key === 'F5') { API.call('rescan'); toast(tr('Looking for new recordings…')); e.preventDefault(); return; }
   if (act) { e.preventDefault(); API.call('player.action', { act }); }
 }
 
@@ -59,7 +59,7 @@ async function bootDetailPane() {
   let cur = null, token = 0;
   const render = async () => {
     const id = App.player.media_id;
-    if (!id) { clear(root).append(emptyState('film', 'Nic se nepřehrává', 'Tady se ukážou a půjdou upravit informace o přehrávaném videu.')); return; }
+    if (!id) { clear(root).append(emptyState('film', tr('Nothing is playing'), tr('Information about the playing video will appear here, and you can edit it.'))); return; }
     if (!root.contains(scroller)) clear(root).append(scroller);
     const t = ++token;
     const keep = scroller.scrollTop;
@@ -72,6 +72,7 @@ async function bootDetailPane() {
   });
   API.on('media-changed', () => App.refresh('media', 'events').then(render));
   API.on('bookmark', () => setTimeout(render, 150));
+  API.on('lang', d => { if (d.lang) I18N.reload(d.lang); });
   App.on('synced', render);
   App.on('bookmarks', () => {});
   document.addEventListener('keydown', playerKeys);
@@ -102,40 +103,41 @@ async function bootDetailPane() {
   API.on('media-changed', () => App.refresh('media', 'events'));
   API.on('player', d => { App.player = d; App.emit('player', d); });
   API.on('navigate', d => App.go(d.view, d.params || {}));
+  API.on('lang', d => { if (d.lang) I18N.reload(d.lang); });   // language changed in Settings
   API.on('pin', async d => {
     // player asked to attach the current moment to an event
     const m = App.mediaById.get(d.media_id);
     const moment = m && m.start ? m.start + d.offset : null;
-    const r = await pickEvent({ title: 'Záložka do události', moment });
+    const r = await pickEvent({ title: tr('Bookmark to event'), moment });
     if (!r) return;
     await API.call('bm.create', { media_id: d.media_id, t: d.offset, event_id: r.id, title: r.note });
-    toast(`Záložka ${fmt.clock(d.offset)} přidána do události`, 'ok', { label: 'Otevřít', fn: () => App.go('events', { id: r.id, tab: 'media' }) });
+    toast(tr('Bookmark {time} added to the event', { time: fmt.clock(d.offset) }), 'ok', { label: tr('Open'), fn: () => App.go('events', { id: r.id, tab: 'media' }) });
     bmChanged();
   });
   API.on('bookmark', d => {
     // B / Shift+B in the player created a bookmark
-    toast(d.t_end != null ? `Úsek ${fmt.clock(d.t)}–${fmt.clock(d.t_end)} uložen` : `Záložka ${fmt.clock(d.t)} uložena`, 'ok',
-      { label: 'Popsat', fn: () => bmEditor(d.id) });
+    toast(d.t_end != null ? tr('Range {from}–{to} saved', { from: fmt.clock(d.t), to: fmt.clock(d.t_end) }) : tr('Bookmark {time} saved', { time: fmt.clock(d.t) }), 'ok',
+      { label: tr('Describe'), fn: () => bmEditor(d.id) });
     bmChanged();
   });
   API.on('snapshot', () => snapshotFlow());   // S / Snímek in the player
   API.on('tagchar', async d => {
     // O / "Postava" in the player: who is here at this moment (stored as a bookmark with characters)
-    const ids = await pickCharacters([], { title: `Kdo je ve videu v ${fmt.clock(d.t)}?` });
+    const ids = await pickCharacters([], { title: tr('Who is in the video at {time}?', { time: fmt.clock(d.t) }) });
     if (!ids || !ids.length) return;
     const names = ids.map(id => App.charsById.get(id)?.name).filter(Boolean);
     const id = await API.call('bm.create', { media_id: d.media_id, t: d.t, chars: ids, title: names.join(', ') });
-    toast(`Označeno: ${names.join(', ')} v ${fmt.clock(d.t)}`, 'ok', { label: 'Upravit', fn: () => bmEditor(id) });
+    toast(tr('Tagged: {names} at {time}', { names: names.join(', '), time: fmt.clock(d.t) }), 'ok', { label: tr('Edit'), fn: () => bmEditor(id) });
     bmChanged(); App.loadChars();
   });
   API.on('toast', d => toast(d.msg, d.type || 'ok'));
   API.on('clip-exported', d => {
-    toast('Klip vyexportován', 'ok', { label: 'Ve složce', fn: () => API.call('media.reveal', { id: d.id }) });
+    toast(tr('Clip exported'), 'ok', { label: tr('In folder'), fn: () => API.call('media.reveal', { id: d.id }) });
     App.refresh('media');
   });
   API.on('resume', applyResume);
   API.on('resumed', d => {
-    toast(`Pokračuji od ${fmt.clock(d.pos)}, kde jsi skončil`, 'ok', { label: 'Od začátku', fn: () => {
+    toast(tr('Resuming from {time}, where you left off', { time: fmt.clock(d.pos) }), 'ok', { label: tr('From the start'), fn: () => {
       API.call('player.action', { act: 'seek0' }); API.call('media.resume_clear', { id: d.media_id });
     } });
   });

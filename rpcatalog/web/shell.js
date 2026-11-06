@@ -10,10 +10,11 @@ const Shell = {
   catsClosed: new Set(),
 
   CHANNELS: [
-    ['Katalog', [['home', 'house', 'přehled'], ['library', 'clapperboard', 'knihovna'], ['moments', 'bookmark', 'momenty'], ['gallery', 'images', 'galerie'], ['transcripts', 'captions', 'přepisy']]],
-    ['Příběh', [['events', 'calendar-range', 'události'], ['timeline', 'chart-gantt', 'časová osa'], ['letters', 'mail', 'holubí pošta']]],
-    ['Svět', [['places', 'map', 'místa'], ['factions', 'shield', 'frakce a rody']]],
-    ['Postavy', [['characters', 'users', 'databáze postav'], ['players', 'gamepad-2', 'hráči']]],
+    // [stable key (persisted in App.ui.catsClosed), label, items]
+    ['catalog', tr('Catalog'), [['home', 'house', tr('overview')], ['library', 'clapperboard', tr('library')], ['moments', 'bookmark', tr('moments')], ['gallery', 'images', tr('gallery')], ['transcripts', 'captions', tr('transcripts')]]],
+    ['story', tr('Story'), [['events', 'calendar-range', tr('events')], ['timeline', 'chart-gantt', tr('timeline')], ['letters', 'mail', tr('pigeon post')]]],
+    ['world', tr('World'), [['places', 'map', tr('places')], ['factions', 'shield', tr('factions and houses')]]],
+    ['characters', tr('Characters'), [['characters', 'users', tr('character database')], ['players', 'gamepad-2', tr('players')]]],
   ],
 
   build() {
@@ -66,22 +67,22 @@ const Shell = {
         h('.pill'), h('.gi', { style: extra.style || {} }, content));
       return g;
     };
-    el.appendChild(item('home', h('img.logo', { src: 'icon.svg', alt: 'Kronikář', draggable: false }), 'Celý katalog – všechny hry', () => { this.setGuild('home'); App.go('home'); }));
+    el.appendChild(item('home', h('img.logo', { src: 'icon.svg', alt: 'Kosmas', draggable: false }), tr('Whole catalog – all games'), () => { this.setGuild('home'); App.go('home'); }));
     el.appendChild(h('.gsep'));
     for (const g of this.games()) {
       const initials = g.game.split(/\s+/).map(w => w[0]).join('').slice(0, 3);
       const pic = g.icon || g.thumb;
       el.appendChild(item(g.game, pic ? null : h('span', initials),
-        `${g.game}\n${fmt.durHuman(g.dur)} nahráno · ${g.n} videí`,
+        `${g.game}\n` + tr('{duration} recorded', { duration: fmt.durHuman(g.dur) }) + ' · ' + trn(g.n, '{n} video', '{n} videos'),
         () => { this.setGuild(g.game); App.go('library', { game: g.game }); },
         { style: pic ? { backgroundImage: `url("${pic}")` } : { background: gameHue(g.game) },
           menu: e => menu(e, [
-            { label: 'Knihovna hry', icon: 'clapperboard', onClick: () => { this.setGuild(g.game); App.go('library', { game: g.game }); } },
-            { label: 'Momenty z této hry', icon: 'bookmark', onClick: () => { this.setGuild(g.game); App.go('moments', { game: g.game }); } },
-            { label: 'Navrhnout události', icon: 'wand-sparkles', onClick: () => App.go('events', { propose: true }) },
+            { label: tr('Game library'), icon: 'clapperboard', onClick: () => { this.setGuild(g.game); App.go('library', { game: g.game }); } },
+            { label: tr('Moments from this game'), icon: 'bookmark', onClick: () => { this.setGuild(g.game); App.go('moments', { game: g.game }); } },
+            { label: tr('Suggest events'), icon: 'wand-sparkles', onClick: () => App.go('events', { propose: true }) },
             { sep: true },
-            { label: 'Ikona a banner hry…', icon: 'image', onClick: () => gameArtDialog(g.game) },
-            { label: 'Přidat server…', icon: 'server', onClick: () => serverDialog({ game: g.game }) },
+            { label: tr('Game icon and banner…'), icon: 'image', onClick: () => gameArtDialog(g.game) },
+            { label: tr('Add server…'), icon: 'server', onClick: () => serverDialog({ game: g.game }) },
           ]) }));
     }
   },
@@ -98,15 +99,15 @@ const Shell = {
   /* ---------- channel column ---------- */
   renderChanHead() {
     const sv = App.scope.server && App.serversById.get(App.scope.server);
-    const title = this.guild === 'home' ? 'Kronikář' : (sv ? `${this.guild} · ${sv.name}` : this.guild);
+    const title = this.guild === 'home' ? 'Kosmas' : (sv ? `${this.guild} · ${sv.name}` : this.guild);
     clear(this.chanHead).append(h('span.ellipsis', title), icon('chevron-down', 'faint'));
     this.chanHead.onclick = e => menu(e, [
-      { label: 'Načíst nové záznamy', icon: 'refresh-cw', onClick: () => { API.call('rescan'); toast('Hledám nové záznamy…'); } },
-      { label: 'Navrhnout události ze záznamů', icon: 'wand-sparkles', onClick: () => App.go('events', { propose: true }) },
-      { label: 'Nová událost', icon: 'calendar-plus', onClick: () => App.go('events', { create: true }) },
+      { label: tr('Load new recordings'), icon: 'refresh-cw', onClick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } },
+      { label: tr('Suggest events from recordings'), icon: 'wand-sparkles', onClick: () => App.go('events', { propose: true }) },
+      { label: tr('New event'), icon: 'calendar-plus', onClick: () => App.go('events', { create: true }) },
       { sep: true },
-      { label: 'Vzhled a nastavení', icon: 'settings', onClick: () => App.go('settings') },
-      { label: 'Otevřít složku s daty', icon: 'folder-open', onClick: () => API.call('open_data_dir') },
+      { label: tr('Appearance and settings'), icon: 'settings', onClick: () => App.go('settings') },
+      { label: tr('Open data folder'), icon: 'folder-open', onClick: () => API.call('open_data_dir') },
     ]);
   },
   renderChannels() {
@@ -115,35 +116,35 @@ const Shell = {
     if (this.guild !== 'home') {
       const game = this.guild;
       const svs = App.servers.filter(s => s.game === game);
-      nav.appendChild(h('.cat', h('span', 'Servery'), h('span.grow'),
-        h('span.cat-add', { title: 'Přidat server', onclick: e => { e.stopPropagation(); serverDialog({ game }); } }, icon('plus'))));
+      nav.appendChild(h('.cat', h('span', tr('Servers')), h('span.grow'),
+        h('span.cat-add', { title: tr('Add server'), onclick: e => { e.stopPropagation(); serverDialog({ game }); } }, icon('plus'))));
       const svChan = (id, label, color, extra = {}) => h('.chan' + ((App.scope.server || null) === id ? '.on' : ''), {
         onclick: () => { App.setScope({ server: id }); this.renderChannels(); Views.show(Views.activeName, {}); },
         oncontextmenu: extra.menu,
       }, color ? h('span.dot', { style: { background: color, width: '10px', height: '10px', margin: '0 4px' } }) : icon('layers'), h('span.ellipsis', label),
       extra.n != null ? h('span.chan-n', extra.n) : null);
-      nav.appendChild(svChan(null, 'všechny servery', null));
+      nav.appendChild(svChan(null, tr('all servers'), null));
       const def = App.defaultServer(game);
       svs.forEach(sv => nav.appendChild(svChan(sv.id, sv.name + (def === sv.id && svs.length > 1 ? ' ★' : ''), sv.color, { n: sv.n_media || null,
         menu: e => menu(e, [
-          { label: 'Upravit server…', icon: 'pencil', onClick: () => serverDialog(sv) },
-          def !== sv.id ? { label: 'Nastavit jako výchozí', icon: 'star', onClick: async () => {
+          { label: tr('Edit server…'), icon: 'pencil', onClick: () => serverDialog(sv) },
+          def !== sv.id ? { label: tr('Set as default'), icon: 'star', onClick: async () => {
             await API.call('server.default', { id: sv.id }); await App.loadServers(); await App.refresh('media'); this.renderChannels();
-            toast(`Výchozí server: ${sv.name} – videa bez serveru i nové věci půjdou sem`);
-          } } : { head: 'Výchozí server této hry' },
-          { label: 'Smazat server', icon: 'trash-2', danger: true, onClick: async () => {
-            if (!await confirmDialog('Smazat server', `Smazat „${sv.name}“? Videa, události a postavy zůstanou, jen bez serveru.`, { danger: true, okLabel: 'Smazat' })) return;
+            toast(tr('Default server: {name} – videos without a server and new items will go here', { name: sv.name }));
+          } } : { head: tr("This game's default server") },
+          { label: tr('Delete server'), icon: 'trash-2', danger: true, onClick: async () => {
+            if (!await confirmDialog(tr('Delete server'), tr('Delete “{name}”? Videos, events and characters will stay, just without a server.', { name: sv.name }), { danger: true, okLabel: tr('Delete') })) return;
             await API.call('server.delete', { id: sv.id }); await App.loadServers(); if (App.scope.server === sv.id) App.setScope({ server: null });
             await App.refresh('media', 'events', 'chars'); this.renderChannels(); Views.show(Views.activeName, {});
           } },
         ]) })));
-      if (!svs.length) nav.appendChild(h('.chan.faint', { onclick: () => serverDialog({ game }) }, icon('plus'), h('span', 'přidat server')));
+      if (!svs.length) nav.appendChild(h('.chan.faint', { onclick: () => serverDialog({ game }) }, icon('plus'), h('span', tr('add server'))));
     }
-    for (const [cat, items] of this.CHANNELS) {
+    for (const [cat, catLabel, items] of this.CHANNELS) {
       const closed = this.catsClosed.has(cat);
       nav.appendChild(h('.cat' + (closed ? '.closed' : ''), {
         onclick: () => { closed ? this.catsClosed.delete(cat) : this.catsClosed.add(cat); App.ui.catsClosed = [...this.catsClosed]; App.saveUi(); this.renderChannels(); },
-      }, icon('chevron-down'), h('span', cat)));
+      }, icon('chevron-down'), h('span', catLabel)));
       for (const [view, ic, label] of items) {
         const on = Views.activeName === view;
         if (closed && !on) continue;
@@ -164,7 +165,7 @@ const Shell = {
     const act = a => API.call('player.action', { act: a });
     const pct = m.duration ? Math.min(100, (p.pos || 0) / m.duration * 100) : 0;
     if (this._npId === m.id && this.np.firstChild) {
-      $('.np-state', this.np).textContent = p.playing ? 'Přehrává se' : 'Pozastaveno';
+      $('.np-state', this.np).textContent = p.playing ? tr('Playing') : tr('Paused');
       $('.np-state', this.np).classList.toggle('paused', !p.playing);
       $('.np-time', this.np).textContent = `${fmt.clock(p.pos)} / ${fmt.dur(m.duration)}`;
       $('.np-prog i', this.np).style.width = pct + '%';
@@ -176,27 +177,27 @@ const Shell = {
     clear(this.np).append(
       h('.np-top',
         h('.grow', { style: { minWidth: 0 } },
-          h('.np-state' + (p.playing ? '' : '.paused'), p.playing ? 'Přehrává se' : 'Pozastaveno'),
+          h('.np-state' + (p.playing ? '' : '.paused'), p.playing ? tr('Playing') : tr('Paused')),
           h('.np-title.ellipsis', { title: m.name, onclick: () => App.go('library', { select: [m.id] }) }, m.name),
           h('.np-time', `${fmt.clock(p.pos)} / ${fmt.dur(m.duration)}`)),
-        h('button.npb', { title: 'Zavřít přehrávač', onclick: () => act('close') }, icon('x'))),
+        h('button.npb', { title: tr('Close player'), onclick: () => act('close') }, icon('x'))),
       h('.np-prog', h('i', { style: { width: pct + '%' } })),
       h('.np-ctl',
-        h('button.npb', { title: '−10 s', onclick: () => act('-5') }, icon('rotate-ccw')),
-        h('button.npb.np-play', { title: 'Pauza (mezerník)', onclick: () => act('pause') }, icon(p.playing ? 'pause' : 'play')),
-        h('button.npb', { title: '+10 s', onclick: () => act('+5') }, icon('rotate-cw')),
-        h('button.npb', { title: 'Záložka (B)', onclick: () => act('bm') }, icon('bookmark-plus')),
-        h('button.npb', { title: 'Označit postavu v tomto momentu (O)', onclick: () => act('tagchar') }, icon('user-round-plus')),
-        h('button.npb', { title: 'Snímek (S)', onclick: () => act('snap') }, icon('camera')),
-        h('button.npb.np-pop' + (p.popout ? '.on' : ''), { title: 'Vyskakovací okno', onclick: () => act('popout') }, icon('picture-in-picture-2'))));
+        h('button.npb', { title: tr('−10 s'), onclick: () => act('-5') }, icon('rotate-ccw')),
+        h('button.npb.np-play', { title: tr('Pause (space)'), onclick: () => act('pause') }, icon(p.playing ? 'pause' : 'play')),
+        h('button.npb', { title: tr('+10 s'), onclick: () => act('+5') }, icon('rotate-cw')),
+        h('button.npb', { title: tr('Bookmark (B)'), onclick: () => act('bm') }, icon('bookmark-plus')),
+        h('button.npb', { title: tr('Tag a character at this moment (O)'), onclick: () => act('tagchar') }, icon('user-round-plus')),
+        h('button.npb', { title: tr('Screenshot (S)'), onclick: () => act('snap') }, icon('camera')),
+        h('button.npb.np-pop' + (p.popout ? '.on' : ''), { title: tr('Pop-out window'), onclick: () => act('popout') }, icon('picture-in-picture-2'))));
   },
 
   renderUser() {
     clear(this.user).append(
       h('.ub-avatar', 'K'),
-      h('.grow', { style: { minWidth: 0 } }, h('.ub-name.ellipsis', 'Kronikář'), h('.ub-sub.ellipsis', `${App.media.length} videí · ${App.events.length} událostí`)),
-      h('button.npb', { title: 'Načíst nové záznamy (F5)', onclick: () => { API.call('rescan'); toast('Hledám nové záznamy…'); } }, icon('refresh-cw')),
-      h('button.npb', { title: 'Nastavení', onclick: () => App.go('settings') }, icon('settings')));
+      h('.grow', { style: { minWidth: 0 } }, h('.ub-name.ellipsis', 'Kosmas'), h('.ub-sub.ellipsis', trn(App.media.length, '{n} video', '{n} videos') + ' · ' + trn(App.events.length, '{n} event', '{n} events'))),
+      h('button.npb', { title: tr('Load new recordings (F5)'), onclick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } }, icon('refresh-cw')),
+      h('button.npb', { title: tr('Settings'), onclick: () => App.go('settings') }, icon('settings')));
   },
 
   /* ---------- top bar of the main column ---------- */
@@ -208,7 +209,7 @@ const Shell = {
       h('.grow'),
       ...(actions || []),
       this.membersAllowed ? h('button.tb-btn' + (this.membersOn() ? '.on' : ''), {
-        title: 'Seznam postav', onclick: () => { App.ui.members = !this.membersOn(); App.saveUi(); this.applyMembers(); this.header(this._hdr); },
+        title: tr('Character list'), onclick: () => { App.ui.members = !this.membersOn(); App.saveUi(); this.applyMembers(); this.header(this._hdr); },
       }, icon('users')) : null);
     this._hdr = { icon: ic, title, topic, actions };
   },
@@ -221,8 +222,8 @@ const Shell = {
   renderMembers() {
     const el = clear(this.members);
     if (!App.chars.length) {
-      el.appendChild(h('.mem-empty', icon('users'), h('div', 'Zatím žádné postavy'),
-        h('button.btn.sm', { onclick: () => App.go('characters') }, icon('user-plus'), 'Založit postavu')));
+      el.appendChild(h('.mem-empty', icon('users'), h('div', tr('No characters yet')),
+        h('button.btn.sm', { onclick: () => App.go('characters') }, icon('user-plus'), tr('Create character'))));
       return;
     }
     const row = c => {
@@ -232,7 +233,7 @@ const Shell = {
         h('.mav', avatar(c, 32), h('span.st', { style: { background: st.color || 'var(--ok)' }, title: st.label || '' })),
         h('.grow', { style: { minWidth: 0 } },
           h('.mn.ellipsis', { style: { color: c.color || null } }, c.name),
-          c.faction || c.player ? h('.ms.ellipsis', [c.faction, c.player && 'hraje ' + c.player].filter(Boolean).join(' · ')) : null),
+          c.faction || c.player ? h('.ms.ellipsis', [c.faction, c.player && tr('played by {player}', { player: c.player })].filter(Boolean).join(' · ')) : null),
         ptagChips(c.player_tags));
     };
     const group = (label, list) => {
@@ -241,11 +242,11 @@ const Shell = {
       list.forEach(c => el.appendChild(row(c)));
     };
     const ctxIds = this.context && this.context.chars ? new Set(this.context.chars) : null;
-    if (ctxIds) group(this.context.label || 'Tady', App.chars.filter(c => ctxIds.has(c.id)));
-    const rest = App.chars.filter(c => !ctxIds || !ctxIds.has(c.id)).sort((a, b) => a.name.localeCompare(b.name, 'cs'));
+    if (ctxIds) group(this.context.label || tr('Here'), App.chars.filter(c => ctxIds.has(c.id)));
+    const rest = App.chars.filter(c => !ctxIds || !ctxIds.has(c.id)).sort((a, b) => a.name.localeCompare(b.name, I18N.locale));
     const alive = c => !(c.status === 'dead' || c.status === 'gone');
     for (const [k, v] of Object.entries(CHAR_KIND)) group(v.plural || v.label, rest.filter(c => c.kind === k && alive(c)));
-    group('Mrtví a zmizelí', rest.filter(c => !alive(c)));
+    group(tr('Dead and missing'), rest.filter(c => !alive(c)));
   },
   charPopout(c, anchor) {
     $$('.char-pop').forEach(x => x.remove());
@@ -257,13 +258,13 @@ const Shell = {
       h('.cp-body',
         h('.cp-name', c.name),
         h('.cp-sub', [CHAR_KIND[c.kind]?.label, c.faction, CHAR_STATUS[c.status]?.label].filter(Boolean).join(' · ')),
-        c.summary ? h('.cp-sec', h('.cp-h', 'O postavě'), h('div', c.summary)) : null,
-        evs.length ? h('.cp-sec', h('.cp-h', `Události — ${evs.length}`),
+        c.summary ? h('.cp-sec', h('.cp-h', tr('About the character')), h('div', c.summary)) : null,
+        evs.length ? h('.cp-sec', h('.cp-h', tr('Events') + ` — ${evs.length}`),
           evs.slice(0, 4).map(e => h('.cp-ev', { onclick: () => { pop.remove(); App.go('events', { id: e.id }); } },
             h('span.dot', { style: { background: e.color } }), h('span.ellipsis', e.title), h('span.faint', e.start_time ? fmt.date(e.start_time) : '')))) : null,
         h('.row', { style: { marginTop: '12px' } },
-          h('button.btn.sm.primary', { onclick: () => { pop.remove(); App.go('characters', { id: c.id }); } }, 'Otevřít profil'),
-          h('button.btn.sm', { onclick: () => { pop.remove(); App.go('library'); setTimeout(() => App.go('library', { char: c.id }), 0); } }, 'Videa'))));
+          h('button.btn.sm.primary', { onclick: () => { pop.remove(); App.go('characters', { id: c.id }); } }, tr('Open profile')),
+          h('button.btn.sm', { onclick: () => { pop.remove(); App.go('library'); setTimeout(() => App.go('library', { char: c.id }), 0); } }, tr('Videos')))));
     document.body.appendChild(pop);
     const pr = pop.getBoundingClientRect();
     pop.style.left = Math.max(8, r.left - pr.width - 12) + 'px';
@@ -297,25 +298,25 @@ function gameHue(g) {
 /** Create / edit a server (name, colour, period it was played). */
 function serverDialog(sv, { onSaved = null, switchScope = true } = {}) {
   const isNew = !sv.id;
-  const games = [...new Set([...Shell.games().map(g => g.game), ...App.servers.map(x => x.game)])].sort((a, b) => a.localeCompare(b, 'cs'));
+  const games = [...new Set([...Shell.games().map(g => g.game), ...App.servers.map(x => x.game)])].sort((a, b) => a.localeCompare(b, I18N.locale));
   const gameSel = h('select.input', games.map(g => h('option', { value: g, selected: g === sv.game }, g)));
-  const name = h('input.input', { value: sv.name || '', placeholder: 'např. Kingdoms Connected – CZ/SK', autofocus: true, onkeydown: e => e.stopPropagation() });
+  const name = h('input.input', { value: sv.name || '', placeholder: tr('e.g. Kingdoms Connected – CZ/SK'), autofocus: true, onkeydown: e => e.stopPropagation() });
   const day = t => t ? fmt.toInput(t).slice(0, 10) : '';
   const from = h('input.input', { type: 'date', value: day(sv.active_from) });
   const to = h('input.input', { type: 'date', value: day(sv.active_to) });
-  const notes = h('textarea.input', { rows: 2, placeholder: 'Poznámky (adresa, Discord serveru…)' }, sv.notes || '');
+  const notes = h('textarea.input', { rows: 2, placeholder: tr("Notes (address, the server's Discord…)") }, sv.notes || '');
   let color = sv.color || PALETTE[(App.servers.length + 1) % PALETTE.length];
   const sw = h('.row', { style: { gap: '6px' } });
   const renderSw = () => clear(sw).append(...PALETTE.map(c => h('span', { style: { width: '22px', height: '22px', borderRadius: '50%', background: c, cursor: 'pointer',
     outline: c === color ? '2px solid var(--text)' : 'none', outlineOffset: '2px' }, onclick: () => { color = c; renderSw(); } })));
   renderSw();
   const ts = (v, end) => v ? new Date(v + (end ? 'T23:59:59' : 'T00:00:00')).getTime() / 1000 : null;
-  modal({ title: isNew ? (sv.game ? `Nový server – ${sv.game}` : 'Nový server') : 'Upravit server', icon: 'server',
-    body: h('.col', { style: { gap: '10px' } }, !sv.game ? h('label.field', 'Hra', gameSel) : null, name,
-      h('.small.muted', 'Kdy jsi na serveru hrál – videa z tohoto období se k němu přiřadí sama (nech prázdné, pokud má hra jen jeden server).'),
-      h('.row', h('label.field', 'Od', from), h('label.field', 'Do', to)), h('.small.muted', 'Barva'), sw, notes),
-    actions: [{ label: 'Zrušit' }, { label: isNew ? 'Přidat' : 'Uložit', primary: true, onClick: async () => {
-      if (!name.value.trim()) { toast('Zadej název serveru', 'err'); return false; }
+  modal({ title: isNew ? (sv.game ? tr('New server – {game}', { game: sv.game }) : tr('New server')) : tr('Edit server'), icon: 'server',
+    body: h('.col', { style: { gap: '10px' } }, !sv.game ? h('label.field', tr('Game'), gameSel) : null, name,
+      h('.small.muted', tr('When you played on the server – videos from this period will be assigned to it automatically (leave empty if the game has only one server).')),
+      h('.row', h('label.field', tr('From'), from), h('label.field', tr('To'), to)), h('.small.muted', tr('Colour')), sw, notes),
+    actions: [{ label: tr('Cancel') }, { label: isNew ? tr('Add') : tr('Save'), primary: true, onClick: async () => {
+      if (!name.value.trim()) { toast(tr('Enter the server name'), 'err'); return false; }
       const f = { name: name.value.trim(), color, active_from: ts(from.value), active_to: ts(to.value, true), notes: notes.value };
       let id = sv.id;
       if (isNew) { id = await API.call('server.create', { game: sv.game || gameSel.value, ...f }); await App.loadServers(); if (switchScope) App.setScope({ server: id }); }

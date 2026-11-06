@@ -18,12 +18,16 @@ from pathlib import Path
 import threading
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot, QUrl, Qt
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFileDialog
 
 from . import config, suggest
+from . import i18n
+from .i18n import tr, trn
 from . import discord_link
 from . import gameart
 from . import sync as websync
+from . import webauth
 from .analysis import analysis_dir, coverage, load_frames
 from .analysis_jobs import speech_tracks
 
@@ -49,7 +53,7 @@ class SyncThread(QThread):
             self.failed.emit(str(e))
         except Exception as e:
             traceback.print_exc()
-            self.failed.emit(f"Synchronizace selhala: {type(e).__name__}: {e}")
+            self.failed.emit(tr("Sync failed: {error}", error=f"{type(e).__name__}: {e}"))
 
 
 def file_url(path):
@@ -58,6 +62,7 @@ def file_url(path):
 
 class Api(QObject):
     notify = Signal(str, str)
+    _main_call = Signal(object)          # worker thread -> run a callable in the Qt main thread
 
     def __init__(self, store, settings, host):
         """host: object with play(media, offset), player_snapshot(path) -> (media, pos) | None,
@@ -68,7 +73,10 @@ class Api(QObject):
         self.host = host
         ATT_DIR.mkdir(parents=True, exist_ok=True)
         self._sync = {"thread": None, "running": False, "progress": "", "error": None, "pairing": False,
-                      "quiet": False, "cancel": threading.Event()}
+                      "quiet": False, "cancel": threading.Event(), "bg": None}
+        self._auth = {"state": "idle", "error": None, "user_code": None, "verification_uri": None, "url": None,
+                      "cancel": threading.Event()}
+        self._main_call.connect(self._run_main, Qt.QueuedConnection)
 
     # ------------------------------------------------------------ dispatch
     READ_ONLY = {"bootstrap", "media.list", "media.get", "media.reveal", "media.play", "player.action",
@@ -82,7 +90,9 @@ class Api(QObject):
                  "analysis.get", "analysis.queue", "analysis.stats", "analysis.models", "analysis.overview",
                  "analysis.char_mentions", "analysis.search", "analysis.open_timeline", "analysis.skip",
                  "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
-                 "analysis.char_looks", "ai.info", "ai.open"}
+                 "analysis.char_looks", "ai.info", "ai.open", "lang.set",
+                 "auth.status", "auth.start", "auth.cancel", "auth.open", "auth.sign_out",
+                 "share.get", "share.set", "share.rotate"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -102,6 +112,30 @@ class Api(QObject):
 
     def emit(self, kind, payload=None):
         self.notify.emit(kind, json.dumps(payload or {}, ensure_ascii=False, default=str))
+
+    @Slot(object)
+    def _run_main(self, fn):
+        try:
+            fn()
+        except Exception:
+            traceback.print_exc()
+
+    def _bg(self, fn):
+        """Runs fn() in a worker thread (network!). JS gets {_bg: id} now and the result later as the "bg" notification
+        ({id, ok} | {id, error}); core.js API.call turns that back into one promise."""
+        rid = uuid.uuid4().hex
+
+        def run():
+            try:
+                payload = {"id": rid, "ok": fn()}
+            except websync.SyncError as e:
+                payload = {"id": rid, "error": str(e)}
+            except Exception as e:
+                traceback.print_exc()
+                payload = {"id": rid, "error": f"{type(e).__name__}: {e}"}
+            self.emit("bg", payload)
+        threading.Thread(target=run, name="kosmas-bg", daemon=True).start()
+        return {"_bg": rid}
 
     # ------------------------------------------------------------ serializers
     def _media(self, m, linked=None, chars=None, bms=None):
@@ -256,8 +290,8 @@ class Api(QObject):
         linked = self.store.linked_media_ids()
         chars = self._char_map("media")
         bms = self._bm_map()
-        tr = self.store.transcript_status()
-        return [dict(self._media(m, linked, chars, bms), tr=tr.get(m.id), transcribed=bool(tr.get(m.id)))
+        ts = self.store.transcript_status()
+        return [dict(self._media(m, linked, chars, bms), tr=ts.get(m.id), transcribed=bool(ts.get(m.id)))
                 for m in self.store.all_media()]
 
     def m_media_get(self, id):
@@ -272,8 +306,8 @@ class Api(QObject):
 
     # ------------------------------------------------------------ transcript / analysis
     WHISPER_MODELS = [
-        ("large-v3", "Large v3 – nejpřesnější (doporučeno)"), ("large-v3-turbo", "Large v3 Turbo – asi 2× rychlejší, o chlup horší"),
-        ("medium", "Medium – rychlý, horší čeština"), ("small", "Small – jen na zkoušku")]
+        ("large-v3", "Large v3 – most accurate (recommended)"), ("large-v3-turbo", "Large v3 Turbo – about 2× faster, slightly worse"),
+        ("medium", "Medium – fast, worse Czech"), ("small", "Small – just for testing")]     # labels go through tr()
 
     def m_analysis_get(self, id):
         jobs = self.host.analysis
@@ -307,7 +341,7 @@ class Api(QObject):
 
     def m_analysis_start(self, ids, speech=True, vision=False, chapters=None, ranges=None):
         if not self.host.analysis.available():
-            raise RuntimeError("Chybí knihovny pro přepis: .venv\\Scripts\\pip install -r requirements-ai.txt")
+            raise RuntimeError(tr("Transcription libraries are missing: .venv\\Scripts\\pip install -r requirements-ai.txt"))
         media = [m for m in (self.store.media(i) for i in ids) if m]
         self.host.analysis.request(media, speech=speech, vision=vision, chapters=chapters, vision_ranges=ranges,
                                    prev={m.id: self._prev_summary(m) for m in media})
@@ -398,7 +432,7 @@ class Api(QObject):
             ollama = [{"name": t["name"], "size": t.get("size"), "family": t.get("details", {}).get("family", "")} for t in tags]
         except OSError:
             ollama = None
-        return {"whisper": self.WHISPER_MODELS, "ollama": ollama, "available": self.host.analysis.available(),
+        return {"whisper": [(k, tr(v)) for k, v in self.WHISPER_MODELS], "ollama": ollama, "available": self.host.analysis.available(),
                 "games": self.host.analysis.detected_games}
 
     # ------------------------------------------------------------ AI setup (ai_setup.py)
@@ -473,7 +507,7 @@ class Api(QObject):
         if data is None:
             data = (analysis_dir(media_id) / "faces" / file).read_bytes()
         dst, mime, kind = self._store_file(data=data, name="portret.jpg")
-        att = self._add("character", character_id, dst, f"Portrét z videa {m.display_title if m else ''}", mime, kind)
+        att = self._add("character", character_id, dst, tr("Portrait from video {title}", title=m.display_title if m else '').strip(), mime, kind)
         self.m_char_portrait(character_id, att["id"])
         return True
 
@@ -535,7 +569,7 @@ class Api(QObject):
             raw = (fields["youtube"] or "").strip()
             fields["youtube"] = websync.youtube_id(raw)
             if raw and not fields["youtube"]:
-                raise ValueError("Tohle nevypadá jako odkaz na video na YouTube (ani jako ID videa).")
+                raise ValueError(tr("This doesn't look like a YouTube video link (or a video ID)."))
         if "tags" in fields:
             self.store.set_media_tags(id, fields.pop("tags"))
         if "chars" in fields:
@@ -670,8 +704,8 @@ class Api(QObject):
         return True
 
     def m_media_thumb_pick(self, id):
-        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, "Vlastní náhled videa", "",
-                                              "Obrázky (*.png *.jpg *.jpeg *.webp *.bmp)")
+        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, tr("Custom video thumbnail"), "",
+                                              tr("Images") + " (*.png *.jpg *.jpeg *.webp *.bmp)")
         if not path:
             return False
         dst = config.THUMB_DIR / "custom" / f"{id}-{uuid.uuid4().hex[:6]}{Path(path).suffix.lower()}"
@@ -801,7 +835,7 @@ class Api(QObject):
 
     def m_event_move(self, id, parent_id, position=None):
         if parent_id is not None and parent_id in self.store.event_descendant_ids(id):
-            raise ValueError("Událost nejde vložit sama do sebe")
+            raise ValueError(tr("An event can't be placed inside itself"))
         siblings = [e for e in self.store.events() if e["parent_id"] == parent_id and e["id"] != id]
         pos = len(siblings) if position is None else max(0, min(position, len(siblings)))
         siblings.insert(pos, {"id": id})
@@ -910,8 +944,8 @@ class Api(QObject):
         return self._att(self.store.attachment(aid))
 
     def m_att_pick(self, owner_type, owner_id, images_only=False):
-        flt = "Obrázky (*.png *.jpg *.jpeg *.gif *.webp *.bmp)" if images_only else "Všechny soubory (*.*)"
-        paths, _ = QFileDialog.getOpenFileNames(self.host.dialog_parent, "Přidat přílohy", "", flt)
+        flt = tr("Images") + " (*.png *.jpg *.jpeg *.gif *.webp *.bmp)" if images_only else tr("All files") + " (*.*)"
+        paths, _ = QFileDialog.getOpenFileNames(self.host.dialog_parent, tr("Add attachments"), "", flt)
         out = []
         for p in paths:
             dst, mime, kind = self._store_file(src_path=p, name=os.path.basename(p))
@@ -934,7 +968,7 @@ class Api(QObject):
         dst.parent.mkdir(parents=True, exist_ok=True)
         res = self.host.player_snapshot(str(dst))
         if not res:
-            raise ValueError("Nic se nepřehrává – pusť video, ze kterého chceš snímek.")
+            raise ValueError(tr("Nothing is playing – play the video you want a screenshot from."))
         media, pos = res
         moment = (media.start_time or time.time()) + pos
         caption = f"{media.display_title} @ {suggest.fmt_clock(pos)}"
@@ -948,7 +982,7 @@ class Api(QObject):
         dst = tmp / f"grab-{uuid.uuid4().hex[:8]}.jpg"
         res = self.host.player_snapshot(str(dst))
         if not res:
-            raise ValueError("Nic se nepřehrává – pusť video, ze kterého chceš snímek.")
+            raise ValueError(tr("Nothing is playing – play the video you want a screenshot from."))
         media, pos = res
         try:
             data = "data:image/jpeg;base64," + base64.b64encode(dst.read_bytes()).decode()
@@ -1140,7 +1174,7 @@ class Api(QObject):
         try:
             return gameart.store_search(term)
         except Exception as e:
-            raise ValueError(f"Obchod Steamu teď nejde načíst: {e}")
+            raise ValueError(tr("The Steam store can't be loaded right now: {error}", error=e))
 
     def m_game_image_data(self, path=None, url=None):
         """Image as a data URL (lets the UI crop it on a canvas)."""
@@ -1151,7 +1185,7 @@ class Api(QObject):
         return None
 
     def m_game_art_pick_file(self):
-        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, "Obrázek hry", "", "Obrázky (*.png *.jpg *.jpeg *.webp *.bmp)")
+        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, tr("Game image"), "", tr("Images") + " (*.png *.jpg *.jpeg *.webp *.bmp)")
         return self.m_game_image_data(path=path) if path else None
 
     def _save_art(self, game, kind, raw, ext=".jpg", appid=None):
@@ -1346,15 +1380,15 @@ class Api(QObject):
         return {"found": len(items), "new": n}
 
     def m_letters_import_export(self):
-        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, "Export dat z Discordu (package.zip)", "",
-                                              "Discord export (*.zip);;Všechny soubory (*.*)")
+        path, _ = QFileDialog.getOpenFileName(self.host.dialog_parent, tr("Discord data export (package.zip)"), "",
+                                              "Discord export (*.zip);;" + tr("All files") + " (*.*)")
         if not path:
             return None
         items = discord_link.export_letters(path, self.settings.get("holub_marker") or "holub")
         return self._save_letters(items)
 
     def m_letters_import_folder(self):
-        path = QFileDialog.getExistingDirectory(self.host.dialog_parent, "Rozbalený export dat z Discordu")
+        path = QFileDialog.getExistingDirectory(self.host.dialog_parent, tr("Extracted Discord data export"))
         if not path:
             return None
         items = discord_link.export_letters(path, self.settings.get("holub_marker") or "holub")
@@ -1363,7 +1397,7 @@ class Api(QObject):
     def m_letters_import_channel(self):
         tok, ch = self.settings.get("discord_token"), self.settings.get("discord_channel")
         if not tok or not ch:
-            raise ValueError("V Nastavení → Discord vyplň token bota a ID kanálu s dopisy.")
+            raise ValueError(tr("Fill in the bot token and the letters channel ID in Settings → Discord."))
         items = discord_link.channel_letters(tok, ch, self.settings.get("holub_marker") or "holub")
         return self._save_letters(items)
 
@@ -1371,7 +1405,7 @@ class Api(QObject):
     def m_discord_members(self):
         tok, gid = self.settings.get("discord_token"), self.settings.get("discord_guild")
         if not tok or not gid:
-            raise ValueError("V Nastavení → Discord vyplň token bota a ID serveru.")
+            raise ValueError(tr("Fill in the bot token and the server ID in Settings → Discord."))
         return discord_link.members(tok, gid)
 
     def _player_avatar_from(self, pid, url):
@@ -1392,7 +1426,7 @@ class Api(QObject):
     def _token(self):
         tok = self.settings.get("discord_token")
         if not tok:
-            raise ValueError("V Nastavení → Discord vyplň token bota (bot nemusí být na žádném serveru).")
+            raise ValueError(tr("Fill in the bot token in Settings → Discord (the bot doesn't need to be on any server)."))
         return tok
 
     def m_discord_user(self, user_id):
@@ -1612,6 +1646,15 @@ class Api(QObject):
             self.host.rescan()
         return True
 
+    def m_lang_set(self, lang="auto"):
+        """UI language setting (auto | en | cs). Both web pages reload themselves in the resolved language."""
+        lang = lang if lang in ("auto", "en", "cs") else "auto"
+        self.settings["lang"] = lang
+        self.host.save_settings()
+        resolved = i18n.set_lang(lang)
+        self.emit("lang", {"lang": resolved, "setting": lang})
+        return resolved
+
     # ------------------------------------------------------------ synchronizace s webem
     def m_sync_status(self):
         st = websync.status(config.DB_PATH, self.settings)
@@ -1622,8 +1665,9 @@ class Api(QObject):
     def m_sync_set_token(self, token=""):
         token = (token or "").strip()
         if token and not token.startswith("krt_"):
-            raise ValueError("Tohle není API token Kronikáře (začíná na krt_). Vytvoř ho na webu v Nastavení.")
+            raise ValueError(tr("This isn't a Kosmas API token (it starts with krt_). Create one on the web in Settings."))
         self.settings["sync_token"] = token
+        self.settings.pop("sync_user", None)
         self.host.save_settings()
         return self.m_sync_status()
 
@@ -1644,7 +1688,7 @@ class Api(QObject):
         if self._sync["running"]:
             return self.m_sync_status()
         if not self.settings.get("sync_token"):
-            raise ValueError("Nejdřív vlož osobní API token z webu.")
+            raise ValueError(tr("Sign in with Discord first (Settings → Web chronicle)."))
         settings = dict(self.settings)
         cancel = threading.Event()
         prog = lambda msg: self._sync.__setitem__("progress", msg)
@@ -1660,7 +1704,7 @@ class Api(QObject):
         # sloty Api běží v hlavním vlákně (vlákno synchronizace jen posílá signál)
         th.done.connect(self._sync_done, Qt.QueuedConnection)
         th.failed.connect(self._sync_failed, Qt.QueuedConnection)
-        self._sync.update(thread=th, running=True, progress="Spouštím…", error=None, pairing=False,
+        self._sync.update(thread=th, running=True, progress=tr("Starting…"), error=None, pairing=False,
                           quiet=quiet, cancel=cancel)
         th.start()
         return self.m_sync_status()
@@ -1668,11 +1712,15 @@ class Api(QObject):
     @Slot(dict)
     def _sync_done(self, res):
         self._sync.update(running=False, progress="", error=None)
+        if self._sync.get("bg"):
+            self.emit("bg", {"id": self._sync.pop("bg"), "ok": res.get("share")})
         self.emit("sync", {"method": "sync.run", "src": None})     # obnovit zobrazená data
         self.emit("web-sync", res)
         n = res.get("conflicts") or 0
         if not self._sync["quiet"] or n or res.get("received"):
-            self.emit("toast", {"msg": f"Synchronizováno s webem{f' – {n} konfliktů k vyřešení (Nastavení)' if n else ''}",
+            self.emit("toast", {"msg": trn(n, "Synced with the web – {n} conflict to resolve (Settings)",
+                                           "Synced with the web – {n} conflicts to resolve (Settings)")
+                                if n else tr("Synced with the web"),
                                 "type": "err" if n else "ok"})
 
     @Slot(str)
@@ -1680,8 +1728,11 @@ class Api(QObject):
         pairing = msg.startswith("pairing:")
         msg = msg[len("pairing:"):] if pairing else msg
         self._sync.update(running=False, progress="", error=msg, pairing=pairing)
+        if self._sync.get("bg"):
+            self.emit("bg", {"id": self._sync.pop("bg"),
+                             "error": tr("Sync is waiting for your choice (Settings → Web chronicle)") if pairing else msg})
         self.emit("web-sync", {"error": msg, "need_pairing": pairing})
-        self.emit("toast", {"msg": "Synchronizace čeká na tvou volbu (Nastavení → Webová kronika)" if pairing else msg,
+        self.emit("toast", {"msg": tr("Sync is waiting for your choice (Settings → Web chronicle)") if pairing else msg,
                             "type": "err"})
 
     def sync_shutdown(self, timeout_ms=10000):
@@ -1693,7 +1744,7 @@ class Api(QObject):
 
     def m_sync_run(self, quiet=False, pairing=None):
         if pairing not in (None, "match", "copy"):
-            raise ValueError("Neznámá volba párování")
+            raise ValueError(tr("Unknown pairing option"))
         return self._sync_start(lambda s: s.run(pairing=pairing), quiet)
 
     def m_sync_cancel(self):
@@ -1704,8 +1755,138 @@ class Api(QObject):
     def m_sync_resolve(self, items):
         return self._sync_start(lambda s: s.resolve(items))
 
+    # ------------------------------------------------------------ sign in with Discord (webauth.py)
+    def _auth_pub(self):
+        a = self._auth
+        return {"state": a["state"], "error": a["error"], "user_code": a["user_code"],
+                "verification_uri": a["verification_uri"], "signed_in": bool(self.settings.get("sync_token")),
+                "user": self.settings.get("sync_user") or None}
+
+    def _open_url(self, url):
+        """Thread-safe: opens the system browser from the Qt main thread."""
+        self._main_call.emit(lambda: QDesktopServices.openUrl(QUrl(url)))
+
+    def m_auth_status(self):
+        return self._auth_pub()
+
+    def m_auth_start(self, mode="browser"):
+        """mode: browser (loopback + PKCE; falls back to a code when 127.0.0.1 can't listen) | device (code)."""
+        self._auth["cancel"].set()                    # a previous attempt stops
+        cancel = threading.Event()
+        server = self.settings.get("sync_url") or websync.DEFAULT_URL
+        websync.check_url(server)
+        a = self._auth = {"state": "device" if mode == "device" else "browser", "error": None, "user_code": None,
+                          "verification_uri": None, "url": None, "cancel": cancel}
+
+        def upd(**kw):
+            if self._auth is a:
+                a.update(kw)
+                self.emit("web-auth", self._auth_pub())
+
+        def work():
+            try:
+                res = None
+                if mode != "device":
+                    try:
+                        res = webauth.loopback_login(server, self._open_url, cancel, on_ready=lambda u: a.update(url=u))
+                    except OSError:
+                        res = None                    # loopback unavailable (firewall / no free port) -> code
+                if res is None:
+                    upd(state="device")
+                    d = webauth.device_start(server)
+                    upd(user_code=d["user_code"], verification_uri=d.get("verification_uri_complete") or d["verification_uri"])
+                    res = webauth.device_poll(server, d["device_code"], cancel, interval=int(d.get("interval") or 5),
+                                              expires_in=int(d.get("expires_in") or 600))
+                self._main_call.emit(lambda: self._auth_finish(a, res))
+            except webauth.Cancelled:
+                upd(state="idle")
+            except websync.SyncError as e:
+                upd(state="error", error=str(e))
+            except Exception as e:
+                traceback.print_exc()
+                upd(state="error", error=tr("Sign-in failed ({error}).", error=type(e).__name__))
+        threading.Thread(target=work, name="kosmas-signin", daemon=True).start()
+        return self._auth_pub()
+
+    def _auth_finish(self, a, res):
+        server = self.settings.get("sync_url") or websync.DEFAULT_URL
+        if self._auth is not a or a["cancel"].is_set():   # cancelled meanwhile -> don't keep a token nobody wanted
+            threading.Thread(target=webauth.revoke, args=(server, res["token"]), daemon=True).start()
+            return
+        old = self.settings.get("sync_token")
+        if old and old != res["token"]:
+            threading.Thread(target=webauth.revoke, args=(server, old), daemon=True).start()
+        name = (res.get("user") or {}).get("name") or ""
+        self.settings["sync_token"] = res["token"]
+        self.settings["sync_user"] = name
+        self.host.save_settings()
+        a.update(state="done", error=None)
+        self.emit("web-auth", self._auth_pub())
+        self.emit("web-sync", {})
+        self.emit("toast", {"msg": tr("Signed in as {name}", name=name or "?"), "type": "ok"})
+
+    def m_auth_cancel(self):
+        self._auth["cancel"].set()
+        self._auth.update(state="idle", error=None, user_code=None, verification_uri=None)
+        return self._auth_pub()
+
+    def m_auth_open(self, which="device"):
+        """Opens the page of the running sign-in again (only URLs this app built - nothing from the page)."""
+        url = self._auth.get("verification_uri") if which == "device" else self._auth.get("url")
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
+        return bool(url)
+
+    def m_auth_sign_out(self):
+        """Disconnect this device: the token is revoked on the server and forgotten here. The sync mapping stays."""
+        tok = self.settings.pop("sync_token", None)
+        self.settings.pop("sync_user", None)
+        self.host.save_settings()
+        if tok:
+            server = self.settings.get("sync_url") or websync.DEFAULT_URL
+            threading.Thread(target=webauth.revoke, args=(server, tok), daemon=True).start()
+        self._auth["cancel"].set()
+        self._auth.update(state="idle", error=None)
+        return self.m_sync_status()
+
+    # ------------------------------------------------------------ share button (share.js)
+    def _share_job(self, fn):
+        settings = dict(self.settings)
+
+        def run():
+            s = websync.Syncer(config.DB_PATH, settings, ATT_DIR)
+            try:
+                return fn(s)
+            finally:
+                s.close()
+        return self._bg(run)
+
+    def m_share_get(self, kind, id):
+        return self._share_job(lambda s: s.share_info(kind, int(id)))
+
+    def m_share_set(self, kind, id, visibility):
+        if visibility not in ("private", "link", "public"):
+            raise ValueError(tr("Unknown visibility"))
+        if not self.settings.get("sync_token"):
+            raise ValueError(tr("Sign in with Discord first (Settings → Web chronicle)."))
+        id = int(id)
+        if visibility == "private" or websync.is_published(config.DB_PATH, kind, id):
+            return self._share_job(lambda s: s.share_set(kind, id, visibility))
+        # not on the web yet -> a normal sync puts it there (progress in sync.status), then the visibility is set
+        if self._sync["running"]:
+            raise ValueError(tr("A sync is running – try again in a moment."))
+        rid = uuid.uuid4().hex
+        self._sync["bg"] = rid
+        self._sync_start(lambda s: s.share_publish(kind, id, visibility), quiet=True)
+        return {"_bg": rid}
+
+    def m_share_rotate(self, kind, id):
+        if not self.settings.get("sync_token"):
+            raise ValueError(tr("Sign in with Discord first (Settings → Web chronicle)."))
+        return self._share_job(lambda s: s.share_set(kind, int(id), rotate=True))
+
     def m_pick_folder(self):
-        return QFileDialog.getExistingDirectory(self.host.dialog_parent, "Složka se záznamy") or None
+        return QFileDialog.getExistingDirectory(self.host.dialog_parent, tr("Recordings folder")) or None
 
     def m_rescan(self):
         self.host.rescan()

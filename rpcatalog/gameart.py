@@ -89,7 +89,7 @@ def local_images(appid):
     def kind(p):
         n = os.path.basename(p).lower()
         return ("cover" if "600x900" in n else "hero" if "hero" in n else "logo" if "logo" in n
-                else "header" if "header" in n else "jiný")
+                else "header" if "header" in n else "other")
     return [{"path": p, "kind": kind(p), "size": os.path.getsize(p)} for p in found if os.path.getsize(p) > 2000]
 
 

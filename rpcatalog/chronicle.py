@@ -1,10 +1,11 @@
-"""Kronikář AI results -> the catalog: mentions of known characters / places / factions are stored
+"""Kosmas AI results -> the catalog: mentions of known characters / places / factions are stored
 right away, new events and new characters / places / factions become proposals the user accepts or rejects."""
 import html
 import json
 import time
 
 from .analysis import analysis_dir, _read_json
+from .i18n import tr
 from .mentions import fold
 
 TYPES = {"postava": "character", "misto": "place", "frakce": "faction"}
@@ -78,9 +79,9 @@ def accept(store, api, proposal_id, edits=None):
     server = m.get("server_id") if m else None
     if p["kind"] == "event":
         base = m.start_time if m and m.start_time else None
-        eid = api.m_event_create(d.get("title") or "Událost", start=base + d["t"] if base else None,
+        eid = api.m_event_create(d.get("title") or tr("Event"), start=base + d["t"] if base else None,
                                  end=base + d["t_end"] if base and d.get("t_end") else None, server_id=server)
-        store.add_link(eid, p["media_id"], offset=d["t"], note="z přepisu")
+        store.add_link(eid, p["media_id"], offset=d["t"], note=tr("from transcript"))
         body = f"<p>{html.escape(d.get('text', ''))}</p>" if d.get("text") else ""
         fields = {"body_html": body}
         if d.get("place_id"):

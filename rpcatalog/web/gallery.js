@@ -30,11 +30,11 @@
   function mount(r) {
     root = r;
     state = { items: [], filter: App.ui.galFilter || 'all', q: '' };
-    const search = h('input.input', { placeholder: 'Hledat v popiscích, událostech, postavách…' });
+    const search = h('input.input', { placeholder: tr('Search captions, events, characters…') });
     search.addEventListener('input', debounce(() => { state.q = search.value; render(); }, 150));
     search.addEventListener('keydown', e => e.stopPropagation());
     root.appendChild(h('.gal-wrap',
-      h('.page-head', h('div', h('h1', 'Galerie'), h('.sub.gal-sub', 'Načítám…')), h('.grow')),
+      h('.page-head', h('div', h('h1', tr('Gallery')), h('.sub.gal-sub', tr('Loading…'))), h('.grow')),
       h('.toolbar',
         h('.search', { style: { width: '340px' } }, icon('search'), search),
         h('.seg.gal-seg'),
@@ -56,7 +56,7 @@
 
   function renderSeg() {
     const seg = $('.gal-seg', root); clear(seg);
-    [['all', 'Vše', 'images'], ['event', 'Události', 'calendar-days'], ['character', 'Postavy', 'users']].forEach(([k, l, ic]) =>
+    [['all', tr('Everything'), 'images'], ['event', tr('Events'), 'calendar-days'], ['character', tr('Characters'), 'users']].forEach(([k, l, ic]) =>
       seg.appendChild(h('button' + (state.filter === k ? '.on' : ''), {
         onclick: () => { state.filter = k; App.ui.galFilter = k; App.saveUi(); renderSeg(); render(); },
       }, icon(ic), l)));
@@ -76,18 +76,17 @@
     if (!root) return;
     const box = $('.gal-scroll', root); clear(box);
     const items = filtered();
-    $('.gal-sub', root).textContent = `${state.items.length} ${fmt.plural(state.items.length, 'obrázek', 'obrázky', 'obrázků')}`;
+    $('.gal-sub', root).textContent = trn(state.items.length, '{n} image', '{n} images');
     if (!state.items.length) {
-      box.appendChild(emptyState('images', 'Zatím žádné obrázky',
-        h('div', 'Vlož screenshot přes ', h('span.kbd', 'Ctrl+V'), ' do zápisu u události nebo postavy,', h('br'),
-          'nebo v přehrávači použij ', h('b', 'snímek z videa'), ' – uloží aktuální záběr i s odkazem na čas ve videu.')));
+      box.appendChild(emptyState('images', tr('No images yet'),
+        h('div', { html: tr('Paste a screenshot with <span class="kbd">Ctrl+V</span> into an entry of an event or character,<br>or use <b>screenshot from video</b> in the player – it saves the current frame together with a link to the time in the video.') })));
       return;
     }
-    if (!items.length) { box.appendChild(h('.faint', { style: { padding: '20px 0' } }, 'Nic neodpovídá filtru.')); return; }
+    if (!items.length) { box.appendChild(h('.faint', { style: { padding: '20px 0' } }, tr('Nothing matches the filter.'))); return; }
     const groups = new Map();
     for (const a of items) {
       const t = a.taken_at || a.created_at;
-      const key = t ? fmt.month(t) : 'bez data';
+      const key = t ? fmt.month(t) : tr('no date');
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(a);
     }
@@ -111,33 +110,33 @@
       oncontextmenu: e => itemMenu(e, a),
     },
     h('img', { src: a.url, loading: 'lazy', alt: a.caption || '' }),
-    a.media_id ? h('span.src', { title: 'Přehrát zdrojové video v tomto čase', onclick: e => { e.stopPropagation(); API.call('att.play_source', { id: a.id }); } },
-      icon('play'), a.media_offset != null ? fmt.clock(a.media_offset) : 'video') : null,
+    a.media_id ? h('span.src', { title: tr('Play the source video at this time'), onclick: e => { e.stopPropagation(); API.call('att.play_source', { id: a.id }); } },
+      icon('play'), a.media_offset != null ? fmt.clock(a.media_offset) : tr('video')) : null,
     h('.cap',
-      h('.t', a.caption || a.orig_name || 'Obrázek'),
+      h('.t', a.caption || a.orig_name || tr('Image')),
       h('.o', icon(ownerIcon(a)), h('span.ellipsis', a.owner_title || '—'), t ? h('span', '· ' + fmt.dt(t)) : null)));
   }
 
   function itemMenu(e, a) {
-    const ownerLabel = a.owner_type === 'character' ? 'Otevřít postavu' : 'Otevřít událost';
+    const ownerLabel = a.owner_type === 'character' ? tr('Open character') : tr('Open event');
     menu(e, [
       (a.event_id || a.char_id) ? { label: ownerLabel, icon: ownerIcon(a), onClick: () => openOwner(a) } : null,
-      a.media_id ? { label: 'Přehrát zdrojové video', icon: 'play', onClick: () => API.call('att.play_source', { id: a.id }) } : null,
-      { label: 'Upravit popisek', icon: 'pencil', onClick: async () => {
-        const v = await promptDialog('Popisek', 'Popisek obrázku', a.caption || '');
+      a.media_id ? { label: tr('Play source video'), icon: 'play', onClick: () => API.call('att.play_source', { id: a.id }) } : null,
+      { label: tr('Edit caption'), icon: 'pencil', onClick: async () => {
+        const v = await promptDialog(tr('Caption'), tr('Image caption'), a.caption || '');
         if (v === null) return;
         await API.call('att.update', { id: a.id, caption: v }); a.caption = v; render();
       } },
-      { label: 'Otevřít v prohlížeči obrázků', icon: 'external-link', onClick: () => API.call('att.open', { id: a.id }) },
-      { label: 'Zobrazit ve složce', icon: 'folder-open', onClick: () => API.call('att.reveal', { id: a.id }) },
+      { label: tr('Open in image viewer'), icon: 'external-link', onClick: () => API.call('att.open', { id: a.id }) },
+      { label: tr('Show in folder'), icon: 'folder-open', onClick: () => API.call('att.reveal', { id: a.id }) },
       { sep: true },
-      { label: 'Smazat', icon: 'trash-2', danger: true, onClick: async () => {
-        if (!await confirmDialog('Smazat obrázek', `Smazat „${a.caption || a.orig_name || 'obrázek'}“? Soubor se odstraní z dat katalogu.`, { danger: true, okLabel: 'Smazat' })) return;
+      { label: tr('Delete'), icon: 'trash-2', danger: true, onClick: async () => {
+        if (!await confirmDialog(tr('Delete image'), tr('Delete “{name}”? The file will be removed from the catalog data.', { name: a.caption || a.orig_name || tr('image') }), { danger: true, okLabel: tr('Delete') })) return;
         await API.call('att.delete', { id: a.id });
-        state.items = state.items.filter(x => x.id !== a.id); render(); toast('Obrázek smazán');
+        state.items = state.items.filter(x => x.id !== a.id); render(); toast(tr('Image deleted'));
       } },
     ]);
   }
 
-  Views.register('gallery', { title: 'Galerie', short: 'Galerie', icon: 'images', order: 50, mount, unmount });
+  Views.register('gallery', { title: tr('Gallery'), short: tr('Gallery'), icon: 'images', order: 50, mount, unmount });
 })();

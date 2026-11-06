@@ -27,7 +27,7 @@ URL = os.environ.get("KRONIKA_URL", "http://127.0.0.1:8790")
 
 def _backend_up():
     try:
-        with urllib.request.urlopen(URL + "/kronika/api/me", timeout=3) as r:
+        with urllib.request.urlopen(URL + "/kosmas/api/me", timeout=3) as r:
             return r.status == 200
     except Exception:
         return False
@@ -59,7 +59,7 @@ class SyncTest(unittest.TestCase):
     # ---- pomocníci
     def web(self, method, path, body=None):
         """Volání API jako uživatel v prohlížeči (X-Dev-User + Origin)."""
-        req = urllib.request.Request(URL + "/kronika/api" + path, method=method,
+        req = urllib.request.Request(URL + "/kosmas/api" + path, method=method,
                                      data=json.dumps(body).encode() if body is not None else None,
                                      headers={"X-Dev-User": json.dumps(self.user), "Origin": URL,
                                               "Content-Type": "application/json"})
@@ -137,7 +137,7 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(ch["data"]["player_id"], recs[f"players:{self.pl}"]["id"])
         ev = recs[f"events:{self.ev}"]
         self.assertEqual(sorted(ev["data"]["tags"]), ["bitva", "skalice"])
-        self.assertIn(f"/kronika/img/{img['data']['key']}", ev["data"]["body_html"])
+        self.assertIn(f"/kosmas/img/{img['data']['key']}", ev["data"]["body_html"])
         self.assertEqual(img["data"]["owner_id"], ch["id"])
         links = {l["src"]: l for l in self.data()["links"] if l["src"]}
         self.assertIn(f"faction_members:{self.fa}:{self.c1}", links)
@@ -251,7 +251,7 @@ class SyncTest(unittest.TestCase):
         self.assertEqual((res["conflicts"], res["sent"], res["received"]), (0, 0, 0), res)
 
     def upload_web(self, owner_id, png):
-        req = urllib.request.Request(f"{URL}/kronika/api/upload?owner_type=character&owner_id={owner_id}&name=web.png&caption=Z+webu",
+        req = urllib.request.Request(f"{URL}/kosmas/api/upload?owner_type=character&owner_id={owner_id}&name=web.png&caption=Z+webu",
                                      method="POST", data=Path(png).read_bytes(),
                                      headers={"X-Dev-User": json.dumps(self.user), "Origin": URL, "Content-Type": "image/png"})
         with urllib.request.urlopen(req, timeout=30) as r:
@@ -324,7 +324,7 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(res["conflicts"], 0, res)
         self.assertEqual(res["created_local"], 0, res)
         recs = self.by_src()
-        self.assertIn("/kronika/img/", recs[f"events:{self.ev}"]["data"]["body_html"])
+        self.assertIn("/kosmas/img/", recs[f"events:{self.ev}"]["data"]["body_html"])
         self.assertEqual(len([r for r in self.data()["records"] if r["type"] == "character"]), 2)
         self.assertGreater(len(self.data()["records"]), n)
 
@@ -467,7 +467,7 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(c["portrait_id"], bad_att)
         self.assertIn(f'data-att="{bad_att}"', c["body_html"])
         self.assertIn("Hans z webu", c["body_html"])
-        self.assertTrue(any("stáhnout" in w for w in res["warnings"]), res)
+        self.assertTrue(any("stáhnout" in w or "could not be downloaded" in w for w in res["warnings"]), res)  # cs or en UI
 
     def test_whitelist_and_account_key(self):
         self.seed()
@@ -480,7 +480,7 @@ class SyncTest(unittest.TestCase):
         # stará podoba klíče účtu (adresa|id) ani jiná adresa mapu nesmaže
         s = sync.Syncer(self.db_path, self.settings, self.att_dir)
         uid = s.state("account")
-        s.set_state("account", f"https://www.example.com/kronika/api|{uid}")
+        s.set_state("account", f"https://www.example.com/kosmas/api|{uid}")
         s.close()
         res = self.run_sync()
         self.assertEqual((res["sent"], res["created_remote"]), (0, 0), res)

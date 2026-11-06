@@ -25,10 +25,10 @@ document.head.appendChild(h('style', `
 .snap-choice small { color: var(--text-3); font-size: 11.5px; text-align: center; }
 `));
 
-const RATIOS = [['4:5', 4 / 5], ['1:1', 1], ['16:9', 16 / 9], ['volně', null]];
+const RATIOS = [['4:5', 4 / 5], ['1:1', 1], ['16:9', 16 / 9], [tr('freeform'), null]];
 
 /** Crop an image (data URL). Resolves to a JPEG data URL or null. */
-function cropDialog(src, { title = 'Vyříznout výřez', ratio = 4 / 5, okLabel = 'Použít výřez' } = {}) {
+function cropDialog(src, { title = tr('Crop'), ratio = 4 / 5, okLabel = tr('Use crop') } = {}) {
   return new Promise(resolve => {
     let done = false, ar = ratio;
     const img = h('img', { src, draggable: 'false' });
@@ -102,14 +102,14 @@ function cropDialog(src, { title = 'Vyříznout výřez', ratio = 4 / 5, okLabel
     modal({
       title, icon: 'crop', xwide: true,
       body: h('.row', { style: { alignItems: 'flex-start', gap: '18px' } }, wrap,
-        h('.col', { style: { gap: '10px', minWidth: '150px' } }, h('.small.muted', 'Poměr stran'), seg,
-          h('.small.muted', { style: { marginTop: '6px' } }, 'Náhled'), prev,
-          h('.tiny.faint', 'Táhni rámeček, rohy mění velikost, kolečko myši zvětšuje.'))),
+        h('.col', { style: { gap: '10px', minWidth: '150px' } }, h('.small.muted', tr('Aspect ratio')), seg,
+          h('.small.muted', { style: { marginTop: '6px' } }, tr('Preview')), prev,
+          h('.tiny.faint', tr('Drag the frame; the corners resize it, the mouse wheel zooms.')))),
       onClose: () => {
         document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp);
         if (!done) resolve(null);
       },
-      actions: [{ label: 'Zrušit' }, { label: okLabel, primary: true, icon: 'check', onClick: finish }],
+      actions: [{ label: tr('Cancel') }, { label: okLabel, primary: true, icon: 'check', onClick: finish }],
     });
   });
 }
@@ -117,18 +117,18 @@ function cropDialog(src, { title = 'Vyříznout výřez', ratio = 4 / 5, okLabel
 /** Save a cropped frame as a character's portrait. charId optional (asks). */
 async function portraitFromGrab(grab, charId = null) {
   if (!charId) {
-    const ids = await pickCharacters([], { title: 'Čí je to portrét?', multi: false });
+    const ids = await pickCharacters([], { title: tr('Whose portrait is this?'), multi: false });
     if (!ids || !ids.length) return false;
     charId = ids[0];
   }
-  const data = await cropDialog(grab.data, { title: 'Vyříznout portrét postavy', ratio: 4 / 5, okLabel: 'Nastavit jako portrét' });
+  const data = await cropDialog(grab.data, { title: tr('Crop character portrait'), ratio: 4 / 5, okLabel: tr('Set as portrait') });
   if (!data) return false;
   const att = await API.call('att.add_data', { owner_type: 'character', owner_id: charId, name: 'portret.jpg', data_b64: data,
     taken_at: grab.moment, caption: grab.caption, media_id: grab.media_id, media_offset: grab.pos });
   await API.call('char.portrait', { id: charId, att_id: att.id });
   await App.loadChars();
   const c = App.charsById.get(charId);
-  toast(`Portrét nastaven${c ? ': ' + c.name : ''}`, 'ok', { label: 'Otevřít', fn: () => App.go('characters', { id: charId }) });
+  toast(c ? tr('Portrait set: {name}', { name: c.name }) : tr('Portrait set'), 'ok', { label: tr('Open'), fn: () => App.go('characters', { id: charId }) });
   return true;
 }
 
@@ -142,22 +142,22 @@ async function snapshotFlow() {
   if (!grab) return;
   const choose = what => { m.close(); run(what); };
   const m = modal({
-    title: 'Snímek z videa', icon: 'camera', wide: true,
+    title: tr('Screenshot from video'), icon: 'camera', wide: true,
     body: h('div', h('img', { src: grab.data, style: { width: '100%', borderRadius: '10px', marginBottom: '12px', display: 'block' } }),
       h('.snap-choice',
-        h('button', { onclick: () => choose('event') }, icon('calendar-range'), 'Do události', h('small', 'celý snímek jako příloha')),
-        h('button', { onclick: () => choose('crop-event') }, icon('crop'), 'Výřez do události', h('small', 'vyřízni jen část')),
-        h('button', { onclick: () => choose('portrait') }, icon('user-round'), 'Portrét postavy', h('small', 'vyřízni obličej / postavu')))),
+        h('button', { onclick: () => choose('event') }, icon('calendar-range'), tr('To an event'), h('small', tr('whole screenshot as an attachment'))),
+        h('button', { onclick: () => choose('crop-event') }, icon('crop'), tr('Crop to an event'), h('small', tr('crop just a part'))),
+        h('button', { onclick: () => choose('portrait') }, icon('user-round'), tr('Character portrait'), h('small', tr('crop the face / character'))))),
   });
   async function run(what) {
     if (what === 'portrait') return portraitFromGrab(grab);
     let data = grab.data;
     if (what === 'crop-event') { data = await cropDialog(grab.data, { ratio: null }); if (!data) return; }
-    const r = await pickEvent({ title: 'Uložit snímek do události', moment: grab.moment, withNote: false });
+    const r = await pickEvent({ title: tr('Save screenshot to event'), moment: grab.moment, withNote: false });
     if (!r) return;
     await API.call('att.add_data', { owner_type: 'event', owner_id: r.id, name: 'snimek.jpg', data_b64: data,
       taken_at: grab.moment, caption: grab.caption, media_id: grab.media_id, media_offset: grab.pos });
-    toast('Snímek uložen do události', 'ok', { label: 'Otevřít', fn: () => App.go('events', { id: r.id, tab: 'files' }) });
+    toast(tr('Screenshot saved to the event'), 'ok', { label: tr('Open'), fn: () => App.go('events', { id: r.id, tab: 'files' }) });
     App.loadEvents();
   }
 }

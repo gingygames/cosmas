@@ -8,6 +8,8 @@ import re
 import sqlite3
 import time
 
+from .i18n import tr
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS media (
     id INTEGER PRIMARY KEY,
@@ -365,13 +367,24 @@ class Media(dict):
         return self["title"] or self["medal_title"] or self.default_title
 
     @property
+    def sync_title(self):
+        """Title sent to the web: the untranslated (Czech) default, so the synced data doesn't depend on the UI language."""
+        return self["title"] or self["medal_title"] or self._default_title(translate=False)
+
+    @property
     def default_title(self):
+        return self._default_title()
+
+    def _default_title(self, translate=True):
         import datetime as dt
         if self["start_time"]:
             stamp = dt.datetime.fromtimestamp(self["start_time"]).strftime("%d.%m.%Y %H:%M")
         else:
             stamp = ""
-        label = {"session": "Záznam", "manual": "Nahrávka"}.get(self.effective_kind, "Klip")
+        if translate:
+            label = {"session": tr("Recording"), "manual": tr("Manual recording")}.get(self.effective_kind, tr("Clip"))
+        else:
+            label = {"session": "Záznam", "manual": "Nahrávka"}.get(self.effective_kind, "Klip")
         return f"{label} {stamp}".strip()
 
     @property

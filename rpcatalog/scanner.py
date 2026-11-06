@@ -8,6 +8,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
 from . import config
+from .i18n import tr
 from .medal_db import read_medal
 
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm"}
@@ -200,7 +201,7 @@ def scan(store, settings, progress=None):
             for n, (r, t) in enumerate(zip(todo, ex.map(lambda r: make_thumb(r["path"], r["duration"]), todo))):
                 r["thumb"] = t
                 if progress:
-                    progress(f"Náhledy {n + 1}/{len(todo)}")
+                    progress(tr("Thumbnails {n}/{total}", n=n + 1, total=len(todo)))
 
     keep_override = {r["id"]: r for r in store.db.execute("SELECT id, path, kind_override, game FROM media")}
     by_path = {r["path"]: r for r in keep_override.values()}

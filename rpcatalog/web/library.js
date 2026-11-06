@@ -98,10 +98,10 @@ const CSS = `
 document.head.appendChild(h('style', CSS));
 
 const SORTS = {
-  new: { label: 'Nejnovější', fn: (a, b) => (b.start || 0) - (a.start || 0) },
-  old: { label: 'Nejstarší', fn: (a, b) => (a.start || 0) - (b.start || 0) },
-  long: { label: 'Nejdelší', fn: (a, b) => (b.duration || 0) - (a.duration || 0) },
-  name: { label: 'Název', fn: (a, b) => a.name.localeCompare(b.name, 'cs') },
+  new: { label: tr('Newest'), fn: (a, b) => (b.start || 0) - (a.start || 0) },
+  old: { label: tr('Oldest'), fn: (a, b) => (a.start || 0) - (b.start || 0) },
+  long: { label: tr('Longest'), fn: (a, b) => (b.duration || 0) - (a.duration || 0) },
+  name: { label: tr('Name'), fn: (a, b) => a.name.localeCompare(b.name, I18N.locale) },
 };
 
 let S = null;  // view state
@@ -161,7 +161,7 @@ async function transcribe(ms, opts) {
   if (!await AISetup.ensure()) return;
   await API.call('analysis.start', { ids: ms.map(m => m.id), speech: true, ...opts });
   TR.refreshQueue();
-  toast(ms.length > 1 ? `${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')} ve frontě na přepis` : 'Přepis spuštěn – průběh je v panelu videa');
+  toast(ms.length > 1 ? trn(ms.length, '{n} video queued for transcription', '{n} videos queued for transcription') : tr('Transcription started – progress is shown in the video panel'));
 }
 
 /** Library search also looks into what was said (and seen) in transcribed videos. */
@@ -180,7 +180,7 @@ async function searchTranscripts() {
 function trHit(m) {
   const x = S.q.trim() && S.trHits && S.trHits.get(m.id);
   if (!x) return null;
-  return h('.tr-hit', { title: 'Přehrát od tohoto místa', onclick: e => { e.stopPropagation(); play(m, Math.max(0, x.t - 1)); } },
+  return h('.tr-hit', { title: tr('Play from here'), onclick: e => { e.stopPropagation(); play(m, Math.max(0, x.t - 1)); } },
     h('span.kbd', fmt.clock(x.t)), h('span.ellipsis', `${x.speaker}: `, x.snippet.split(/[[\]]/).map((p, i) => i % 2 ? h('mark', p) : p)));
 }
 
@@ -197,22 +197,22 @@ function renderSide(side) {
     return el;
   };
   const all = App.media.filter(m => inScope(m, 'media'));
-  side.appendChild(it('Vše', 'library', { type: 'all' }, all.length));
-  side.appendChild(it('Bez události', 'inbox', { type: 'unlinked' }, all.filter(m => !m.linked).length));
-  side.appendChild(it('Oblíbené', 'star', { type: 'fav' }, all.filter(m => m.favorite).length));
+  side.appendChild(it(tr('All'), 'library', { type: 'all' }, all.length));
+  side.appendChild(it(tr('Not in an event'), 'inbox', { type: 'unlinked' }, all.filter(m => !m.linked).length));
+  side.appendChild(it(tr('Favorites'), 'star', { type: 'fav' }, all.filter(m => m.favorite).length));
 
-  side.appendChild(h('.grp', 'Alba', h('button.btn.ghost.sm.icon', { title: 'Nové album', onclick: newAlbum }, icon('plus'))));
-  if (!App.albums.length) side.appendChild(h('.it.faint', { style: { cursor: 'default' } }, icon('folder-plus'), h('span.small', 'Zatím žádná alba')));
+  side.appendChild(h('.grp', tr('Albums'), h('button.btn.ghost.sm.icon', { title: tr('New album'), onclick: newAlbum }, icon('plus'))));
+  if (!App.albums.length) side.appendChild(h('.it.faint', { style: { cursor: 'default' } }, icon('folder-plus'), h('span.small', tr('No albums yet'))));
   App.albums.forEach(a => side.appendChild(it(a.name, 'folder', { type: 'album', id: a.id }, a.n, {
-    drop: ids => API.call('media.bulk', { ids, op: 'album_add', value: a.id }).then(() => { toast(`Přidáno do alba ${a.name}`); App.refresh('media', 'meta'); }),
+    drop: ids => API.call('media.bulk', { ids, op: 'album_add', value: a.id }).then(() => { toast(tr('Added to album {name}', { name: a.name })); App.refresh('media', 'meta'); }),
     menu: e => menu(e, [
-      { label: 'Přejmenovat', icon: 'pencil', onClick: async () => { const n = await promptDialog('Přejmenovat album', 'Název', a.name); if (n) { await API.call('album.rename', { id: a.id, name: n }); App.refresh('meta'); } } },
-      { label: 'Smazat album', icon: 'trash-2', danger: true, onClick: async () => { if (await confirmDialog('Smazat album', `Smazat album „${a.name}“? Videa zůstanou.`, { danger: true, okLabel: 'Smazat' })) { await API.call('album.delete', { id: a.id }); S.filter = { type: 'all' }; App.refresh('meta'); } } },
+      { label: tr('Rename'), icon: 'pencil', onClick: async () => { const n = await promptDialog(tr('Rename album'), tr('Name'), a.name); if (n) { await API.call('album.rename', { id: a.id, name: n }); App.refresh('meta'); } } },
+      { label: tr('Delete album'), icon: 'trash-2', danger: true, onClick: async () => { if (await confirmDialog(tr('Delete album'), tr('Delete album “{name}”? The videos will stay.', { name: a.name }), { danger: true, okLabel: tr('Delete') })) { await API.call('album.delete', { id: a.id }); S.filter = { type: 'all' }; App.refresh('meta'); } } },
     ]),
   })));
 
   if (App.chars.length) {
-    side.appendChild(h('.grp', 'Postavy'));
+    side.appendChild(h('.grp', tr('Characters')));
     const counts = new Map();
     all.forEach(m => (m.chars || []).forEach(id => counts.set(id, (counts.get(id) || 0) + 1)));
     App.chars.filter(c => counts.get(c.id)).forEach(c => {
@@ -223,7 +223,7 @@ function renderSide(side) {
   }
 
   if (App.tags.length) {
-    side.appendChild(h('.grp', 'Štítky'));
+    side.appendChild(h('.grp', tr('Tags')));
     App.tags.forEach(([t, n]) => side.appendChild(it('#' + t, null, { type: 'tag', tag: t }, n)));
   }
 }
@@ -252,10 +252,10 @@ async function loadAlbum() {
 }
 
 async function newAlbum(ids) {
-  const name = await promptDialog('Nové album', 'Název alba', '', { placeholder: 'např. Nejlepší momenty' });
+  const name = await promptDialog(tr('New album'), tr('Album name'), '', { placeholder: tr('e.g. Best moments') });
   if (!name) return;
   await API.call('album.create', { name, ids: Array.isArray(ids) ? ids : null });
-  toast(`Album „${name}“ vytvořeno`);
+  toast(tr('Album “{name}” created', { name }));
   App.refresh('meta', 'media');
 }
 
@@ -282,13 +282,13 @@ function renderHero() {
       h('.grow',
         h('h2', f.game),
         h('.stats',
-          stat('Nahráno', fmt.durHuman(total)),
-          stat('Celé záznamy', String(sess.length)),
-          stat('Klipy', String(list.length - sess.length)),
-          stat('Naposledy', latest && latest.start ? fmt.rel(latest.start) : '—'))),
-      latest ? h('button.btn.play', { onclick: () => play(latest) }, icon('play'), 'Přehrát poslední') : null,
-      h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), 'Navrhnout události'),
-      h('button.btn.icon', { title: 'Ikona a banner hry', onclick: () => gameArtDialog(f.game) }, icon('image'))));
+          stat(tr('Recorded'), fmt.durHuman(total)),
+          stat(tr('Full recordings'), String(sess.length)),
+          stat(tr('Clips'), String(list.length - sess.length)),
+          stat(tr('Latest'), latest && latest.start ? fmt.rel(latest.start) : '—'))),
+      latest ? h('button.btn.play', { onclick: () => play(latest) }, icon('play'), tr('Play latest')) : null,
+      h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), tr('Suggest events')),
+      h('button.btn.icon', { title: tr('Game icon and banner'), onclick: () => gameArtDialog(f.game) }, icon('image'))));
   void nEv;
 }
 
@@ -315,11 +315,11 @@ function card(m) {
   },
   h('.th', { 'data-rmid': m.id }, m.thumb ? h('img', { src: m.thumb, loading: 'lazy', draggable: 'false' }) : h('.empty', { style: { padding: '30px' } }, icon('film')),
     h('span.badge.' + m.type, KIND[m.type]?.label),
-    h('.flags', m.favorite ? h('span', { title: 'Oblíbené' }, icon('star')) : null,
-      m.linked ? h('span', { title: 'Je v události' }, icon('link')) : null,
-      m.sidecars ? h('span', { title: 'Samostatné zvukové stopy' }, icon('audio-lines')) : null,
-      m.tr && m.tr.speech ? h('span.tr-flag', { title: 'Má přepis řeči' }, icon('captions')) : null,
-      m.tr && m.tr.vision ? h('span.tr-flag.vis', { title: 'Má popis obrazu' }, icon('scan-eye')) : null),
+    h('.flags', m.favorite ? h('span', { title: tr('Favorites') }, icon('star')) : null,
+      m.linked ? h('span', { title: tr('In an event') }, icon('link')) : null,
+      m.sidecars ? h('span', { title: tr('Separate audio tracks') }, icon('audio-lines')) : null,
+      m.tr && m.tr.speech ? h('span.tr-flag', { title: tr('Has a speech transcript') }, icon('captions')) : null,
+      m.tr && m.tr.vision ? h('span.tr-flag.vis', { title: tr('Has picture descriptions') }, icon('scan-eye')) : null),
     h('span.dur', fmt.dur(m.duration)),
     m.duration ? h('.bm', (m.bookmarks || []).filter(b => b.source !== 'auto' || b.event_id).map(b => h('b', {
       style: { left: (b.t / m.duration * 100) + '%', width: b.t_end ? Math.max(0.6, (b.t_end - b.t) / m.duration * 100) + '%' : null, background: b.color || null },
@@ -342,8 +342,8 @@ function renderGrid() {
   clear(grid);
   grid.style.setProperty('--card-w', S.size + 'px');
   if (!items.length) {
-    grid.appendChild(h('div', { style: { gridColumn: '1/-1' } }, emptyState('search-x', 'Nic tu není',
-      S.q ? 'Zkus jiné hledání nebo zapni další typy záznamů.' : 'V tomto filtru zatím nejsou žádná videa.')));
+    grid.appendChild(h('div', { style: { gridColumn: '1/-1' } }, emptyState('search-x', tr('Nothing here'),
+      S.q ? tr('Try a different search or turn on more recording types.') : tr('No videos in this filter yet.'))));
   }
   let lastDay = null;
   const dayTotals = {};
@@ -355,18 +355,18 @@ function renderGrid() {
       if (k !== lastDay) {
         lastDay = k;
         const n = items.filter(x => x.start && new Date(x.start * 1000).toDateString() === k).length;
-        frag.appendChild(h('.lib-day', h('h3', m.start ? fmt.dateLong(m.start) : 'Bez data'),
-          h('span.faint', `${n} ${fmt.plural(n, 'video', 'videa', 'videí')} · ${fmt.durHuman(dayTotals[k])}`), h('.line')));
+        frag.appendChild(h('.lib-day', h('h3', m.start ? fmt.dateLong(m.start) : tr('No date')),
+          h('span.faint', `${trn(n, '{n} video', '{n} videos')} · ${fmt.durHuman(dayTotals[k])}`), h('.line')));
       }
     }
     frag.appendChild(card(m));
   }
   grid.appendChild(frag);
   const total = items.reduce((s, m) => s + (m.duration || 0), 0);
-  countEl.textContent = `${items.length} ${fmt.plural(items.length, 'video', 'videa', 'videí')} · ${fmt.durHuman(total)}`;
+  countEl.textContent = `${trn(items.length, '{n} video', '{n} videos')} · ${fmt.durHuman(total)}`;
   const svx = App.scope.server && App.serversById.get(App.scope.server);
-  Shell.header({ icon: App.scope.game ? 'gamepad-2' : 'clapperboard', title: App.scope.game ? (svx ? `${App.scope.game} · ${svx.name}` : App.scope.game) : 'knihovna', topic: countEl.textContent,
-    actions: [h('button.tb-btn', { title: 'Načíst nové záznamy (F5)', onclick: () => { API.call('rescan'); toast('Hledám nové záznamy…'); } }, icon('refresh-cw'))] });
+  Shell.header({ icon: App.scope.game ? 'gamepad-2' : 'clapperboard', title: App.scope.game ? (svx ? `${App.scope.game} · ${svx.name}` : App.scope.game) : tr('library'), topic: countEl.textContent,
+    actions: [h('button.tb-btn', { title: tr('Load new recordings (F5)'), onclick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } }, icon('refresh-cw'))] });
   renderBulk();
 }
 
@@ -398,7 +398,7 @@ async function linkToEvent(ms) {
   const r = await pickEvent({ moment: times.length ? Math.min(...times) : null });
   if (!r) return;
   const n = await API.call('link.add', { event_id: r.id, media_ids: ms.map(m => m.id), note: r.note });
-  toast(`Připojeno k události (${n})`, 'ok', { label: 'Otevřít', fn: () => App.go('events', { id: r.id }) });
+  toast(tr('Linked to event ({n})', { n }), 'ok', { label: tr('Open'), fn: () => App.go('events', { id: r.id }) });
   App.refresh('media', 'events');
 }
 async function eventFromSelection(ms) {
@@ -406,21 +406,21 @@ async function eventFromSelection(ms) {
   const start = times.length ? Math.min(...times) : null;
   const end = ms.length ? Math.max(...ms.map(m => m.end || m.start || 0)) : null;
   const def = ms.length === 1 ? ms[0].name : `${ms[0].game} – ${start ? fmt.date(start) : ''}`;
-  const title = await promptDialog('Nová událost', `Název události (${ms.length} ${fmt.plural(ms.length, 'záznam se připojí', 'záznamy se připojí', 'záznamů se připojí')})`, def);
+  const title = await promptDialog(tr('New event'), trn(ms.length, 'Event name ({n} recording will be linked)', 'Event name ({n} recordings will be linked)'), def);
   if (!title) return;
   const id = await API.call('event.create', { title, start, end, media_ids: ms.map(m => m.id) });
   await App.refresh('media', 'events');
   App.go('events', { id });
 }
 async function addTags(ms) {
-  const t = await promptDialog('Přidat štítky', `Štítky pro ${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')}`, '', { placeholder: '#únos #policie' });
+  const t = await promptDialog(tr('Add tags'), trn(ms.length, 'Tags for {n} video', 'Tags for {n} videos'), '', { placeholder: tr('#kidnapping #police') });
   if (!t) return;
   const tags = t.split(/[\s,]+/).map(x => x.replace(/^#/, '')).filter(Boolean);
   await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'add_tags', value: tags });
   App.refresh('media', 'meta');
 }
 async function addChars(ms) {
-  const ids = await pickCharacters([], { title: 'Kdo je ve videu?' });
+  const ids = await pickCharacters([], { title: tr('Who is in the video?') });
   if (!ids || !ids.length) return;
   for (const c of ids) await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'char_add', value: c });
   App.refresh('media', 'chars');
@@ -429,15 +429,15 @@ async function deleteMedia(ms) {
   const size = ms.reduce((s, m) => s + (m.size || 0), 0);
   const names = ms.slice(0, 6).map(m => '• ' + m.name).join('\n') + (ms.length > 6 ? '\n…' : '');
   const linked = ms.filter(m => m.linked).length;
-  const ok = await confirmDialog('Smazat do koše',
-    `Přesunout ${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')} (${fmt.size(size)}) do Koše?\n\n${names}` +
-    (linked ? `\n\n${linked} z nich ${fmt.plural(linked, 'je', 'jsou', 'je')} v událostech – odkazy zmizí.` : '') +
-    '\n\nMedal je pak ve své knihovně uvidí jako chybějící.', { danger: true, okLabel: 'Přesunout do koše' });
+  const ok = await confirmDialog(tr('Delete to Recycle Bin'),
+    trn(ms.length, 'Move {n} video ({size}) to the Recycle Bin?', 'Move {n} videos ({size}) to the Recycle Bin?', { size: fmt.size(size) }) + `\n\n${names}` +
+    (linked ? '\n\n' + trn(linked, '{n} of them is in events – the links will disappear.', '{n} of them are in events – the links will disappear.') : '') +
+    '\n\n' + tr('Medal will then show them as missing in its library.'), { danger: true, okLabel: tr('Move to Recycle Bin') });
   if (!ok) return;
   const r = await API.call('media.delete', { ids: ms.map(m => m.id) });
   S.sel.clear();
-  if (r.failed.length) toast('Některá videa se nepodařilo smazat: ' + r.failed.join(', '), 'err');
-  else toast(`Přesunuto do koše: ${ms.length}`);
+  if (r.failed.length) toast(tr('Some videos could not be deleted: {list}', { list: r.failed.join(', ') }), 'err');
+  else toast(tr('Moved to the Recycle Bin: {n}', { n: ms.length }));
   App.refresh('media', 'events', 'meta');
 }
 
@@ -446,39 +446,39 @@ function cardMenu(e) {
   const one = ms.length === 1 ? ms[0] : null;
   const fav = ms.every(m => m.favorite);
   menu(e, [
-    one ? { label: 'Přehrát', icon: 'play', onClick: () => play(one) } : null,
-    one ? { label: 'Přehrát ve vlastním okně', icon: 'picture-in-picture-2', onClick: () => API.call('media.play', { id: one.id, popout: true }) } : null,
+    one ? { label: tr('Play'), icon: 'play', onClick: () => play(one) } : null,
+    one ? { label: tr('Play in a separate window'), icon: 'picture-in-picture-2', onClick: () => API.call('media.play', { id: one.id, popout: true }) } : null,
     { sep: true },
-    { label: 'Připojit k události…', icon: 'link', onClick: () => linkToEvent(ms) },
-    { label: 'Nová událost z výběru', icon: 'calendar-plus', onClick: () => eventFromSelection(ms) },
-    { label: 'Označit postavy…', icon: 'users', onClick: () => addChars(ms) },
-    { label: 'Přidat štítky…', icon: 'tag', onClick: () => addTags(ms) },
-    { label: 'Přepis', icon: 'captions', submenu: [
-      { label: 'Přepsat řeč', icon: 'audio-lines', onClick: () => transcribe(ms, { chapters: false }) },
-      { label: 'Řeč + Kronikář AI', icon: 'sparkles', onClick: () => transcribe(ms, { chapters: true }) },
-      { label: 'Řeč + obraz v rozhovorech + Kronikář AI', icon: 'wand-sparkles', onClick: () => transcribe(ms, { vision: true, chapters: true }) },
+    { label: tr('Link to event…'), icon: 'link', onClick: () => linkToEvent(ms) },
+    { label: tr('New event from selection'), icon: 'calendar-plus', onClick: () => eventFromSelection(ms) },
+    { label: tr('Tag characters…'), icon: 'users', onClick: () => addChars(ms) },
+    { label: tr('Add tags…'), icon: 'tag', onClick: () => addTags(ms) },
+    { label: tr('Transcript'), icon: 'captions', submenu: [
+      { label: tr('Transcribe speech'), icon: 'audio-lines', onClick: () => transcribe(ms, { chapters: false }) },
+      { label: tr('Speech + Kosmas AI'), icon: 'sparkles', onClick: () => transcribe(ms, { chapters: true }) },
+      { label: tr('Speech + picture in conversations + Kosmas AI'), icon: 'wand-sparkles', onClick: () => transcribe(ms, { vision: true, chapters: true }) },
       { sep: true },
-      { label: 'Fronta přepisů', icon: 'list-ordered', onClick: () => App.go('transcripts') },
+      { label: tr('Transcription queue'), icon: 'list-ordered', onClick: () => App.go('transcripts') },
     ] },
-    { label: 'Přidat do alba', icon: 'folder-plus', submenu: [
-      ...App.albums.map(a => ({ label: a.name, icon: 'folder', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_add', value: a.id }); toast(`Přidáno do „${a.name}“`); App.refresh('meta'); } })),
+    { label: tr('Add to album'), icon: 'folder-plus', submenu: [
+      ...App.albums.map(a => ({ label: a.name, icon: 'folder', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_add', value: a.id }); toast(tr('Added to “{name}”', { name: a.name })); App.refresh('meta'); } })),
       App.albums.length ? { sep: true } : null,
-      { label: 'Nové album…', icon: 'plus', onClick: () => newAlbum(ms.map(m => m.id)) },
+      { label: tr('New album…'), icon: 'plus', onClick: () => newAlbum(ms.map(m => m.id)) },
     ] },
-    S.filter.type === 'album' ? { label: 'Odebrat z alba', icon: 'folder-minus', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_remove', value: S.filter.id }); await loadAlbum(); App.refresh('meta'); } } : null,
-    { label: 'Změnit typ', icon: 'shapes', submenu: [
-      { label: 'Automaticky', onClick: () => bulk_('kind', null) },
+    S.filter.type === 'album' ? { label: tr('Remove from album'), icon: 'folder-minus', onClick: async () => { await API.call('media.bulk', { ids: ms.map(m => m.id), op: 'album_remove', value: S.filter.id }); await loadAlbum(); App.refresh('meta'); } } : null,
+    { label: tr('Change type'), icon: 'shapes', submenu: [
+      { label: tr('Automatic'), onClick: () => bulk_('kind', null) },
       ...Object.entries(KIND).map(([k, v]) => ({ label: v.label, icon: v.icon, onClick: () => bulk_('kind', k) })),
     ] },
-    { label: fav ? 'Odebrat z oblíbených' : 'Přidat do oblíbených', icon: 'star', onClick: () => bulk_('favorite', !fav) },
+    { label: fav ? tr('Remove from favorites') : tr('Add to favorites'), icon: 'star', onClick: () => bulk_('favorite', !fav) },
     { sep: true },
-    one ? { label: 'Upravit informace…', icon: 'pencil', onClick: () => editMediaDialog(one) } : null,
+    one ? { label: tr('Edit info…'), icon: 'pencil', onClick: () => editMediaDialog(one) } : null,
     { label: 'Server', icon: 'server', submenu: [
       ...App.servers.filter(s => ms.every(m => m.game === s.game)).map(s => ({ label: s.name, onClick: async () => { await API.call('server.assign', { type: 'media', ids: ms.map(m => m.id), server_id: s.id }); App.refresh('media'); } })),
-      { label: 'Bez serveru', onClick: async () => { await API.call('server.assign', { type: 'media', ids: ms.map(m => m.id), server_id: null }); App.refresh('media'); } },
+      { label: tr('No server'), onClick: async () => { await API.call('server.assign', { type: 'media', ids: ms.map(m => m.id), server_id: null }); App.refresh('media'); } },
     ] },
-    one ? { label: 'Zobrazit ve složce', icon: 'folder-open', onClick: () => API.call('media.reveal', { id: one.id }) } : null,
-    { label: 'Smazat do koše…', icon: 'trash-2', danger: true, onClick: () => deleteMedia(ms) },
+    one ? { label: tr('Show in folder'), icon: 'folder-open', onClick: () => API.call('media.reveal', { id: one.id }) } : null,
+    { label: tr('Delete to Recycle Bin…'), icon: 'trash-2', danger: true, onClick: () => deleteMedia(ms) },
   ]);
   async function bulk_(op, value) { await API.call('media.bulk', { ids: ms.map(m => m.id), op, value }); App.refresh('media'); }
 }
@@ -490,13 +490,13 @@ function renderBulk() {
   if (n < 2) return;
   const ms = selected();
   clear(bulk).append(
-    h('b', `${n} vybráno`), h('span.faint.small', fmt.durHuman(ms.reduce((s, m) => s + (m.duration || 0), 0))), h('.vsep'),
-    h('button.btn.sm', { onclick: () => linkToEvent(ms) }, icon('link'), 'K události'),
-    h('button.btn.sm', { onclick: () => eventFromSelection(ms) }, icon('calendar-plus'), 'Nová událost'),
-    h('button.btn.sm', { onclick: () => addChars(ms) }, icon('users'), 'Postavy'),
-    h('button.btn.sm', { onclick: () => addTags(ms) }, icon('tag'), 'Štítky'),
+    h('b', tr('{n} selected', { n })), h('span.faint.small', fmt.durHuman(ms.reduce((s, m) => s + (m.duration || 0), 0))), h('.vsep'),
+    h('button.btn.sm', { onclick: () => linkToEvent(ms) }, icon('link'), tr('To event')),
+    h('button.btn.sm', { onclick: () => eventFromSelection(ms) }, icon('calendar-plus'), tr('New event')),
+    h('button.btn.sm', { onclick: () => addChars(ms) }, icon('users'), tr('Characters')),
+    h('button.btn.sm', { onclick: () => addTags(ms) }, icon('tag'), tr('Tags')),
     h('button.btn.sm', { onclick: e => cardMenu(e) }, icon('ellipsis')),
-    h('button.btn.sm.ghost.icon', { title: 'Zrušit výběr', onclick: () => { S.sel.clear(); refreshSel(); } }, icon('x')));
+    h('button.btn.sm.ghost.icon', { title: tr('Clear selection'), onclick: () => { S.sel.clear(); refreshSel(); } }, icon('x')));
 }
 
 /* ---------------- inspector ---------------- */
@@ -523,7 +523,7 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
   };
   const title = h('input.input.bare.title-in', { value: m.title || '', placeholder: m.medal_title || m.name,
     onchange: e => save({ title: e.target.value.trim() || null }), onkeydown: e => { if (e.key === 'Enter') e.target.blur(); } });
-  const desc = h('textarea.input', { rows: 3, placeholder: 'Poznámky, co se stalo, kdo tam byl…', onchange: e => save({ description: e.target.value }) }, m.description || '');
+  const desc = h('textarea.input', { rows: 3, placeholder: tr('Notes, what happened, who was there…'), onchange: e => save({ description: e.target.value }) }, m.description || '');
 
   const gameIn = h('input.input', { value: m.game || '', list: 'lib-games', onchange: e => e.target.value.trim() && save({ game: e.target.value.trim() }) });
   const kindSeg = h('.seg', [['', 'Auto'], ...Object.entries(KIND).map(([k, v]) => [k, v.label])].map(([k, label]) =>
@@ -532,53 +532,53 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
   box.append(
     hero ? h('.hero', { 'data-rmid': m.id, onclick: () => play(m) }, m.thumb ? h('img', { src: m.thumb }) : null, resumeBar(m), h('.pl', h('span', icon('play')))) : null,
     h('.pad.col', { style: { gap: '12px' } },
-      h('.row', title, h('button.btn.ghost.icon' + (m.favorite ? '.active' : ''), { title: 'Oblíbené', onclick: () => save({ favorite: !m.favorite }) }, icon('star'))),
+      h('.row', title, h('button.btn.ghost.icon' + (m.favorite ? '.active' : ''), { title: tr('Favorites'), onclick: () => save({ favorite: !m.favorite }) }, icon('star'))),
       h('.row.small.muted.wrap', h('span.badge.' + m.type, KIND[m.type]?.label), h('span', fmt.range(m.start, m.end)), h('span.faint', '· ' + fmt.dur(m.duration))),
       tagEditor(m.tags, tags => save({ tags })),
       desc,
-      h('.section-title', icon('users'), 'Postavy', h('.line')),
+      h('.section-title', icon('users'), tr('Characters'), h('.line')),
       h('.row.wrap', (m.chars || []).map(id => App.charsById.get(id)).filter(Boolean).map(c =>
         charChip(c, { onRemove: () => save({ chars: m.chars.filter(x => x !== c.id) }) })),
-      h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(m.chars || [], { title: 'Kdo je ve videu?' }); if (ids) save({ chars: ids }); } }, icon('user-plus'), 'Označit')),
-      h('.section-title', icon('calendar-range'), 'Události', h('.line')),
+      h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(m.chars || [], { title: tr('Who is in the video?') }); if (ids) save({ chars: ids }); } }, icon('user-plus'), tr('Tag'))),
+      h('.section-title', icon('calendar-range'), tr('Events'), h('.line')),
       h('.rowlist', m.links.length ? m.links.map(l => h('.list-row', { onclick: () => App.go('events', { id: l.event_id }) },
         h('span.dot', { style: { background: App.eventsById.get(l.event_id)?.color || 'var(--accent)' } }),
         h('.grow.ellipsis', l.event_title), l.offset != null ? h('span.kbd', fmt.clock(l.offset)) : null)) :
-        h('.faint.small', { style: { padding: '2px 8px' } }, 'Zatím v žádné události')),
-      h('.row', h('button.btn.sm', { onclick: () => linkToEvent([m]) }, icon('link'), 'Připojit k události'),
-        h('button.btn.sm.ghost', { onclick: () => eventFromSelection([m]) }, icon('calendar-plus'), 'Nová událost')),
-      h('.section-title', icon('folder'), 'Alba', h('.line')),
+        h('.faint.small', { style: { padding: '2px 8px' } }, tr('Not in any event yet'))),
+      h('.row', h('button.btn.sm', { onclick: () => linkToEvent([m]) }, icon('link'), tr('Link to event')),
+        h('button.btn.sm.ghost', { onclick: () => eventFromSelection([m]) }, icon('calendar-plus'), tr('New event'))),
+      h('.section-title', icon('folder'), tr('Albums'), h('.line')),
       h('.row.wrap', App.albums.map(a => h('span.chip' + (m.albums.includes(a.id) ? '.on' : ''), {
         onclick: async () => { await API.call('media.bulk', { ids: [m.id], op: m.albums.includes(a.id) ? 'album_remove' : 'album_add', value: a.id }); App.refresh('meta'); rerender(); },
-      }, a.name)), h('span.chip', { onclick: () => newAlbum([m.id]) }, icon('plus'), 'Nové')),
-      h('.section-title', icon('bookmark'), `Záložky${m.bm_full.length ? ' · ' + m.bm_full.length : ''}`, h('.line'),
-        h('button.btn.sm.ghost', { title: 'Záložka na aktuálním místě přehrávání (B)', onclick: () => addBookmarkHere(m.id).then(rerender) }, icon('bookmark-plus'), 'Přidat')),
+      }, a.name)), h('span.chip', { onclick: () => newAlbum([m.id]) }, icon('plus'), tr('New'))),
+      h('.section-title', icon('bookmark'), tr('Bookmarks') + (m.bm_full.length ? ' · ' + m.bm_full.length : ''), h('.line'),
+        h('button.btn.sm.ghost', { title: tr('Bookmark at the current playback position (B)'), onclick: () => addBookmarkHere(m.id).then(rerender) }, icon('bookmark-plus'), tr('Add'))),
       m.bm_full.length ? h('div', bmStrip(m, m.bm_full, { onChange: rerender }),
         h('div', m.bm_full.filter(b => b.source !== 'auto' || b.event_id || b.note).map(b => bmRow(b, { onChange: rerender }))),
         m.bm_full.some(b => b.source === 'auto' && !b.event_id && !b.note) ? h('.tiny.faint', { style: { padding: '2px 10px' } },
-          `+ ${m.bm_full.filter(b => b.source === 'auto' && !b.event_id && !b.note).length} automatických herních momentů (šedé čárky)`) : null)
-        : h('.faint.small', { style: { padding: '2px 8px' } }, 'Během přehrávání stiskni B. Shift+B označí začátek a konec úseku.'),
+          trn(m.bm_full.filter(b => b.source === 'auto' && !b.event_id && !b.note).length, '+ {n} automatic game moment (grey ticks)', '+ {n} automatic game moments (grey ticks)')) : null)
+        : h('.faint.small', { style: { padding: '2px 8px' } }, tr('Press B during playback. Shift+B marks the start and end of a section.')),
       window.transcriptSection ? window.transcriptSection(m) : null,
-      h('.section-title', icon('info'), 'Podrobnosti', h('.line')),
+      h('.section-title', icon('info'), tr('Details'), h('.line')),
       h('.kv',
-        h('.k', 'Hra'), gameIn,
+        h('.k', tr('Game')), gameIn,
         h('.k', 'Server'), serverPicker(m.server_id, async id => { await API.call('media.update', { id: m.id, server_id: id }); await App.refresh('media'); rerender(); }, m.game),
-        h('.k', 'YouTube'), h('input.input', { value: m.youtube || '', placeholder: 'odkaz nebo ID videa – kvůli webové kronice',
-          title: 'Na web se posílají jen videa nahraná na YouTube (samotné soubory se nenahrávají)',
+        h('.k', 'YouTube'), h('input.input', { value: m.youtube || '', placeholder: tr('link or video ID – for the web chronicle'),
+          title: tr('Only videos uploaded to YouTube are sent to the web (the files themselves are not uploaded)'),
           onkeydown: e => e.stopPropagation(), onchange: e => save({ youtube: e.target.value.trim() || null }) }),
-        h('.k', 'Typ'), kindSeg,
-        h('.k', 'Velikost'), h('div', fmt.size(m.size)),
-        h('.k', 'Zvuk'), h('div', (m.tracks.length ? m.tracks.map(t => ({ all: 'Vše', game: 'Hra', mic: 'Mikrofon', discord: 'Discord', system: 'Systém' }[t.role] || t.name || 'Stopa')).join(', ') : '—') + (m.sidecars ? ` + ${m.sidecars} samostatné` : '')),
-        h('.k', 'Soubor'), h('.small.faint', { style: { wordBreak: 'break-all' } }, m.path)),
+        h('.k', tr('Type')), kindSeg,
+        h('.k', tr('Size')), h('div', fmt.size(m.size)),
+        h('.k', tr('Audio')), h('div', (m.tracks.length ? m.tracks.map(t => ({ all: tr('All'), game: tr('Game'), mic: tr('Microphone'), discord: 'Discord', system: tr('System') }[t.role] || t.name || tr('Track'))).join(', ') : '—') + (m.sidecars ? ' ' + tr('+ {n} separate', { n: m.sidecars }) : '')),
+        h('.k', tr('File')), h('.small.faint', { style: { wordBreak: 'break-all' } }, m.path)),
       h('datalist', { id: 'lib-games' }, App.games.map(([g]) => h('option', { value: g }))),
       h('.row', { style: { marginTop: '6px' } },
-        h('button.btn', { onclick: () => play(m) }, icon('play'), 'Přehrát'),
-        h('button.btn.ghost', { onclick: () => API.call('media.reveal', { id: m.id }) }, icon('folder-open'), 'Ve složce'),
-        h('button.btn.ghost', { title: 'Náhled videa', onclick: e => menu(e, [
-          { label: 'Aktuální snímek z přehrávače (T)', icon: 'camera', disabled: App.player.media_id !== m.id, onClick: () => API.call('player.action', { act: 'thumb' }) },
-          { label: 'Vybrat obrázek…', icon: 'image-up', onClick: async () => { if (await API.call('media.thumb_pick', { id: m.id })) { await App.refresh('media'); rerender(); } } },
-          m.custom_thumb ? { label: 'Vrátit původní náhled', icon: 'rotate-ccw', onClick: async () => { await API.call('media.thumb_reset', { id: m.id }); await App.refresh('media'); rerender(); } } : null,
-        ]) }, icon('image'), 'Náhled'),
+        h('button.btn', { onclick: () => play(m) }, icon('play'), tr('Play')),
+        h('button.btn.ghost', { onclick: () => API.call('media.reveal', { id: m.id }) }, icon('folder-open'), tr('In folder')),
+        h('button.btn.ghost', { title: tr('Video thumbnail'), onclick: e => menu(e, [
+          { label: tr('Current frame from the player (T)'), icon: 'camera', disabled: App.player.media_id !== m.id, onClick: () => API.call('player.action', { act: 'thumb' }) },
+          { label: tr('Choose image…'), icon: 'image-up', onClick: async () => { if (await API.call('media.thumb_pick', { id: m.id })) { await App.refresh('media'); rerender(); } } },
+          m.custom_thumb ? { label: tr('Restore original thumbnail'), icon: 'rotate-ccw', onClick: async () => { await API.call('media.thumb_reset', { id: m.id }); await App.refresh('media'); rerender(); } } : null,
+        ]) }, icon('image'), tr('Thumbnail')),
         h('.grow'),
         h('button.btn.danger', { onclick: () => deleteMedia([m]) }, icon('trash-2')))));
 }
@@ -588,7 +588,7 @@ window.mediaPanel = mediaPanel;
 
 function editMediaDialog(m) {
   const box = h('.lib-insp.in-modal');
-  modal({ title: 'Informace o videu', icon: 'pencil', wide: true, body: box, onClose: () => App.refresh('media', 'meta') });
+  modal({ title: tr('Video info'), icon: 'pencil', wide: true, body: box, onClose: () => App.refresh('media', 'meta') });
   const rerender = () => mediaPanel(box, m.id, { hero: false, rerender });
   rerender();
 }
@@ -596,7 +596,7 @@ function editMediaDialog(m) {
 function tagEditor(tags, onChange) {
   tags = [...tags];
   const box = h('.tag-input');
-  const inp = h('input', { placeholder: tags.length ? '' : '#štítek, Enter…', list: 'lib-tags' });
+  const inp = h('input', { placeholder: tags.length ? '' : tr('#tag, Enter…'), list: 'lib-tags' });
   const render = () => {
     clear(box);
     tags.forEach(t => box.appendChild(h('span.chip', '#' + t, h('span.x', { onclick: () => { tags = tags.filter(x => x !== t); onChange(tags); render(); } }, icon('x')))));
@@ -629,7 +629,7 @@ function onKey(e) {
 }
 
 Views.register('library', {
-  title: 'Knihovna', short: 'Knihovna', icon: 'clapperboard', order: 10,
+  title: tr('Library'), short: tr('Library'), icon: 'clapperboard', order: 10,
   async mount(r, params) {
     root = r; S = S || state(); S.q = '';
     if (params.select) { S.filter = { type: 'all' }; S.sel = new Set(params.select); }
@@ -638,7 +638,7 @@ Views.register('library', {
     if (params.char) { S.filter = { type: 'char', id: params.char }; S.sel.clear(); }
     side = h('.lib-side');
     Shell.slot().appendChild(side);
-    const search = h('input.input#lib-search', { placeholder: 'Hledat názvy, #štítky, postavy, hry…  (Ctrl+F)', value: S.q,
+    const search = h('input.input#lib-search', { placeholder: tr('Search names, #tags, characters, games…  (Ctrl+F)'), value: S.q,
       oninput: debounce(e => { S.q = e.target.value; searchTranscripts(); }, 150), onkeydown: e => e.stopPropagation() });
     const kindChips = h('.row', Object.entries(KIND).map(([k, v]) => h('span.chip' + (S.kinds.has(k) ? '.on' : ''), {
       onclick: e => { S.kinds.has(k) ? S.kinds.delete(k) : S.kinds.add(k); e.currentTarget.classList.toggle('on'); persist(); renderGrid(); },
@@ -646,15 +646,15 @@ Views.register('library', {
     const sortSel = h('select.input', { style: { width: '140px' }, onchange: e => { S.sort = e.target.value; persist(); renderGrid(); } },
       Object.entries(SORTS).map(([k, v]) => h('option', { value: k, selected: S.sort === k ? 'selected' : null }, v.label)));
     const size = h('input', { type: 'range', min: 170, max: 380, value: S.size, style: { width: '90px', accentColor: 'var(--accent)' },
-      title: 'Velikost karet', oninput: e => { S.size = +e.target.value; grid.style.setProperty('--card-w', S.size + 'px'); persist(); } });
+      title: tr('Card size'), oninput: e => { S.size = +e.target.value; grid.style.setProperty('--card-w', S.size + 'px'); persist(); } });
     countEl = h('span.faint.small');
     heroEl = h('.game-hero.hidden');
     head = h('div',
       h('.toolbar', { style: { paddingTop: '14px' } },
         h('.search', { style: { flex: '1', minWidth: '240px', maxWidth: '520px' } }, icon('search'), search),
         kindChips,
-        h('label.check', h('input', { type: 'checkbox', checked: S.showShort, onchange: e => { S.showShort = e.target.checked; persist(); renderGrid(); } }), 'krátké záznamy'),
-        h('label.check', h('input', { type: 'checkbox', checked: S.group, onchange: e => { S.group = e.target.checked; persist(); renderGrid(); } }), 'po dnech'),
+        h('label.check', h('input', { type: 'checkbox', checked: S.showShort, onchange: e => { S.showShort = e.target.checked; persist(); renderGrid(); } }), tr('short recordings')),
+        h('label.check', h('input', { type: 'checkbox', checked: S.group, onchange: e => { S.group = e.target.checked; persist(); renderGrid(); } }), tr('by day')),
         h('.grow'), icon('layout-grid', 'faint'), size, sortSel));
     grid = h('.lib-grid');
     gridWrap = h('.lib-grid-wrap', { onclick: e => { if (e.target === gridWrap || e.target === grid) { S.sel.clear(); refreshSel(); } } }, grid);

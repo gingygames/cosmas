@@ -195,6 +195,8 @@ function tlPack(items) {
 }
 
 function tlMidnight(t) { const d = new Date(t * 1000); d.setHours(0, 0, 0, 0); return d; }
+/** Short day + month label ("6. 11." in Czech, "06/11" in English). */
+function tlDM(d) { return d.toLocaleDateString(I18N.locale, { day: 'numeric', month: 'numeric' }); }
 function tlDayKey(d) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
 
 /** Axis ticks for [t0, t1] at the given pixels-per-second. */
@@ -223,7 +225,7 @@ function tlTicks(t0, t1, pps) {
       const t = d.getTime() / 1000;
       const major = step === 604800 ? d.getDate() <= 7 : d.getDate() === 1;
       out.push({ t, major,
-        label: step === 604800 ? `${d.getDate()}. ${d.getMonth() + 1}.` : `${DAYS_SHORT[d.getDay()]} ${d.getDate()}. ${d.getMonth() + 1}.`,
+        label: step === 604800 ? tlDM(d) : `${DAYS_SHORT[d.getDay()]} ${tlDM(d)}`,
         sub: major ? MONTHS[d.getMonth()] : '' });
       d.setDate(d.getDate() + days);
     }
@@ -236,7 +238,7 @@ function tlTicks(t0, t1, pps) {
   while (t <= t1 && out.length < 600) {
     const d = new Date(t * 1000);
     const isMid = d.getHours() === 0 && d.getMinutes() === 0;
-    out.push({ t, major: isMid, label: isMid ? `${d.getDate()}. ${d.getMonth() + 1}.` : `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    out.push({ t, major: isMid, label: isMid ? tlDM(d) : `${pad(d.getHours())}:${pad(d.getMinutes())}`,
       sub: isMid ? DAYS[d.getDay()] : '' });
     t += step;
   }
@@ -503,7 +505,7 @@ function tlEventHover(e) {
     e.location ? h('.l', icon('map-pin'), e.location) : null,
     e.excerpt ? h('.x', e.excerpt) : null,
     chars.length ? h('.row', { style: { marginTop: '8px' } }, avatarStack(chars, 22, 7)) : null,
-    h('.hint', 'Klikni pro otevření události'));
+    h('.hint', tr('Click to open the event')));
 }
 
 function tlMediaHover(m) {
@@ -514,7 +516,7 @@ function tlMediaHover(m) {
     h('.l', icon('clock'), fmt.range(m.start, m.end)),
     h('.l', icon('timer'), fmt.dur(m.duration)),
     (m.tags || []).length ? h('.l', h('span.tag', m.tags.map(t => '#' + t).join(' '))) : null,
-    h('.hint', 'Klik = přehrát od tohoto místa'));
+    h('.hint', tr('Click = play from here')));
 }
 
 /* ============================================================ state */
@@ -583,7 +585,7 @@ function tlFilteredMedia(visibleEvents) {
 
 /* ============================================================ view */
 Views.register('timeline', {
-  title: 'Časová osa', short: 'Osa', icon: 'chart-gantt', order: 40,
+  title: tr('Timeline'), short: tr('Timeline'), icon: 'chart-gantt', order: 40,
 
   mount(root, params = {}) {
     TL.root = root;
@@ -592,10 +594,10 @@ Views.register('timeline', {
     TL.mode = mode;
 
     const seg = h('.seg',
-      ...[['chron', 'scroll-text', 'Kronika'], ['gantt', 'chart-gantt', 'Osa'], ['cal', 'calendar-days', 'Kalendář'], ['chars', 'users', 'Postavy']]
+      ...[['chron', 'scroll-text', tr('Chronicle')], ['gantt', 'chart-gantt', tr('Gantt')], ['cal', 'calendar-days', tr('Calendar')], ['chars', 'users', tr('Characters')]]
         .map(([k, ic, label]) => h('button' + (k === mode ? '.on' : ''), { 'data-mode': k, onclick: () => tlSetMode(k) }, icon(ic), label)));
     TL.sub = h('.sub', '');
-    const head = h('.page-head', h('div', h('h1', 'Časová osa'), TL.sub), h('.grow'), seg);
+    const head = h('.page-head', h('div', h('h1', tr('Timeline')), TL.sub), h('.grow'), seg);
 
     TL.filterBar = h('.tl-filters');
     TL.body = h('.tl-body');
@@ -606,7 +608,7 @@ Views.register('timeline', {
       App.on('chars', () => tlLoad()),
       App.on('media', () => TL.data && tlRender()),
     ];
-    TL.body.appendChild(h('.empty', icon('loader'), h('div', 'Načítám…')));
+    TL.body.appendChild(h('.empty', icon('loader'), h('div', tr('Loading…'))));
     tlLoad();
   },
 
@@ -637,17 +639,17 @@ function tlSetMode(mode) {
 
 function tlBuildFilters() {
   const bar = clear(TL.filterBar), f = TL.f;
-  const q = h('input.input', { placeholder: 'Hledat v událostech a záznamech…', value: f.q });
+  const q = h('input.input', { placeholder: tr('Search events and recordings…'), value: f.q });
   q.addEventListener('input', debounce(() => { f.q = q.value; tlRender(); }, 200));
   q.addEventListener('keydown', e => e.stopPropagation());
   bar.appendChild(h('.search', icon('search'), q));
 
   const charBtn = h('button.btn' + (f.chars.size ? '.active' : ''), {
     onclick: async () => {
-      const ids = await pickCharacters([...f.chars], { title: 'Filtrovat podle postav' });
+      const ids = await pickCharacters([...f.chars], { title: tr('Filter by characters') });
       if (ids) { f.chars = new Set(ids); tlBuildFilters(); tlRender(); }
     },
-  }, icon('users'), f.chars.size ? `Postavy (${f.chars.size})` : 'Postavy');
+  }, icon('users'), f.chars.size ? tr('Characters ({n})', { n: f.chars.size }) : tr('Characters'));
   bar.appendChild(charBtn);
   for (const id of f.chars) {
     const c = App.charsById.get(id);
@@ -658,22 +660,22 @@ function tlBuildFilters() {
   (TL.data?.events || []).forEach(e => (e.tags || []).forEach(t => tags.add(t)));
   App.media.forEach(m => (m.tags || []).forEach(t => tags.add(t)));
   const sel = h('select.input', { onchange: e => { f.tag = e.target.value; tlRender(); } },
-    h('option', { value: '' }, 'Všechny štítky'),
+    h('option', { value: '' }, tr('All tags')),
     [...tags].sort().map(t => h('option', { value: t, selected: f.tag === t ? true : null }, '#' + t)));
   bar.appendChild(sel);
 
   bar.appendChild(h('label.check', h('input', { type: 'checkbox', checked: f.rootsOnly, onchange: e => { f.rootsOnly = e.target.checked; tlRender(); } }),
-    'Jen hlavní události'));
+    tr('Only top-level events')));
 
   if (f.q || f.chars.size || f.tag || f.rootsOnly) {
     bar.appendChild(h('button.btn.ghost.sm', { onclick: () => { TL.f = { q: '', chars: new Set(), tag: '', rootsOnly: false }; tlBuildFilters(); tlRender(); } },
-      icon('x'), 'Zrušit filtry'));
+      icon('x'), tr('Clear filters')));
   }
 
   const hints = {
-    gantt: 'Kolečko = posun · Ctrl+kolečko = zoom · Shift+kolečko = svisle · tažení = posun',
-    chars: 'Ctrl+kolečko = zoom · tažení = posun',
-    cal: 'Klikni na den pro detail',
+    gantt: tr('Wheel = pan · Ctrl+wheel = zoom · Shift+wheel = vertical · drag = pan'),
+    chars: tr('Ctrl+wheel = zoom · drag = pan'),
+    cal: tr('Click a day for details'),
     chron: '',
   };
   if (hints[TL.mode]) bar.appendChild(h('.tl-hint', hints[TL.mode]));
@@ -685,8 +687,8 @@ function tlRender() {
   const media = tlFilteredMedia(events);
   const total = TL.data.events.length;
   TL.sub.textContent = total
-    ? `${events.length} z ${total} ${fmt.plural(total, 'události', 'událostí', 'událostí')} · ${media.length} záznamů`
-    : `Zatím žádné události · ${App.media.length} záznamů`;
+    ? trn(total, '{shown} of {n} event', '{shown} of {n} events', { shown: events.length }) + ' · ' + trn(media.length, '{n} recording', '{n} recordings')
+    : tr('No events yet') + ' · ' + trn(App.media.length, '{n} recording', '{n} recordings');
 
   // Gantt instances survive only within the same mode
   const ganttMode = TL.mode === 'gantt' || TL.mode === 'chars';
@@ -704,15 +706,15 @@ function tlRenderChron(events) {
   const wrap = h('.tl-chron-wrap');
   TL.body.appendChild(wrap);
   if (!TL.data.events.length) {
-    wrap.appendChild(emptyState('scroll-text', 'Kronika je zatím prázdná',
-      'Vytvoř první událost – ručně, nebo nech aplikaci navrhnout události z tvých záznamů.',
+    wrap.appendChild(emptyState('scroll-text', tr('The chronicle is still empty'),
+      tr('Create the first event – manually, or let the app suggest events from your recordings.'),
       h('.row', { style: { marginTop: '6px' } },
-        h('button.btn.primary', { onclick: () => App.go('events', { create: true }) }, icon('plus'), 'Nová událost'),
-        h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('sparkles'), 'Navrhnout ze záznamů'))));
+        h('button.btn.primary', { onclick: () => App.go('events', { create: true }) }, icon('plus'), tr('New event')),
+        h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('sparkles'), tr('Suggest from recordings')))));
     return;
   }
   if (!events.length) {
-    wrap.appendChild(emptyState('search-x', 'Nic neodpovídá filtru', 'Zkus upravit hledání nebo zrušit filtry.'));
+    wrap.appendChild(emptyState('search-x', tr('Nothing matches the filter'), tr('Try adjusting the search or clearing the filters.')));
     return;
   }
   const visible = new Set(events.map(e => e.id));
@@ -742,7 +744,7 @@ function tlRenderChron(events) {
       const ev = TL.evById.get(it.en.event_id);
       chron.appendChild(h('.tl-item.note' + (right ? '.right' : ''),
         h('.tl-note', { onclick: () => App.go('events', { id: it.en.event_id, entry: it.en.id }) },
-          h('.h', icon('notebook-pen'), h('span', fmt.time(it.t)), h('b', it.en.title || 'Zápis'),
+          h('.h', icon('notebook-pen'), h('span', fmt.time(it.t)), h('b', it.en.title || tr('Entry')),
             ev ? h('span', '· ' + ev.title) : null, it.en.ingame_date ? h('span', { style: { color: 'var(--accent-2)' } }, '· ' + it.en.ingame_date) : null),
           it.en.excerpt ? h('.x', it.en.excerpt) : null)));
     }
@@ -751,7 +753,7 @@ function tlRenderChron(events) {
 
   if (undated.length) {
     wrap.appendChild(h('.tl-undated',
-      h('.section-title', icon('calendar-off'), 'Bez data', h('.line')),
+      h('.section-title', icon('calendar-off'), tr('No date'), h('.line')),
       h('.grid', undated.map(e => tlEventCard(e, visible)))));
   }
 }
@@ -785,10 +787,10 @@ function tlEventCard(e, visible) {
         chars.length ? avatarStack(chars, 24, 6) : null,
         (e.tags || []).length ? h('span.tag', e.tags.slice(0, 4).map(t => '#' + t).join(' ')) : null,
         h('.counts',
-          e.link_count ? h('span', { title: 'Odkazy na záznamy' }, icon('film'), e.link_count) : null,
-          e.bm_count ? h('span', { title: 'Momenty (záložky)' }, icon('bookmark'), e.bm_count) : null,
-          e.entry_count ? h('span', { title: 'Zápisy' }, icon('notebook-pen'), e.entry_count) : null,
-          e.att_count ? h('span', { title: 'Přílohy' }, icon('paperclip'), e.att_count) : null)),
+          e.link_count ? h('span', { title: tr('Links to recordings') }, icon('film'), e.link_count) : null,
+          e.bm_count ? h('span', { title: tr('Moments (bookmarks)') }, icon('bookmark'), e.bm_count) : null,
+          e.entry_count ? h('span', { title: tr('Entries') }, icon('notebook-pen'), e.entry_count) : null,
+          e.att_count ? h('span', { title: tr('Attachments') }, icon('paperclip'), e.att_count) : null)),
       kids.length ? tlSubList(kids, visible) : null));
 }
 
@@ -802,7 +804,7 @@ function tlSubList(kids, visible) {
         h('span.dot', { style: { background: k.color } }),
         h('span.t.ellipsis', k.title),
         chars.length ? avatarStack(chars, 18, 4) : null,
-        h('span.m', k.start_time ? fmt.range(k.start_time, k.end_time) : (k.ingame_date || 'bez data'))),
+        h('span.m', k.start_time ? fmt.range(k.start_time, k.end_time) : (k.ingame_date || tr('no date')))),
       grand.length ? tlSubList(grand, visible) : null);
   }));
 }
@@ -832,10 +834,10 @@ function tlGanttControls(g) {
   TL.rangeLbl = h('span.faint.small.mono', '');
   const box = h('.row', { style: { marginLeft: 'auto' } },
     TL.rangeLbl,
-    h('button.btn.sm', { onclick: () => g.zoomAt(g.width / 2, 1 / 1.5), title: 'Oddálit' }, icon('zoom-out')),
-    h('button.btn.sm', { onclick: () => g.zoomAt(g.width / 2, 1.5), title: 'Přiblížit' }, icon('zoom-in')),
-    h('button.btn.sm', { onclick: () => g.today() }, icon('locate-fixed'), 'Dnes'),
-    h('button.btn.sm', { onclick: () => g.fit() }, icon('maximize-2'), 'Přizpůsobit'));
+    h('button.btn.sm', { onclick: () => g.zoomAt(g.width / 2, 1 / 1.5), title: tr('Zoom out') }, icon('zoom-out')),
+    h('button.btn.sm', { onclick: () => g.zoomAt(g.width / 2, 1.5), title: tr('Zoom in') }, icon('zoom-in')),
+    h('button.btn.sm', { onclick: () => g.today() }, icon('locate-fixed'), tr('Today')),
+    h('button.btn.sm', { onclick: () => g.fit() }, icon('maximize-2'), tr('Fit')));
   const old = $('.tl-gctl', TL.filterBar);
   if (old) old.remove();
   box.classList.add('tl-gctl');
@@ -847,8 +849,8 @@ function tlGanttControls(g) {
 function tlRenderGantt(events, media) {
   const g = tlEnsureGantt('gantt', {
     labelWidth: 200,
-    corner: h('span', icon('layers'), ' Stopy'),
-    emptyNode: emptyState('calendar-x', 'Nic k zobrazení', 'Žádné události ani záznamy neodpovídají filtru.'),
+    corner: h('span', icon('layers'), ' ' + tr('Tracks')),
+    emptyNode: emptyState('calendar-x', tr('Nothing to show'), tr('No events or recordings match the filter.')),
     onItemClick: (it, t) => {
       if (it.payload.type === 'event') App.go('events', { id: it.payload.id });
       else if (it.payload.type === 'media') {
@@ -870,7 +872,7 @@ function tlRenderGantt(events, media) {
     payload: { type: 'event', id: e.id }, hover: () => tlEventHover(e),
   }));
   if (evItems.length) {
-    lanes.push({ label: tlLaneLabel('calendar-range', 'Události', `${evItems.length} ${fmt.plural(evItems.length, 'událost', 'události', 'událostí')}`),
+    lanes.push({ label: tlLaneLabel('calendar-range', tr('Events'), trn(evItems.length, '{n} event', '{n} events')),
       rows: tlPack(evItems) });
   }
 
@@ -901,9 +903,9 @@ function tlRenderGantt(events, media) {
           const t = m.start + l.offset;
           extra.push({ kind: 'marker', start: t, end: t, color: TL.evById.get(l.event_id)?.color,
             payload: { type: 'marker', media_id: m.id, offset: l.offset },
-            hover: () => h('div', h('.t', evTitles.get(l.event_id) || 'Odkaz'),
-              h('.l', icon('clock'), `${fmt.dt(t)} · ${fmt.dur(l.offset)} ve videu`),
-              l.note ? h('.x', l.note) : null, h('.hint', 'Klik = přehrát tento okamžik')) });
+            hover: () => h('div', h('.t', evTitles.get(l.event_id) || tr('Event link')),
+              h('.l', icon('clock'), `${fmt.dt(t)} · ${tr('{time} in video', { time: fmt.dur(l.offset) })}`),
+              l.note ? h('.x', l.note) : null, h('.hint', tr('Click = play this moment'))) });
         }
         for (const b of TL.bmByMedia.get(m.id) || []) {
           const t = m.start + b.t, te = b.t_end ? m.start + b.t_end : t;
@@ -911,16 +913,16 @@ function tlRenderGantt(events, media) {
           extra.push({ kind: 'marker', cls: 'bm' + (b.t_end ? ' rng' : ''), start: t, end: te,
             color: b.color || (ev && ev.color) || '#f2cd6b', payload: { type: 'bm', b: { ...b, media_id: m.id } },
             hover: () => h('div', h('.t', bmTitle(b)),
-              h('.l', icon('clock'), `${fmt.dt(t)} · ${fmt.dur(b.t)}${b.t_end ? '–' + fmt.dur(b.t_end) : ''} ve videu`),
+              h('.l', icon('clock'), `${fmt.dt(t)} · ${tr('{time} in video', { time: fmt.dur(b.t) + (b.t_end ? '–' + fmt.dur(b.t_end) : '') })}`),
               ev ? h('.l', icon('calendar-range'), ev.title) : null,
-              h('.hint', b.t_end ? 'Klik = přehrát úsek' : 'Klik = přehrát od záložky')) });
+              h('.hint', b.t_end ? tr('Click = play the range') : tr('Click = play from the bookmark'))) });
         }
       });
       row.push(...extra);
     });
     const nClips = list.filter(m => m.type === 'clip').length;
     lanes.push({
-      label: tlLaneLabel('gamepad-2', game, `${fmt.durHuman(total)} · ${list.length - nClips} záz. · ${nClips} klipů`),
+      label: tlLaneLabel('gamepad-2', game, `${fmt.durHuman(total)} · ${tr('{n} rec.', { n: list.length - nClips })} · ${trn(nClips, '{n} clip', '{n} clips')}`),
       rows,
     });
   }
@@ -957,23 +959,23 @@ function tlRenderChars(events) {
     }
   }
   const chars = [...byChar.keys()].map(id => App.charsById.get(id)).filter(Boolean)
-    .sort((a, b) => (a.kind === 'mine' ? -1 : 0) - (b.kind === 'mine' ? -1 : 0) || a.name.localeCompare(b.name, 'cs'));
+    .sort((a, b) => (a.kind === 'mine' ? -1 : 0) - (b.kind === 'mine' ? -1 : 0) || a.name.localeCompare(b.name, I18N.locale));
 
   if (!chars.length) {
     if (TL.gantt) { TL.gantt.destroy(); TL.gantt = null; }
     clear(TL.body);
     const old = $('.tl-gctl', TL.filterBar); if (old) old.remove();
-    TL.body.appendChild(emptyState('users', 'Žádné postavy v událostech',
+    TL.body.appendChild(emptyState('users', tr('No characters in events'),
       App.chars.length
-        ? 'Označ postavy v událostech (nebo je zmiň přes @ v zápisu) a uvidíš tu jejich životní linky.'
-        : 'Nejdřív si založ postavy, pak je označuj v událostech.',
-      h('button.btn', { onclick: () => App.go('characters') }, icon('users'), 'Databáze postav')));
+        ? tr('Tag characters in events (or mention them with @ in an entry) and you will see their life lines here.')
+        : tr('Create characters first, then tag them in events.'),
+      h('button.btn', { onclick: () => App.go('characters') }, icon('users'), tr('Character database'))));
     return;
   }
 
   const g = tlEnsureGantt('chars', {
     labelWidth: 220,
-    corner: h('span', icon('users'), ' Postavy'),
+    corner: h('span', icon('users'), ' ' + tr('Characters')),
     onItemClick: it => App.go('events', { id: it.payload.id }),
   });
   tlGanttControls(g);
@@ -993,7 +995,7 @@ function tlRenderChars(events) {
       onLabelClick: () => App.go('characters', { id: c.id }),
       label: h('.row', { style: { gap: '10px', width: '100%' } }, avatar(c, 32),
         h('.grow', h('.ttl.ellipsis', c.name),
-          h('.sub.ellipsis', [CHAR_KIND[c.kind]?.label, c.faction].filter(Boolean).join(' · ') || `${items.length} událostí`))),
+          h('.sub.ellipsis', [CHAR_KIND[c.kind]?.label, c.faction].filter(Boolean).join(' · ') || trn(items.length, '{n} event', '{n} events')))),
       rows: tlPack(items),
     };
   });
@@ -1045,13 +1047,13 @@ function tlRenderCal(events, media) {
   const main = h('.tl-cal-main');
   const title = `${MONTHS[m]} ${y}`;
   main.appendChild(h('.tl-cal-head',
-    h('button.btn.icon', { onclick: () => tlCalShift(-1), title: 'Předchozí měsíc' }, icon('chevron-left')),
+    h('button.btn.icon', { onclick: () => tlCalShift(-1), title: tr('Previous month') }, icon('chevron-left')),
     h('h2', title),
-    h('button.btn.icon', { onclick: () => tlCalShift(1), title: 'Další měsíc' }, icon('chevron-right')),
-    h('button.btn.sm', { onclick: () => { const d = new Date(); TL.cal = { y: d.getFullYear(), m: d.getMonth() }; TL.calSel = todayKey; TL.calSelDate = d; tlRender(); } }, 'Dnes'),
+    h('button.btn.icon', { onclick: () => tlCalShift(1), title: tr('Next month') }, icon('chevron-right')),
+    h('button.btn.sm', { onclick: () => { const d = new Date(); TL.cal = { y: d.getFullYear(), m: d.getMonth() }; TL.calSel = todayKey; TL.calSelDate = d; tlRender(); } }, tr('Today')),
     h('.grow'),
-    h('span.faint.small', icon('video'), ' ', fmt.durHuman([...rec.entries()].filter(([k]) => k.startsWith(`${y}-${m}-`)).reduce((s, [, v]) => s + v, 0)), ' nahráno v tomto měsíci')));
-  main.appendChild(h('.tl-cal-dow', ['po', 'út', 'st', 'čt', 'pá', 'so', 'ne'].map(d => h('div', d))));
+    h('span.faint.small', icon('video'), ' ', tr('{duration} recorded this month', { duration: fmt.durHuman([...rec.entries()].filter(([k]) => k.startsWith(`${y}-${m}-`)).reduce((s, [, v]) => s + v, 0)) }))));
+  main.appendChild(h('.tl-cal-dow', [0, 1, 2, 3, 4, 5, 6].map(i => h('div', new Date(2024, 0, 1 + i).toLocaleDateString(I18N.locale, { weekday: 'short' })))));
 
   const weeksEl = h('.tl-cal-weeks');
   const dated = events.filter(e => e.start_time);
@@ -1068,8 +1070,8 @@ function tlRenderCal(events, media) {
         { onclick: () => { TL.calSel = key; TL.calSelDate = new Date(d); tlRender(); } },
         secs ? h('.heat', { style: { opacity: (0.03 + 0.12 * Math.min(1, secs / maxRec)).toFixed(3) } }) : null,
         h('span.n', d.getDate()),
-        secs ? h('.rec', { title: `Nahráno ${fmt.durHuman(secs)}` }, icon('video'), h('.b', h('i', { style: { width: Math.min(100, secs / (8 * 3600) * 100) + '%' } })),
-          h('span', (secs / 3600).toFixed(1).replace('.', ',') + ' h')) : null);
+        secs ? h('.rec', { title: tr('Recorded {duration}', { duration: fmt.durHuman(secs) }) }, icon('video'), h('.b', h('i', { style: { width: Math.min(100, secs / (8 * 3600) * 100) + '%' } })),
+          h('span', (secs / 3600).toLocaleString(I18N.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' h')) : null);
       row.appendChild(cell);
     }
     // multi-day event bars, packed into lanes per week
@@ -1096,7 +1098,7 @@ function tlRenderCal(events, media) {
       hidden.forEach(({ start, end }) => { for (let c = start; c < end; c++) perCol.set(c, (perCol.get(c) || 0) + 1); });
       perCol.forEach((n, c) => row.appendChild(h('.tl-cal-more', {
         style: { left: `calc(${c} * (100% + 6px) / 7)`, top: (34 + MAXL * 23) + 'px' },
-      }, `+${n} další`)));
+      }, tr('+{n} more', { n }))));
     }
     weeksEl.appendChild(row);
   }
@@ -1125,9 +1127,9 @@ function tlCalSide(day, events, media, rec) {
   const secs = rec.get(tlDayKey(ds)) || 0;
   return h('.tl-cal-side',
     h('.row', h('h3.grow', fmt.dateLong(a)),
-      h('button.btn.ghost.icon.sm', { onclick: () => { TL.calSel = null; TL.calSelDate = null; tlRender(); }, title: 'Zavřít' }, icon('x'))),
-    h('.small.faint', { style: { marginTop: '2px' } }, secs ? `Nahráno ${fmt.durHuman(secs)} · ${md.length} záznamů` : 'Žádné záznamy'),
-    h('.section-title', icon('calendar-range'), 'Události', h('.line')),
+      h('button.btn.ghost.icon.sm', { onclick: () => { TL.calSel = null; TL.calSelDate = null; tlRender(); }, title: tr('Close') }, icon('x'))),
+    h('.small.faint', { style: { marginTop: '2px' } }, secs ? tr('Recorded {duration}', { duration: fmt.durHuman(secs) }) + ' · ' + trn(md.length, '{n} recording', '{n} recordings') : tr('No recordings')),
+    h('.section-title', icon('calendar-range'), tr('Events'), h('.line')),
     evs.length ? evs.map(e => h('.evr', { onclick: () => App.go('events', { id: e.id }) },
       h('.c', { style: { background: e.color } }),
       h('.grow',
@@ -1135,9 +1137,9 @@ function tlCalSide(day, events, media, rec) {
         h('.tiny.faint', fmt.range(e.start_time, e.end_time)),
         e.excerpt ? h('.small.muted', { style: { marginTop: '4px' } }, e.excerpt.slice(0, 120)) : null),
       tlEventChars(e.id).length ? avatarStack(tlEventChars(e.id), 20, 3) : null))
-      : h('.small.faint', 'Tento den nemá žádnou událost.',
+      : h('.small.faint', tr('There is no event on this day.'),
         h('div', { style: { marginTop: '8px' } },
-          h('button.btn.sm', { onclick: () => App.go('events', { create: true, start: a + 18 * 3600 }) }, icon('plus'), 'Nová událost'))),
-    md.length ? h('.section-title', icon('film'), 'Záznamy', h('.line')) : null,
+          h('button.btn.sm', { onclick: () => App.go('events', { create: true, start: a + 18 * 3600 }) }, icon('plus'), tr('New event')))),
+    md.length ? h('.section-title', icon('film'), tr('Recordings'), h('.line')) : null,
     md.length ? h('.mgrid', md.map(m => h('div', mediaTile(m), h('.mcap.ellipsis', `${fmt.time(m.start)} · ${m.name}`)))) : null);
 }

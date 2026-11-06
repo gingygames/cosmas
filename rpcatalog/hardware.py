@@ -3,6 +3,8 @@ memory and processor. Used to recommend local AI models and to pick how speech i
 import os
 import subprocess
 
+from .i18n import tr
+
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 GPU_CLASS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
 VENDORS = {"10de": "nvidia", "1002": "amd", "8086": "intel", "5143": "qualcomm"}
@@ -109,19 +111,19 @@ def gb(n):
 
 
 # Ollama models (one model for picture and text where possible: no reloading between the two) by usable memory.
-# (min GB, vision, text, download GB, note) - tags checked on ollama.com 2026-11-06
+# (min GB, vision, text, download GB, note - English, translated by recommend()) - tags checked on ollama.com 2026-11-06
 GPU_TIERS = [
-    (30, "qwen3.8:27b-q8_0", "qwen3.8:27b-q8_0", 30, "Nejvyšší kvalita, která se vejde do paměti karty."),
-    (20, "qwen3.8:27b", "qwen3.8:27b", 18, "Velmi dobrá čeština i čtení obrazu."),
-    (14, "gemma4:12b-it-q8_0", "gemma4:12b-it-q8_0", 13, "Dobrá čeština, rychlé."),
-    (10, "gemma4:12b-it-qat", "gemma4:12b-it-qat", 7.2, "Dobrá čeština, rychlé."),
-    (7, "qwen3.5:9b", "qwen3.5:9b", 6.6, "Slušné výsledky; na delší kroniky je lepší placená služba."),
-    (5, "qwen3.5:4b", "qwen3.5:4b", 3.3, "Malý model – popis obrazu ujde, kronika bude stručná."),
-    (3, "qwen3.5:2b", "qwen3.5:4b", 2.7, "Jen základní popis obrazu; na kroniku doporučujeme placenou službu."),
+    (30, "qwen3.8:27b-q8_0", "qwen3.8:27b-q8_0", 30, "Highest quality that still fits in the card's memory."),
+    (20, "qwen3.8:27b", "qwen3.8:27b", 18, "Very good Czech and picture reading."),
+    (14, "gemma4:12b-it-q8_0", "gemma4:12b-it-q8_0", 13, "Good Czech, fast."),
+    (10, "gemma4:12b-it-qat", "gemma4:12b-it-qat", 7.2, "Good Czech, fast."),
+    (7, "qwen3.5:9b", "qwen3.5:9b", 6.6, "Decent results; for longer chronicles a paid service is better."),
+    (5, "qwen3.5:4b", "qwen3.5:4b", 3.3, "Small model – picture descriptions are passable, the chronicle will be brief."),
+    (3, "qwen3.5:2b", "qwen3.5:4b", 2.7, "Only basic picture descriptions; for the chronicle we recommend a paid service."),
 ]
 CPU_TIERS = [
-    (32, "qwen3.5:4b", "qwen3.5:9b", 3.3, "Bez grafické karty to půjde, ale pomalu (hodina videa ≈ několik hodin)."),
-    (16, "qwen3.5:2b", "qwen3.5:4b", 2.7, "Bez grafické karty velmi pomalé a slabé – doporučujeme placenou službu."),
+    (32, "qwen3.5:4b", "qwen3.5:9b", 3.3, "Works without a graphics card, but slowly (an hour of video ≈ several hours)."),
+    (16, "qwen3.5:2b", "qwen3.5:4b", 2.7, "Without a graphics card very slow and weak – we recommend a paid service."),
 ]
 
 
@@ -136,28 +138,28 @@ def recommend(hw=None):
     out = {"gpu": g["name"] if g else "", "vram": round(vram, 1), "ram": round(ram), "cpu": hw["cpu"], "vendor": g["vendor"] if g else ""}
     tier = next((t for t in GPU_TIERS if usable >= t[0]), None) if usable else None
     if tier:
-        out.update(where="gpu", vision=tier[1], text=tier[2], download=tier[3], note=tier[4],
+        out.update(where="gpu", vision=tier[1], text=tier[2], download=tier[3], note=tr(tier[4]),
                    level="great" if tier[0] >= 14 else "ok" if tier[0] >= 7 else "weak")
     else:
         ct = next((t for t in CPU_TIERS if ram >= t[0] - 1), None)
         if ct:
-            out.update(where="cpu", vision=ct[1], text=ct[2], download=ct[3], note=ct[4], level="slow")
+            out.update(where="cpu", vision=ct[1], text=ct[2], download=ct[3], note=tr(ct[4]), level="slow")
         else:
             out.update(where="none", vision="", text="", download=0, level="none",
-                       note="Na tomto PC lokální AI rozumně nepoběží – použij placenou službu.")
+                       note=tr("Local AI won't run reasonably on this PC – use a paid service."))
     # speech: faster-whisper on NVIDIA (CUDA), otherwise the processor
     if g and g["vendor"] == "nvidia" and vram >= 5.5:
         out["whisper"] = {"model": "large-v3", "device": "cuda", "compute": "float16", "batch": 16 if vram >= 10 else 8,
-                          "note": "Na grafické kartě: hodina záznamu za pár minut."}
+                          "note": tr("On the graphics card: an hour of recording in a few minutes.")}
     elif g and g["vendor"] == "nvidia" and vram >= 2:
         out["whisper"] = {"model": "large-v3-turbo", "device": "cuda", "compute": "int8_float16", "batch": 4,
-                          "note": "Na grafické kartě, menší rychlá varianta modelu."}
+                          "note": tr("On the graphics card, a smaller fast variant of the model.")}
     elif hw["cores"] >= 8 and ram >= 15:
         out["whisper"] = {"model": "medium", "device": "cpu", "compute": "int8", "batch": 4,
-                          "note": "Na procesoru: hodina záznamu zhruba za 20–40 minut. Přesnější a rychlejší je placený přepis (Groq ≈ 2,5 Kč/h)."}
+                          "note": tr("On the processor: an hour of recording in roughly 20–40 minutes. A paid transcription is more accurate and faster (Groq ≈ CZK 2.5/h).")}
     else:
         out["whisper"] = {"model": "small", "device": "cpu", "compute": "int8", "batch": 2,
-                          "note": "Na procesoru pomalé a méně přesné – doporučujeme placený přepis (Groq ≈ 2,5 Kč/h)."}
+                          "note": tr("On the processor slow and less accurate – we recommend a paid transcription (Groq ≈ CZK 2.5/h).")}
     out["speech_local_ok"] = out["whisper"]["device"] == "cuda" or (hw["cores"] >= 8 and ram >= 15)
     out["llm_local_ok"] = out["level"] in ("great", "ok")
     return out

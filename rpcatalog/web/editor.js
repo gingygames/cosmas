@@ -66,7 +66,7 @@ function renderRich(html) {
   return el;
 }
 
-function RichEditor({ html = '', placeholder = 'Piš…', ownerType = null, ownerId = null, onChange, minHeight = 160, autofocus = false } = {}) {
+function RichEditor({ html = '', placeholder = tr('Write…'), ownerType = null, ownerId = null, onChange, minHeight = 160, autofocus = false } = {}) {
   const area = h('.area.prose', { contenteditable: 'true', 'data-ph': placeholder, spellcheck: 'true', style: { minHeight: minHeight + 'px' } });
   area.innerHTML = html || '';
   const changed = debounce(() => onChange && onChange(getHTML()), 700);
@@ -74,38 +74,38 @@ function RichEditor({ html = '', placeholder = 'Piš…', ownerType = null, owne
   const block = tag => exec('formatBlock', tag);
 
   const tb = h('.tb',
-    btn('bold', 'Tučně (Ctrl+B)', () => exec('bold')),
-    btn('italic', 'Kurzíva (Ctrl+I)', () => exec('italic')),
-    btn('underline', 'Podtržení (Ctrl+U)', () => exec('underline')),
-    btn('strikethrough', 'Přeškrtnutí', () => exec('strikeThrough')),
+    btn('bold', tr('Bold (Ctrl+B)'), () => exec('bold')),
+    btn('italic', tr('Italic (Ctrl+I)'), () => exec('italic')),
+    btn('underline', tr('Underline (Ctrl+U)'), () => exec('underline')),
+    btn('strikethrough', tr('Strikethrough'), () => exec('strikeThrough')),
     h('.sp'),
-    btn('heading-2', 'Nadpis', () => block('h2')),
-    btn('heading-3', 'Podnadpis', () => block('h3')),
-    btn('pilcrow', 'Odstavec', () => block('p')),
-    btn('quote', 'Citace / promluva', () => block('blockquote')),
-    btn('list', 'Odrážky', () => exec('insertUnorderedList')),
-    btn('list-ordered', 'Číslovaný seznam', () => exec('insertOrderedList')),
-    btn('minus', 'Oddělovač', () => exec('insertHTML', '<hr><p><br></p>')),
+    btn('heading-2', tr('Heading'), () => block('h2')),
+    btn('heading-3', tr('Subheading'), () => block('h3')),
+    btn('pilcrow', tr('Paragraph'), () => block('p')),
+    btn('quote', tr('Quote / speech'), () => block('blockquote')),
+    btn('list', tr('Bullet list'), () => exec('insertUnorderedList')),
+    btn('list-ordered', tr('Numbered list'), () => exec('insertOrderedList')),
+    btn('minus', tr('Divider'), () => exec('insertHTML', '<hr><p><br></p>')),
     h('.sp'),
-    btn('at-sign', 'Označit postavu (@)', () => openMentions(true), 'Postava'),
-    btn('calendar-clock', 'Vložit datum a čas', () => insertStamp(), 'Datum'),
-    btn('link', 'Odkaz', async () => {
+    btn('at-sign', tr('Tag a character (@)'), () => openMentions(true), tr('Character')),
+    btn('calendar-clock', tr('Insert date and time'), () => insertStamp(), tr('Date')),
+    btn('link', tr('Link'), async () => {
       const sel = saveSel();
-      const url = await promptDialog('Odkaz', 'Adresa (https://…)', 'https://');
+      const url = await promptDialog(tr('Link'), tr('Address (https://…)'), 'https://');
       restoreSel(sel); if (url) exec('createLink', url);
     }),
-    ownerType ? btn('image-plus', 'Vložit obrázek ze souboru', async () => {
+    ownerType ? btn('image-plus', tr('Insert image from file'), async () => {
       const sel = saveSel();
       const atts = await API.call('att.pick', { owner_type: ownerType, owner_id: ownerId, images_only: true });
       restoreSel(sel); atts.forEach(insertImage);
     }) : null,
-    ownerType ? btn('camera', 'Snímek z přehrávače', async () => {
+    ownerType ? btn('camera', tr('Screenshot from the player'), async () => {
       const sel = saveSel();
       const a = await API.call('att.snapshot', { owner_type: ownerType, owner_id: ownerId });
       restoreSel(sel); insertImage(a);
     }) : null,
     h('.grow'),
-    btn('eraser', 'Vymazat formátování', () => exec('removeFormat')),
+    btn('eraser', tr('Clear formatting'), () => exec('removeFormat')),
   );
   function btn(ic, title, fn, label) {
     return h('button', { title, onmousedown: e => e.preventDefault(), onclick: fn, type: 'button' }, icon(ic), label ? h('span', label) : null);
@@ -118,7 +118,8 @@ function RichEditor({ html = '', placeholder = 'Piš…', ownerType = null, owne
   }
   function insertStamp() {
     const d = new Date();
-    const txt = `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const day = I18N.lang === 'cs' ? `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}` : d.toLocaleDateString(I18N.locale, { day: 'numeric', month: 'short', year: 'numeric' });
+    const txt = `${day} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     exec('insertHTML', `<span class="stamp" contenteditable="false">${txt}</span>&nbsp;`);
   }
   let savedRange = null;
@@ -154,8 +155,8 @@ function RichEditor({ html = '', placeholder = 'Piš…', ownerType = null, owne
     popItems.forEach((c, i) => pop.appendChild(h('.list-row' + (i === popIdx ? '.on' : ''), { onmousedown: e => { e.preventDefault(); choose(c); } },
       avatar(c, 24), h('.grow.ellipsis', c.name), h('.tiny.faint', c.faction || ''))));
     if (createItem) pop.appendChild(h('.list-row' + (popIdx === popItems.length ? '.on' : ''), { onmousedown: e => { e.preventDefault(); choose(createItem); } },
-      icon('user-plus'), h('span', 'Nová postava „', h('b', createItem.create), '“')));
-    if (!pop.children.length) pop.appendChild(h('.tiny.faint', { style: { padding: '8px' } }, 'Napiš jméno postavy…'));
+      icon('user-plus'), h('span', { html: tr('New character “{name}”', { name: '<b>' + escapeHtml(createItem.create) + '</b>' }) })));
+    if (!pop.children.length) pop.appendChild(h('.tiny.faint', { style: { padding: '8px' } }, tr('Type a character name…')));
     const s = getSelection();
     if (s.rangeCount) {
       const rect = s.getRangeAt(0).getBoundingClientRect();
@@ -210,7 +211,7 @@ function RichEditor({ html = '', placeholder = 'Piš…', ownerType = null, owne
     if (!imgs.length || !ownerType) return false;
     e.preventDefault();
     for (const a of await uploadFiles(ownerType, ownerId, imgs)) insertImage(a);
-    toast(`Vloženo ${imgs.length} ${fmt.plural(imgs.length, 'obrázek', 'obrázky', 'obrázků')}`);
+    toast(trn(imgs.length, 'Inserted {n} image', 'Inserted {n} images'));
     return true;
   }
   area.addEventListener('paste', async e => {
