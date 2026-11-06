@@ -197,6 +197,7 @@ function nodeMenu(ev, e) {
     { label: tr('New sub-event'), icon: 'corner-down-right', onClick: () => newEvent(e.id) },
     { label: tr('Move to top level'), icon: 'arrow-up-to-line', disabled: !e.parent_id, onClick: async () => { await API.call('event.move', { id: e.id, parent_id: null }); App.loadEvents(); } },
     { sep: true },
+    testMenuItem('event', e),
     { label: tr('Delete…'), icon: 'trash-2', danger: true, onClick: () => deleteEvent(e) },
   ]);
 }
@@ -261,6 +262,7 @@ async function renderPage() {
         { label: tr('New sub-event'), icon: 'corner-down-right', onClick: () => newEvent(ev.id) },
         { label: tr('Show on timeline'), icon: 'chart-gantt', onClick: () => App.go('timeline', { focus: ev.id }) },
         { sep: true },
+        testMenuItem('event', App.eventsById.get(ev.id) || ev),
         { label: tr('Delete event…'), icon: 'trash-2', danger: true, onClick: () => deleteEvent(App.eventsById.get(ev.id)) },
       ]) }, icon('ellipsis'))),
     h('.inner',

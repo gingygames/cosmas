@@ -92,6 +92,7 @@ function renderDetail() {
     h('textarea.input.lt-paper', { rows: 14, onkeydown: e => e.stopPropagation(), oninput: e => { l.body = e.target.value; save({ body: l.body }); } }, l.body || ''),
     h('.row', { style: { marginTop: '14px' } },
       l.channel ? h('span.small.faint', tr('Source: {source}', { source: l.channel + (l.author ? ' · ' + l.author : '') })) : null, h('.grow'),
+      h('button.btn', { onclick: e => menu(e, [testMenuItem('letter', l)]) }, icon('flask-conical'), l.is_test ? tr('Test record') : tr('Test')),
       h('button.btn.danger', { onclick: async () => { if (!await confirmDialog(tr('Delete letter'), tr('Really delete this letter?'), { danger: true, okLabel: tr('Delete') })) return; await API.call('letter.delete', { id: l.id }); cur = null; await load(); renderRows(); renderDetail(); } }, icon('trash-2'), tr('Delete'))));
 }
 

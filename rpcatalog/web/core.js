@@ -475,6 +475,23 @@ document.addEventListener('mousedown', e => { if (!e.target.closest('.menu')) { 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); $$('.menu').forEach(x => x.remove()); } });
 
 /* ---------------- shared widgets ---------------- */
+/** Menu item that marks records as test data (hidden unless Settings → Test data → Show, never synced) or back. */
+function testMenuItem(kind, recs) {
+  recs = (Array.isArray(recs) ? recs : [recs]).filter(Boolean);
+  const on = recs.length > 0 && recs.every(r => r.is_test);
+  return { label: on ? tr('Not a test record') : tr('Mark as test record'), icon: 'flask-conical', onClick: async () => {
+    await API.call('test.mark', { kind, ids: recs.map(r => r.id), value: !on });
+    toast(on ? tr('Marked as a real record') : (App.settings.show_test_data ? tr('Marked as test record')
+      : tr('Marked as test record – hidden until you turn on Show test data in Settings')));
+    await Promise.all([App.refresh('media', 'events', 'chars', 'meta'), App.loadServers ? App.loadServers() : null]);
+    App.emit('bookmarks'); App.emit('synced');
+    Views.show(Views.activeName, {});
+  } };
+}
+/** Small "TEST" chip next to a record name while test data are shown. */
+function testChip(r) {
+  return r && r.is_test ? h('span.test-chip', { title: tr('Test record – hidden unless test data are shown, never synced') }, tr('TEST')) : null;
+}
 function initials(name) {
   // first letter of the first two words, skipping quotes and nicknames ('Ada "Crow" Malone' -> AM)
   const words = (name || '').split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w));

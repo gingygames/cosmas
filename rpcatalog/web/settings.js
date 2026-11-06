@@ -206,6 +206,26 @@ Views.register('settings', {
       App.settings.short_session_seconds = +shortS.value; App.settings.event_gap_minutes = +gap.value;
       toast(tr('Saved – reloading the library'));
     };
+    const testCard = () => {
+      const box = h('div');
+      const render = async () => {
+        const t = await API.call('test.info');
+        const n = Object.values(t.counts || {}).reduce((a, b) => a + b, 0);
+        clear(box).append(
+          h('label.check', h('input', { type: 'checkbox', checked: !!t.show, onchange: async e => {
+            await API.call('test.show', { show: e.target.checked }); App.settings.show_test_data = e.target.checked; location.reload();
+          } }), tr('Show test data')),
+          h('.small.faint', { style: { margin: '8px 0 10px' } }, n ? trn(n, '{n} test record', '{n} test records') : tr('No test records.')),
+          h('button.btn.danger', { disabled: !n, onclick: async () => {
+            if (!await confirmDialog(tr('Delete test data'), tr('Delete all test records? A backup of the catalogue is made first. Videos stay in the library (still marked as test) – files on disk are never touched.'), { danger: true, okLabel: tr('Delete') })) return;
+            const r = await API.call('test.delete');
+            toast(tr('Test data deleted. Backup: {path}', { path: r.backup }));
+            await App.refresh('media', 'events', 'chars', 'meta'); App.emit('synced'); render();
+          } }, icon('trash-2'), tr('Delete test data')));
+      };
+      render();
+      return box;
+    };
     root.appendChild(h('.scroll', { style: { flex: 1 } },
       h('.page-head', h('h1', tr('Settings')), h('.grow'), h('button.btn.primary', { onclick: save }, icon('save'), tr('Save'))),
       h('div', { style: { padding: '0 24px 40px', maxWidth: '820px' } },
@@ -224,6 +244,7 @@ Views.register('settings', {
         card(tr('Audio tracks'), tr('Which tracks are turned on when a video is opened (when the last choice is not remembered).'), mixRow,
           h('label.check', { style: { marginTop: '12px' } }, remember, tr('Remember the last selected tracks (by type – game, microphone…)'))),
         card(tr('Renaming and merging games'), tr('One line = original name = new name.'), aliases),
+        card(tr('Test data'), tr('Records marked as test (menu ⋯ → Mark as test record) are hidden everywhere unless shown here, and they are never synced or published.'), testCard()),
         card(tr('Catalog data'), tr('Edits, journals, characters and attachments are stored in {path}. Back this folder up.', { path: s.data_dir || 'data' }),
           h('.row', h('button.btn', { onclick: () => API.call('open_data_dir') }, icon('folder-open'), tr('Open data folder')),
             h('button.btn', { onclick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } }, icon('refresh-cw'), tr('Reload library')))),

@@ -328,7 +328,7 @@ function card(m) {
     resumeBar(m),
     h('.pl', { onclick: e => { e.stopPropagation(); play(m); } }, h('span', icon('play')))),
   h('.meta',
-    h('.t.ellipsis', m.name),
+    h('.t.ellipsis', m.name, testChip(m)),
     h('.s', h('span.ellipsis', `${fmt.time(m.start)} · ${m.game}`)),
     (m.tags.length || (m.chars || []).length) ? h('.tags',
       (m.chars || []).length ? avatarStack(m.chars, 20, 4) : null,
@@ -479,6 +479,7 @@ function cardMenu(e) {
       { label: tr('No server'), onClick: async () => { await API.call('server.assign', { type: 'media', ids: ms.map(m => m.id), server_id: null }); App.refresh('media'); } },
     ] },
     one ? { label: tr('Show in folder'), icon: 'folder-open', onClick: () => API.call('media.reveal', { id: one.id }) } : null,
+    testMenuItem('media', ms),
     { label: tr('Delete to Recycle Bin…'), icon: 'trash-2', danger: true, onClick: () => deleteMedia(ms) },
   ]);
   async function bulk_(op, value) { await API.call('media.bulk', { ids: ms.map(m => m.id), op, value }); App.refresh('media'); }

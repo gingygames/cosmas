@@ -92,7 +92,7 @@ class Api(QObject):
                  "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
                  "analysis.char_looks", "ai.info", "ai.open", "lang.set",
                  "auth.status", "auth.start", "auth.cancel", "auth.open", "auth.sign_out",
-                 "share.get", "share.set", "share.rotate"}
+                 "share.get", "share.set", "share.rotate", "test.info"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -153,6 +153,7 @@ class Api(QObject):
             "sidecars": len(m.sidecar_list()),
             "resume": m.get("resume_pos"), "watched_at": m.get("watched_at"),
             "chars": chars.get(m.id, []) if chars is not None else None,
+            "is_test": bool(m.get("is_test")),
         }
 
     @staticmethod
@@ -243,7 +244,7 @@ class Api(QObject):
         return {
             "settings": {k: self.settings.get(k) for k in
                          ("clip_max_seconds", "short_session_seconds", "hide_short_sessions",
-                          "event_gap_minutes", "roots", "ui", "player_layout", "discord_guild", "holub_marker")},
+                          "event_gap_minutes", "roots", "ui", "player_layout", "discord_guild", "holub_marker", "show_test_data")},
             "albums": self.store.albums(),
             "tags": self.store.all_tags(),
             "games": self.store.games(),
@@ -1645,6 +1646,43 @@ class Api(QObject):
         if values.get("_rescan", True):
             self.host.rescan()
         return True
+
+    # ------------------------------------------------------------ test records
+    TEST_KINDS = {"media": "media", "video": "media", "character": "characters", "faction": "factions",
+                  "place": "places", "event": "events", "letter": "letters", "bookmark": "bookmarks",
+                  "moment": "bookmarks", "player": "players"}
+
+    def m_test_mark(self, kind, ids, value=True):
+        """Mark records as test data (hidden unless "Show test data" is on, never synced) or back as real."""
+        table = self.TEST_KINDS.get(kind)
+        if not table:
+            raise ValueError(kind)
+        self.store.set_test(table, ids, value)
+        return True
+
+    def m_test_info(self):
+        return {"show": bool(self.settings.get("show_test_data")), "counts": self.store.test_counts()}
+
+    def m_test_show(self, show):
+        self.settings["show_test_data"] = bool(show)
+        self.store.hide_test = not show
+        self.host.save_settings()
+        return self.m_test_info()
+
+    def m_test_delete(self):
+        """Back up catalog.db (backups/catalog-<time>-before-deleting-test-data.db), then delete all test records."""
+        import sqlite3
+        bdir = config.DATA_DIR / "backups"
+        bdir.mkdir(parents=True, exist_ok=True)
+        dst = bdir / time.strftime("catalog-%Y%m%d-%H%M%S-before-deleting-test-data.db")
+        out = sqlite3.connect(str(dst))
+        try:
+            self.store.db.commit()
+            self.store.db.backup(out)
+        finally:
+            out.close()
+        counts = self.store.delete_test_data()
+        return {"backup": str(dst), "deleted": counts}
 
     def m_lang_set(self, lang="auto"):
         """UI language setting (auto | en | cs). Both web pages reload themselves in the resolved language."""
