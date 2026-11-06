@@ -233,8 +233,7 @@ def write_sha256(path):
     """<installer>.sha256 next to the installer, in the format of sha256sum: "<hex>  <file name>"."""
     digest = sha256_of(path)
     out = Path(str(path) + ".sha256")
-    out.write_text(f"{digest}  {Path(path).name}
-", "ascii")
+    out.write_text(f"{digest}  {Path(path).name}\n", "ascii")
     return digest, out
 
 
