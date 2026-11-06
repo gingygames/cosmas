@@ -44,6 +44,10 @@ DEFAULTS = {
     "ai_base_every": 120,            # outside conversations (0 = never)
     "ai_detect_names": True,         # read name tags above characters
     "ai_detect_faces": True,         # cut out faces during conversations
+    "ai_appearance": True,           # recognise characters by clothing, hair and face
+    "ai_look_threshold": 0.60,       # how similar a figure must be to a character's references
+    "ai_look_margin": 0.04,          # ... and how much more than to the second most similar character
+    "ai_look_half_life": 30,         # days after which an older reference (other clothes?) counts less
     "ai_context": "",                # a few words about the game / server for the models
     "ai_chapters": True,
     "ai_text_model": "qwen3.8:27b",

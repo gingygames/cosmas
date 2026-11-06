@@ -227,16 +227,21 @@ class Worker:
                         "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "3", "-y", str(dst)], creationflags=NO_WINDOW)
         return dst if dst.exists() else None
 
-    def _faces(self, img, t):
+    def _face_detector(self):
         import cv2
         if self.faces is None:
             if not FACE_MODEL.exists():
                 FACE_MODEL.parent.mkdir(parents=True, exist_ok=True)
                 urllib.request.urlretrieve(FACE_MODEL_URL, FACE_MODEL)
             self.faces = cv2.FaceDetectorYN.create(str(FACE_MODEL), "", (320, 320), 0.75)
+        return self.faces
+
+    def _faces(self, img, t):
+        import cv2
         h, w = img.shape[:2]
-        self.faces.setInputSize((w, h))
-        _, found = self.faces.detect(img)
+        det = self._face_detector()
+        det.setInputSize((w, h))
+        _, found = det.detect(img)
         out = []
         fdir = analysis_dir(self.job["id"]) / "faces"
         fdir.mkdir(exist_ok=True)
@@ -289,12 +294,14 @@ class Worker:
                 heard = " ".join(f"{r['speaker']}: {r['text']}" for r in speech
                                  if (r.get("t_end") or r["t"]) > t - 12 and r["t"] < t + 12)
                 try:
-                    rec.update(self._ask_vision(path, heard))
+                    rec.update(self._ask_vision(path, heard, img.shape[1], img.shape[0]))
                 except (OSError, ValueError, KeyError) as e:      # one bad frame must not stop the video
                     self.say("vision", i / max(1, len(plan)), f"Obraz · {clock(t)} · přeskočeno ({type(e).__name__})")
                     f.write(json.dumps({"t": t, "kind": kind, "skip": True, "error": str(e)[:200]}) + "\n")
                     path.unlink(missing_ok=True)
                     continue
+                if rec.get("persons"):
+                    rec["persons"] = self._persons(img, t, rec["persons"])
                 thumb = out / "frames" / f"{int(t * 10):07d}.jpg"
                 cv2.imwrite(str(thumb), cv2.resize(img, (320, int(320 * img.shape[0] / img.shape[1]))),
                             [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -305,7 +312,44 @@ class Worker:
                 last_img, last_t = small.astype(int), t
                 self.say("vision", (i + 1) / len(plan), f"Obraz · {clock(t)}", partial=True)
 
-    def _ask_vision(self, img, heard):
+    def _persons(self, img, t, raw):
+        """Crop every person the model marked, fingerprint clothing/hair (and the face if visible)."""
+        import cv2
+        from .appearance import Embedder, pack
+        if getattr(self, "_emb", None) is None:
+            self._emb = Embedder()
+        h, w = img.shape[:2]
+        pdir = analysis_dir(self.job["id"]) / "people"
+        pdir.mkdir(exist_ok=True)
+        out = []
+        for k, p in enumerate(raw[:6]):
+            x0, y0, x1, y1 = p["box"]
+            x0, x1 = sorted((max(0, int(x0 * w)), min(w, int(x1 * w))))
+            y0, y1 = sorted((max(0, int(y0 * h)), min(h, int(y1 * h))))
+            if (x1 - x0) * (y1 - y0) < w * h * 0.015 or x1 - x0 < 16 or y1 - y0 < 24:
+                continue                      # too small to tell clothes apart
+            crop = img[y0:y1, x0:x1]
+            rec = {"idx": k, "box": [x0 / w, y0 / h, (x1 - x0) / w, (y1 - y0) / h], "name": p.get("name", ""),
+                   "look": p.get("look", ""), "emb": pack(self._emb.body(crop))}
+            try:      # face inside the figure, if one is visible
+                det = self._face_detector()
+                det.setInputSize((crop.shape[1], crop.shape[0]))
+                _, found = det.detect(crop)
+                if found is not None and len(found):
+                    best = max(found, key=lambda f: f[2] * f[3])
+                    if best[2] >= 24:
+                        rec["face_emb"] = pack(self._emb.face(crop, best))
+            except cv2.error:
+                pass
+            name = f"{int(t * 10):07d}_{k}.jpg"
+            sc = min(1.0, 240 / crop.shape[0])
+            cv2.imwrite(str(pdir / name), cv2.resize(crop, (max(1, int(crop.shape[1] * sc)), max(1, int(crop.shape[0] * sc)))),
+                        [cv2.IMWRITE_JPEG_QUALITY, 85])
+            rec["file"] = name
+            out.append(rec)
+        return out
+
+    def _ask_vision(self, img, heard, width=768, height=432):
         cfg = self.cfg
         prompt = ("Toto je snímek z videozáznamu hraní RP (hraní rolí) ve hře. "
                   + (cfg["context"].strip() + " " if cfg.get("context", "").strip() else "")
@@ -316,19 +360,38 @@ class Worker:
                        "nebo v rozhraní (rozhovor, chat). Nic si nedomýšlej; když žádné nevidíš, dej prázdný seznam.")
             if cfg.get("known_names"):
                 prompt += " Postavy v tomto světě jsou např.: " + ", ".join(cfg["known_names"][:60]) + "."
+        if cfg.get("appearance"):
+            prompt += (" Do pole 'lide' uveď každou zřetelně viditelnou postavu (nejvýš 6, ne hlavní postavu zezadu "
+                       "v popředí, pokud je vidět jen kus): box = [x1, y1, x2, y2] v souřadnicích 0–1000 vůči šířce "
+                       "a výšce obrázku (celá viditelná postava včetně hlavy), jmeno = jméno napsané přímo nad touto "
+                       "postavou (jinak prázdné), vzhled = krátce oblečení, barvy, vlasy, vousy, pokrývka hlavy.")
         if heard:
             prompt += f" V tu chvíli zaznívá: \"{heard[:600]}\""
+        person = {"type": "object", "required": ["box"], "properties": {
+            "box": {"type": "array", "items": {"type": "number"}}, "jmeno": {"type": "string"}, "vzhled": {"type": "string"}}}
         schema = {"type": "object", "required": ["popis", "jmena", "postav"], "properties": {
             "popis": {"type": "string"}, "jmena": {"type": "array", "items": {"type": "string"}},
-            "postav": {"type": "integer"}, "misto": {"type": "string"}}}
+            "postav": {"type": "integer"}, "misto": {"type": "string"},
+            **({"lide": {"type": "array", "items": person}} if cfg.get("appearance") else {})}}
         # num_predict caps the answer: a model that starts looping must not hold the GPU for minutes
         resp = _ollama("/api/generate", {"model": cfg["vision_model"], "prompt": prompt, "stream": False, "format": schema,
                                          "images": [base64.b64encode(img.read_bytes()).decode()],
                                          "options": {"temperature": 0.2, "num_predict": 700}}, timeout=240)
         try:
             d = json.loads(resp["response"])
-            return {"caption": d.get("popis", "").strip(), "names": [n.strip() for n in d.get("jmena", []) if n.strip()]
-                    if cfg["detect_names"] else [], "people": d.get("postav"), "place": d.get("misto", "")}
+            persons = []
+            for p in d.get("lide") or []:
+                b = p.get("box") or []
+                if len(b) != 4:
+                    continue
+                # 0-1000 as asked; some models answer in pixels of the image they got
+                sx, sy = (width, height) if max(b) > 1000 else (1000, 1000)
+                persons.append({"box": [b[0] / sx, b[1] / sy, b[2] / sx, b[3] / sy],
+                                "name": (p.get("jmeno") or "").strip(), "look": (p.get("vzhled") or "").strip()})
+            names = [n.strip() for n in d.get("jmena", []) if n.strip()] if cfg["detect_names"] else []
+            names += [p["name"] for p in persons if p["name"] and p["name"] not in names]
+            return {"caption": d.get("popis", "").strip(), "names": names, "people": d.get("postav"),
+                    "place": d.get("misto", ""), "persons": persons}
         except ValueError:
             return {"caption": resp["response"].strip(), "names": [], "people": None}
 
@@ -422,7 +485,8 @@ class Worker:
                     "misto": {"type": "string"}, "ucastnici": {"type": "array", "items": {"type": "string"}},
                     "popis": {"type": "string"}}}},
                 "zminky": {"type": "array", "items": ent}, "nove": {"type": "array", "items": ent},
-                "pamet": {"type": "string"}}, ctx=32768)
+                "pamet": {"type": "string"}}, ctx=32768,
+                fallback={"nazev": {"type": "string"}, "shrnuti": {"type": "string"}, "pamet": {"type": "string"}})
 
             def ts(x, default):
                 v = _parse_clock(x)
@@ -545,14 +609,23 @@ def _ollama(path, body=None, timeout=600):
         return json.loads(r.read())
 
 
-def _ask_text(model, prompt, props, ctx=16384, max_tokens=4000):
+def _ask_text(model, prompt, props, ctx=16384, max_tokens=12000, fallback=None):
+    """Structured answer from a text model. Thinking models (qwen3.x) think first and that counts against
+    max_tokens, so the limit is generous; a cut or broken answer is logged and, if `fallback` (simpler
+    properties) is given, asked again in the simple form so at least the chapter and memory exist."""
     resp = _ollama("/api/generate", {"model": model, "prompt": prompt, "stream": False,
                                      "options": {"temperature": 0.3, "num_ctx": ctx, "num_predict": max_tokens},
                                      "format": {"type": "object", "properties": props, "required": list(props)}},
-                   timeout=900)
+                   timeout=1200)
     try:
         return json.loads(resp["response"])
     except ValueError:
+        with (config.DATA_DIR / "analysis" / "llm_errors.log").open("a", encoding="utf-8") as log:
+            log.write(json.dumps({"time": time.time(), "model": model, "done_reason": resp.get("done_reason"),
+                                  "eval": resp.get("eval_count"), "thinking": len(resp.get("thinking") or ""),
+                                  "response": (resp.get("response") or "")[-2000:]}, ensure_ascii=False) + "\n")
+        if fallback:
+            return _ask_text(model, prompt + "\n\n(Odpověz stručně.)", fallback, ctx, max_tokens)
         return {}
 
 

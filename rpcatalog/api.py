@@ -54,7 +54,8 @@ class Api(QObject):
                  "game.art_pick_file", "game.art_installed", "factions.list", "faction.get", "players.list", "player.get",
                  "analysis.get", "analysis.queue", "analysis.stats", "analysis.models", "analysis.overview",
                  "analysis.char_mentions", "analysis.search", "analysis.open_timeline", "analysis.skip",
-                 "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions"}
+                 "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
+                 "analysis.char_looks"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -257,12 +258,19 @@ class Api(QObject):
 
         def url(sub, f):
             return file_url(d / sub / f) if f else None
+        hits = self.store.appearance_hits(id)
         frames = [{"t": f["t"], "kind": f.get("kind", "base"), "skip": bool(f.get("skip")), "names": f.get("names") or [],
                    "people": f.get("people"), "place": f.get("place", ""), "thumb": url("frames", f.get("thumb")),
-                   "faces": [{"url": url("faces", x["file"]), "file": x["file"]} for x in f.get("faces") or []]}
+                   "faces": [{"url": url("faces", x["file"]), "file": x["file"]} for x in f.get("faces") or []],
+                   "persons": [{"idx": p["idx"], "url": url("people", p.get("file")), "name": p.get("name", ""),
+                                "look": p.get("look", ""), "face": bool(p.get("face_emb")),
+                                "hit": hits.get((round(f["t"], 1), p["idx"]))} for p in f.get("persons") or []]}
                   for f in load_frames(id)]
         m = self.store.media(id)
-        return {"available": jobs.available(), "state": jobs.state.get(id), "rows": rows, "frames": frames,
+        from .appearance import unknown_groups
+        groups = [dict(g, urls=[url("people", f) for f in g["files"][:8]], files=None)
+                  for g in unknown_groups(load_frames(id), hits)[:12]]
+        return {"available": jobs.available(), "state": jobs.state.get(id), "rows": rows, "frames": frames, "groups": groups,
                 "coverage": coverage(id), "mentions": self.store.mentions(media_id=id), "duration": m.duration if m else 0,
                 "speakers": [s["speaker"] for s in speech_tracks(m)] if m else [],
                 "timeline": (d / "timeline.md").exists(), "vision_model": self.settings.get("ai_vision_model"),
@@ -410,6 +418,50 @@ class Api(QObject):
         att = self._add("character", character_id, dst, f"Portrét z videa {m.display_title if m else ''}", mime, kind)
         self.m_char_portrait(character_id, att["id"])
         return True
+
+    # ---- appearance: who is who on the frames
+    def m_analysis_person_label(self, media_id, t, idx, character_id, verdict="yes"):
+        """The user says who a person on a frame is (yes) or is not (no); it becomes a reference."""
+        self.store.label_person(media_id, t, idx, character_id, verdict)
+        self.host.import_analysis(media_id, False)
+        return self.store.appearance_hits(media_id).get((round(t, 1), idx))
+
+    def m_analysis_group_label(self, media_id, members, character_id):
+        """One answer for a whole group of similar-looking people: all of them are this character."""
+        for t, idx in members:
+            self.store.label_person(media_id, t, idx, character_id, "yes")
+        self.host.import_analysis(media_id, False)
+        return len(members)
+
+    def m_analysis_char_looks(self, id):
+        """How a character looked in recordings: the reference crops, oldest first."""
+        out = []
+        names = {}
+        for r in self.store.appearance_refs(id):
+            if r["media_id"] not in names:
+                m = self.store.media(r["media_id"])
+                names[r["media_id"]] = m.display_title if m else ""
+            out.append({"id": r["id"], "media_id": r["media_id"], "t": r["t"], "source": r["source"], "look": r["look"],
+                        "abs_time": r["abs_time"], "media": names[r["media_id"]], "face": bool(r["face"]),
+                        "url": file_url(analysis_dir(r["media_id"]) / "people" / r["file"]) if r["file"] else None})
+        return out
+
+    def m_analysis_ref_delete(self, id):
+        r = next((x for x in self.store.appearance_refs() if x["id"] == id), None)
+        self.store.delete_appearance_ref(id)
+        if r:
+            self.host.import_analysis(r["media_id"], False)
+        return True
+
+    def m_analysis_rematch_all(self):
+        """Compare every analysed video again with the current references (after confirming or correcting)."""
+        n = 0
+        for d in sorted((config.DATA_DIR / "analysis").glob("*/captions.jsonl")):
+            mid = int(d.parent.name) if d.parent.name.isdigit() else None
+            if mid and self.store.media(mid):
+                self.host.import_analysis(mid, False)
+                n += 1
+        return n
 
     def m_analysis_search(self, q, limit=200):
         return self.store.transcript_search(q, limit)

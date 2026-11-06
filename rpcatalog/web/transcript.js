@@ -359,14 +359,32 @@ function transcriptSection(m) {
         cv.chapters.map(c => h('.trs-chap-row', { onclick: () => { jumpTo(c.t); TR.play(m.id, c.t); } },
           h('span.kbd', fmt.clock(c.t)), h('.grow', h('b', c.title), h('.tiny.faint', c.summary))))));
     }
+    if ((d.groups || []).length) {
+      meta.appendChild(h('details.trs-groups', { open: true },
+        h('summary', icon('users-round'), `Nepoznané postavy · ${d.groups.length} ${fmt.plural(d.groups.length, 'skupina', 'skupiny', 'skupin')} podle vzhledu`),
+        h('.tiny.faint', { style: { margin: '4px 0 6px' } }, 'Stejné oblečení a vlasy = nejspíš stejná postava. Jedna odpověď označí celou skupinu a vytvoří vzory pro další videa.'),
+        d.groups.map(g => h('.trs-group',
+          h('.trs-group-imgs', g.urls.filter(Boolean).map(u => h('img', { src: u, loading: 'lazy' }))),
+          h('.grow', { style: { minWidth: 0 } }, h('b', `${g.members.length}× v záznamu`),
+            g.names.length ? h('.tiny.faint.ellipsis', 'jmenovky: ' + g.names.map(([n, k]) => `${n} (${k}×)`).join(', ')) : null),
+          h('button.btn.sm', { onclick: async () => {
+            const ids = await pickCharacters([], { title: g.names.length ? `Kdo to je? (jmenovka: ${g.names[0][0]})` : 'Kdo to je?', multi: false });
+            const id = Array.isArray(ids) ? ids[0] : ids;
+            if (!id) return;
+            const n = await API.call('analysis.group_label', { media_id: m.id, members: g.members, character_id: id });
+            toast(`${n}× označeno jako ${App.charsById.get(id)?.name || 'postava'} – vzory uloženy`);
+            load();
+          } }, icon('user-search'), 'Kdo to je…')))));
+    }
     const byChar = new Map();
     for (const x of d.mentions) { if (!byChar.has(x.character_id)) byChar.set(x.character_id, []); byChar.get(x.character_id).push(x); }
     if (byChar.size) {
       meta.appendChild(h('.trs-chars', h('span.tiny.faint', 'V záznamu:'),
         [...byChar.entries()].map(([id, xs]) => [App.charsById.get(id), xs]).filter(([c]) => c).sort((a, b) => b[1].length - a[1].length).map(([c, xs]) =>
-          h('span.chip' + (st.charFilter === c.id ? '.on' : ''), { title: `${xs.length}× – ${[...new Set(xs.map(x => ({ speech: 'zmíněn v řeči', seen: 'jmenovka v obraze', ai: 'podle kroniky' }[x.kind])))].join(', ')}. Klik = jen tato místa`,
+          h('span.chip' + (st.charFilter === c.id ? '.on' : ''), { title: `${xs.length}× – ${[...new Set(xs.map(x => ({ speech: 'zmíněn v řeči', seen: 'jmenovka / potvrzeno v obraze', look: 'poznán podle vzhledu', ai: 'podle kroniky' }[x.kind])))].join(', ')}. Klik = jen tato místa`,
             onclick: () => { st.charFilter = st.charFilter === c.id ? null : c.id; renderMeta(); renderList(); } },
-          avatar(c, 18), c.name, h('span.faint', xs.length), xs.some(x => x.kind === 'seen') ? icon('eye') : null))));
+          avatar(c, 18), c.name, h('span.faint', xs.length), xs.some(x => x.kind === 'seen') ? icon('eye') : null,
+          xs.some(x => x.kind === 'look') ? icon('scan-face') : null))));
     }
   }
   function jumpTo(t) {
@@ -435,8 +453,9 @@ function transcriptSection(m) {
         h('.trs-body',
           f && f.thumb ? h('img.trs-thumb', { src: f.thumb, loading: 'lazy' }) : null,
           h('span.trs-text', richText(r.text, stems, words)),
-          f && (f.names.length || f.faces.length) ? h('.trs-extra',
-            f.names.map(n => h('span.trs-tag', icon('tag'), n)),
+          f && (f.names.length || f.faces.length || (f.persons || []).length) ? h('.trs-extra',
+            (f.persons || []).map(p => personChip(r.t, p)),
+            f.names.filter(n => !(f.persons || []).some(p => p.name === n)).map(n => h('span.trs-tag', icon('tag'), n)),
             f.faces.map(x => h('img.trs-face', { src: x.url, title: 'Tvář – klik: použít jako portrét postavy', onclick: e => { e.stopPropagation(); facePortrait(r.t, x); } }))) : null),
         h('.trs-act',
           h('button.npb', { title: 'Záložka na tomto místě', onclick: async e => { e.stopPropagation(); await API.call('bm.create', { media_id: m.id, t: r.t, title: r.text.slice(0, 70) }); toast('Záložka přidána'); } }, icon('bookmark-plus')))));
@@ -448,6 +467,38 @@ function transcriptSection(m) {
     list.scrollTop = top;
     count.textContent = (words.length || near) ? `${shown.length} ${fmt.plural(shown.length, 'výsledek', 'výsledky', 'výsledků')}` : '';
     $('.trs-tools', root).classList.toggle('hidden', !d.rows.length);
+  }
+  /** One person on a frame: crop + who it is (name tag, confirmed, or recognised by clothing/hair/face). */
+  function personChip(t, p) {
+    const hit = p.hit, c = hit && App.charsById.get(hit.character_id);
+    const how = hit ? { tag: ['tag', 'jmenovka nad hlavou'], user: ['user-check', 'potvrzeno tebou'], look: ['scan-face', 'podle vzhledu'] }[hit.source] : null;
+    const label = c ? c.name : p.name || 'neznámý';
+    return h('span.trs-person' + (hit ? '.' + hit.source : '.unknown'), {
+      title: [label, how ? how[1] + (hit.source === 'look' ? ` (shoda ${Math.round(hit.score * 100)} %)` : '') : 'nepoznáno – klikni a řekni kdo to je',
+        p.look].filter(Boolean).join('\n'),
+      onclick: e => { e.stopPropagation(); personMenu(e, t, p, c); },
+    }, p.url ? h('img', { src: p.url, loading: 'lazy' }) : null,
+      h('span.trs-pname', how ? icon(how[0]) : icon('circle-help'), h('span.ellipsis', label),
+        hit && hit.source === 'look' ? h('span.trs-score', Math.round(hit.score * 100) + ' %') : null));
+  }
+  function personMenu(e, t, p, c) {
+    const label = async (cid, verdict) => {
+      await API.call('analysis.person_label', { media_id: m.id, t, idx: p.idx, character_id: cid, verdict });
+      toast(verdict === 'yes' ? 'Uloženo – podle tohoto vzoru se postava pozná i jinde' : 'Uloženo – tady to není');
+      load();
+    };
+    const pick = async () => {
+      const ids = await pickCharacters([], { title: 'Kdo to je?', multi: false });
+      const id = Array.isArray(ids) ? ids[0] : ids;
+      if (id) label(id, 'yes');
+    };
+    menu(e, [
+      c && p.hit.source === 'look' ? { label: `Ano, je to ${c.name}`, icon: 'check', onClick: () => label(c.id, 'yes') } : null,
+      c ? { label: `Není to ${c.name}`, icon: 'x', onClick: () => label(c.id, 'no') } : null,
+      { label: c ? 'Je to někdo jiný…' : 'Kdo to je…', icon: 'user-search', onClick: pick },
+      c ? { sep: true } : null,
+      c ? { label: `Otevřít postavu ${c.name}`, icon: 'user', onClick: () => App.go('characters', { id: c.id }) } : null,
+    ].filter(Boolean));
   }
   async function facePortrait(t, face) {
     const ids = await pickCharacters([], { title: 'Čí je to tvář?', multi: false });
@@ -476,11 +527,39 @@ function mentionsSection(type, id, { title = 'V záznamech (přepis)' } = {}) {
         h('.trm-head', { onclick: () => App.go('library', { select: [g.media.id] }) }, g.media.thumb ? h('img', { src: g.media.thumb }) : null,
           h('.grow', h('.ellipsis', g.media.name), h('.tiny.faint', fmt.dt(g.media.start)))),
         h('.trm-hits', g.hits.slice(0, 12).map(x => h('.trm-hit', { onclick: () => TR.play(g.media.id, x.t - 2), title: x.text || '' },
-          h('span.kbd', fmt.clock(x.t)), icon({ speech: 'audio-lines', seen: 'eye', ai: 'sparkles' }[x.kind] || 'dot'),
-          h('span.ellipsis', x.text || { seen: 'jmenovka v obraze', speech: 'zmínka v řeči', ai: 'podle kroniky' }[x.kind] || ''))),
+          h('span.kbd', fmt.clock(x.t)), icon({ speech: 'audio-lines', seen: 'eye', look: 'scan-face', ai: 'sparkles' }[x.kind] || 'dot'),
+          h('span.ellipsis', x.text || { seen: 'jmenovka / potvrzeno v obraze', look: 'poznán podle vzhledu', speech: 'zmínka v řeči', ai: 'podle kroniky' }[x.kind] || ''))),
           g.hits.length > 12 ? h('.tiny.faint', `+ ${g.hits.length - 12} dalších`) : null)));
     }
   }).catch(() => {});
   return box;
 }
 window.mentionsSection = mentionsSection;
+
+/** "Vzhled v záznamech": how a character looked over time (references from name tags and confirmations). */
+function looksSection(charId) {
+  const box = h('.ch-sec.trl', h('.section-title', icon('scan-face'), 'Vzhled v záznamech', h('.line')), h('.faint.small', 'Načítám…'));
+  const render = async () => {
+    const refs = await API.call('analysis.char_looks', { id: charId }).catch(() => []);
+    while (box.childNodes.length > 1) box.lastChild.remove();
+    if (!refs.length) {
+      box.appendChild(h('.faint.small', 'Zatím žádné vzory. Vzniknou samy, když je nad postavou ve videu vidět jmenovka, nebo když u postavy na snímku potvrdíš, kdo to je – podle nich se pak pozná i bez jmenovky (oblečení, vlasy, obličej).'));
+      return;
+    }
+    box.appendChild(h('.tiny.faint', { style: { marginBottom: '6px' } },
+      `${refs.length} ${fmt.plural(refs.length, 'vzor', 'vzory', 'vzorů')} · podle nich se postava pozná i bez jmenovky. Novější vzory mají přednost (oblečení se mění).`));
+    box.appendChild(h('.trl-grid', refs.slice().reverse().map(r => h('.trl-item', {
+      title: [fmt.dt(r.abs_time) || r.media, r.look, r.source === 'tag' ? 'ze jmenovky' : 'potvrzeno tebou'].filter(Boolean).join('\n'),
+      onclick: () => TR.play(r.media_id, r.t),
+      oncontextmenu: e => menu(e, [
+        { label: 'Přehrát toto místo', icon: 'play', onClick: () => TR.play(r.media_id, r.t) },
+        { label: 'Není to tato postava – odebrat vzor', icon: 'trash-2', danger: true, onClick: async () => { await API.call('analysis.ref_delete', { id: r.id }); render(); } },
+      ]),
+    }, r.url ? h('img', { src: r.url, loading: 'lazy' }) : icon('user'),
+      h('span.trl-src', icon(r.source === 'tag' ? 'tag' : 'user-check'), r.face ? icon('smile') : null),
+      h('span.trl-date', r.abs_time ? fmt.date(r.abs_time) : '')))));
+  };
+  render();
+  return box;
+}
+window.looksSection = looksSection;

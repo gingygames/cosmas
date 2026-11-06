@@ -63,6 +63,7 @@ def worker_config(s, queue_file, world=None):
         "dialog_every": g("ai_dialog_every", 8), "static_every": g("ai_static_every", 45),
         "motion_threshold": g("ai_motion_threshold", 0.06), "conv_gap": g("ai_conv_gap", 20),
         "detect_names": g("ai_detect_names", True), "detect_faces": g("ai_detect_faces", True),
+        "appearance": g("ai_appearance", True),
         "context": g("ai_context", ""), "text_model": g("ai_text_model", "qwen3.8:27b"),
         "chapter_minutes": g("ai_chapter_minutes", 15), "known_names": (world or {}).get("names", []),
         "world": world or {},

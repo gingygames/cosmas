@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QSplitter, QMessageBox
                                QVBoxLayout, QLabel, QToolButton)
 
 from . import config, scanner
-from . import chronicle, mentions
+from . import appearance, chronicle, mentions
 from .analysis import analysis_dir, load_frames, load_results, _read_json
 from .analysis_jobs import AnalysisJobs
 from .api import Api
@@ -300,7 +300,9 @@ class MainWindow(QMainWindow):
         self.store.transcript_set(media_id, rows)
         chronicle.import_chronicle(self.store, media_id)
         matcher = mentions.Matcher([dict(c) for c in self.store.characters()], [dict(p) for p in self.store.players()])
-        found = mentions.find(rows, load_frames(media_id), matcher)
+        frames = load_frames(media_id)
+        found = mentions.find(rows, frames, matcher)
+        found += appearance.match_media(self.store, media_id, frames, matcher, self.settings)
         found += [{"character_id": x["entity_id"], "t": x["t"], "kind": "ai"}
                   for x in self.store.entity_mentions_of_media(media_id, "character")]
         self.store.set_mentions(media_id, found, autolink=self.settings.get("ai_autolink", True))

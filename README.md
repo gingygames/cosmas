@@ -131,6 +131,11 @@ Všechno běží na tvém počítači (grafická karta NVIDIA), nic se nikam nep
   a obraz se nemění, jen občas. Model čte **jmenovky nad postavami** (propojí je s postavami a hráči) a při rozhovorech
   se hledají **tváře** – klik na tvář ji nastaví jako portrét postavy. Jakýkoli úsek jde dopracovat ručně:
   na pruhu pokrytí v panelu videa táhni myší → „Popsat obraz“.
+- **Poznávání postav podle vzhledu:** model obrazu označí každou postavu na snímku (rámeček, jmenovka nad hlavou,
+  popis oblečení a vlasů); z výřezu se spočítá otisk oblečení/vlasů (DINOv2) a obličeje (SFace). Postavy se jmenovkou
+  nebo potvrzené tebou (klik na postavu u snímku → „Ano, je to…“ / „Kdo to je…“) jsou vzory, ostatní se poznají
+  podle podobnosti – vzory ze stejného večera mají přednost, starší váží méně (oblečení se mění). U postavy je galerie
+  „Vzhled v záznamech“. Modely (~130 MB) se stáhnou do `data/models` při prvním použití a běží na procesoru.
 - **Kronikář AI:** po přepisu projde záznam silnější textový model po blocích (dělených v pauzách mezi rozhovory,
   pauzy jsou v textu vyznačené) s průběžnou pamětí děje, se shrnutím předchozího večera stejné hry a se znalostí
   postav, míst a frakcí z databáze. Vytvoří kapitoly, shrnutí večera, zmínky (uloží se rovnou k postavám, místům,
