@@ -5,7 +5,7 @@
      share.get    {kind, id}              → info
      share.set    {kind, id, visibility}  → info   (desktop: publishes the record first when it isn't on the web yet)
      share.rotate {kind, id}              → info   (new link, the old /kosmas/k/… stops working)
-   info: {kind, id, title, via, desktop, signed_in, published, visibility: private|link|public, share_url}
+   info: {kind, id, title, via, desktop, signed_in, published, visibility: private|link|public, share_url, discord_use?}
    kind: character | faction | place | event | bookmark (a moment is shared together with its video, via = {type, title})
    ============================================================ */
 'use strict';
@@ -24,6 +24,8 @@ document.head.appendChild(h('style', `
 .share-panel .busy i { animation: share-spin 1s linear infinite; }
 @keyframes share-spin { to { transform: rotate(360deg); } }
 .share-panel .err { color: var(--danger); }
+.share-panel .note { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); }
+.share-panel .note > i { margin-top: 2px; flex: none; }
 `));
 
 const VIS = [['private', 'lock', tr('Only me')], ['link', 'link-2', tr('Anyone with the link')], ['public', 'globe', tr('Public')]];
@@ -43,6 +45,14 @@ async function copyText(text) {
   try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
   ta.remove();
   return ok;
+}
+
+/* A character with "Use on Discord" shared via link or public gets a card (with the link) in the community Discord. */
+function usesDiscord(kind, id, info) {
+  if (kind !== 'character') return false;
+  if (info && info.discord_use != null) return !!info.discord_use;
+  const c = typeof App !== 'undefined' && App.charsById && App.charsById.get(Number(id));
+  return !!(c && c.discord_use);
 }
 
 function openShare(kind, id) {
@@ -87,16 +97,25 @@ function openShare(kind, id) {
     const what = h('.what.ellipsis', info.title || tr('Untitled'));
     if (!info.signed_in) {
       body.append(what,
-        h('.small.muted', tr('Sharing works through the web chronicle. Sign in with Discord – the record is uploaded to your private chronicle and you decide who can see it.')),
+        h('.small.muted', tr('Sharing works through the web chronicle. Sign in with Discord – sharing then syncs your whole catalogue to your private web chronicle, and only what you share is visible to others.')),
         h('div', h('button.btn.primary', { onclick: async () => { if (window.webSignIn && await window.webSignIn()) load(); } }, icon('log-in'), tr('Sign in with Discord'))));
       return;
     }
     const vis = info.visibility || 'private';
+    const discord = usesDiscord(kind, id, info);
     body.append(what,
       info.via ? h('.small.muted', tr('A moment is shared together with its video “{title}”.', { title: info.via.title || tr('Video') })) : null,
       h('.seg', VIS.map(([k, ic, label]) => h('button' + (vis === k ? '.on' : ''), { disabled: !!busy, 'aria-pressed': String(vis === k), onclick: () => setVis(k) }, icon(ic), label))),
       h('.small.faint', VIS_HINT[vis]),
-      !info.published && vis === 'private' && info.desktop ? h('.tiny.faint', tr('The record is not on the web yet – choosing a link or Public uploads it now.')) : null,
+      // the first upload sends the whole catalogue (privately) – say so before it happens
+      !info.published && vis === 'private' && info.desktop ? h('.small.muted.note', icon('info'),
+        h('span', tr('The record is not on the web yet. Choosing a link or Public first syncs your whole catalogue to your private web chronicle: characters, factions, places, events, journal entries, moments (including AI chapters), video details (names and file names, not the videos) and attached images. Only this record becomes visible to others – everything else stays private.'))) : null,
+      discord ? h('.small.muted.note', icon('message-circle'),
+        h('span', vis === 'private'
+          ? tr('This character is used on Discord: with a link or Public, its card with the link is posted in the community Discord channel 🧙│postavy.')
+          : tr('This character is used on Discord, so its card with the link is posted in the community Discord channel 🧙│postavy.'))) : null,
+      kind === 'event' ? h('.small.muted.note', icon('film'),
+        h('span', tr('Videos and their moments show up on the shared event only when you publish the video too (a video shared by link shows up when the event is opened through its link).'))) : null,
       busy ? h('.small.muted.busy', icon('loader'), busy + (progress ? ' ' + progress : '')) : null,
       err ? h('.small.err', err) : null,
       info.share_url && vis !== 'private' ? [

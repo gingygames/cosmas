@@ -326,7 +326,7 @@ Views.register('settings', {
       return box;
     };
     const web = sec('web',
-      card(tr('Web chronicle'), tr('Sync with gingygames.com/kosmas: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.'),
+      card(tr('Web chronicle'), tr('Sync with gingygames.com/kosmas: characters, factions, places, events, journal entries, moments (including AI chapters), video details (names and file names, not the videos themselves) and images. Everything on the web is private until you share or publish it yourself. Player contacts and test records are never sent.'),
         webSyncCard()),
       card('Discord', tr('Player names and avatars are fetched via your bot on the server. The token stays on this computer only (in the settings file in the data folder).'), discordCard(s)),
       card(tr('Test data'), tr('Records marked as test (menu ⋯ → Mark as test record) are hidden everywhere unless shown here, and they are never synced or published.'), testCard()));
