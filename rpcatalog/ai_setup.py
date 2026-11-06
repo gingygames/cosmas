@@ -114,7 +114,7 @@ def login_openrouter(api):
             if "code" in q:
                 got["code"] = q["code"][0]
             body = ("<html><meta charset='utf-8'><body style='font-family:sans-serif;padding:40px'>"
-                    "<h2>" + tr("Done, you can go back to Kosmas.") + "</h2></body></html>").encode()
+                    "<h2>" + tr("Done, you can go back to Cosmas.") + "</h2></body></html>").encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
@@ -139,7 +139,7 @@ def login_openrouter(api):
         api.emit("ai", {"task": "login", "state": "waiting", "provider": "openrouter",
                         "msg": tr("Sign in in the browser that just opened…")})
         webbrowser.open("https://openrouter.ai/auth?" + urllib.parse.urlencode(
-            {"callback_url": cb, "code_challenge": challenge, "code_challenge_method": "S256", "key_label": "Kosmas"}))
+            {"callback_url": cb, "code_challenge": challenge, "code_challenge_method": "S256", "key_label": "Cosmas"}))
         end = time.time() + 600
         try:
             while "code" not in got and time.time() < end:

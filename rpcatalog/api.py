@@ -92,7 +92,10 @@ class Api(QObject):
                  "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
                  "analysis.char_looks", "ai.info", "ai.open", "lang.set",
                  "auth.status", "auth.start", "auth.cancel", "auth.open", "auth.sign_out",
-                 "share.get", "share.set", "share.rotate", "test.info"}
+                 "share.get", "share.set", "share.rotate", "test.info",
+                 "app.info", "update.status", "update.check", "update.download", "update.cancel", "update.install",
+                 "update.skip", "update.options", "data.info", "backup.now", "backup.open", "cache.clear", "data.export_json",
+                 "diag.copy", "diag.open_logs", "feedback.snap", "feedback.preview", "feedback.send", "feedback.queue"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -1629,7 +1632,9 @@ class Api(QObject):
         }
 
     def m_settings_get(self):
-        return dict({k: v for k, v in self.settings.items() if k not in ("geometry", "sync_token")}, data_dir=str(config.DATA_DIR))
+        return dict({k: v for k, v in self.settings.items() if k not in ("geometry", "sync_token", "update_latest")},
+                    data_dir=str(config.DATA_DIR), **{k: self.settings.get(k, v) for k, v in config.DEFAULTS.items()
+                                                      if k not in self.settings})
 
     def m_settings_set(self, values):
         for k in ("roots", "clip_max_seconds", "short_session_seconds", "hide_short_sessions",
@@ -1640,8 +1645,22 @@ class Api(QObject):
         for k in values:           # transcript settings (Přepisy page)
             if k.startswith("ai_") and k in config.DEFAULTS:
                 self.settings[k] = values[k]
+        changed = set()
+        for k in values:           # General, Library, Player, Updates, Backups… (validated)
+            if k in config.SETTING_RULES:
+                v = config.check_setting(k, values[k])
+                if self.settings.get(k, config.DEFAULTS.get(k)) != v:
+                    changed.add(k)
+                self.settings[k] = v
         if not self.settings.get("remember_last_mix"):
             self.settings.pop("last_mix", None)
+        if "rescan_minutes" in changed and hasattr(self.host, "apply_rescan_interval"):
+            self.host.apply_rescan_interval()
+        if "close_to_tray" in changed and hasattr(self.host, "_setup_tray"):
+            self.host._setup_tray()
+        if "log_level" in changed:
+            from . import applog
+            applog.set_level(self.settings["log_level"])
         self.host.save_settings()
         if values.get("_rescan", True):
             self.host.rescan()
@@ -1703,7 +1722,7 @@ class Api(QObject):
     def m_sync_set_token(self, token=""):
         token = (token or "").strip()
         if token and not token.startswith("krt_"):
-            raise ValueError(tr("This isn't a Kosmas API token (it starts with krt_). Create one on the web in Settings."))
+            raise ValueError(tr("This isn't a Cosmas API token (it starts with krt_). Create one on the web in Settings."))
         self.settings["sync_token"] = token
         self.settings.pop("sync_user", None)
         self.host.save_settings()
@@ -1933,6 +1952,166 @@ class Api(QObject):
     def m_open_data_dir(self):
         os.startfile(str(config.DATA_DIR))
         return True
+
+    # ------------------------------------------------------------ app info, updates
+    def m_app_info(self):
+        from . import __version__
+        return {"name": i18n.app_name(), "version": __version__, "dev": config.IS_DEV, "data_dir": str(config.DATA_DIR),
+                "install_dir": str(config.APP_DIR.parent) if not config.IS_DEV else str(config.APP_DIR),
+                "site": "https://cosmas.gingygames.com", "web": "https://gingygames.com/kosmas/",
+                "repo": "https://github.com/gingygames/kosmas", "issues": "https://github.com/gingygames/kosmas/issues",
+                "releases": "https://github.com/gingygames/kosmas/releases"}
+
+    def _updates(self):
+        u = getattr(self.host, "updates", None)
+        if u is None:
+            raise RuntimeError("updates are not available here")
+        return u
+
+    def m_update_status(self):
+        return self._updates().status()
+
+    def m_update_check(self):
+        return self._updates().check(manual=True)
+
+    def m_update_download(self):
+        return self._updates().download()
+
+    def m_update_cancel(self):
+        return self._updates().cancel()
+
+    def m_update_install(self, accept_unverified=False):
+        return self._updates().install(accept_unverified=bool(accept_unverified))
+
+    def m_update_skip(self, version=""):
+        return self._updates().skip(version)
+
+    def m_update_options(self, auto_check=None, auto_download=None, channel=None):
+        return self._updates().set_options(auto_check, auto_download, channel)
+
+    # ------------------------------------------------------------ data & backups
+    def m_data_info(self):
+        from . import backup, updater, applog
+        d = config.DATA_DIR
+        size = lambda p: backup.dir_size(p) if p.is_dir() else 0
+        db = sum(os.path.getsize(str(config.DB_PATH) + s) for s in ("", "-wal") if os.path.exists(str(config.DB_PATH) + s))
+        return {"data_dir": str(d), "db": db, "thumbs": size(d / "thumbs"), "previews": size(d / "previews"),
+                "attachments": size(d / "attachments"), "analysis": size(d / "analysis"), "backups": size(backup.backup_dir()),
+                "updates": size(updater.UPDATES_DIR), "logs": size(applog.LOG_DIR), "log_dir": str(applog.LOG_DIR),
+                "backup_list": backup.list_backups()[:40]}
+
+    def m_backup_now(self):
+        from . import backup
+        self.store.db.commit()
+        return self._bg(lambda: backup.make("manual").name)
+
+    def m_backup_open(self):
+        from . import backup
+        backup.backup_dir().mkdir(parents=True, exist_ok=True)
+        os.startfile(str(backup.backup_dir()))
+        return True
+
+    def m_backup_restore(self, name):
+        """Checks the backup, then restarts the app; the swap happens at the next start (backup.py)."""
+        from . import backup
+        r = backup.restore(name)
+        restart = getattr(self.host, "restart_app", None)
+        if restart:
+            restart()
+        return r
+
+    def m_cache_clear(self, what):
+        """previews = seek-bar thumbnails and waveforms (made again when needed); updates = downloaded installers."""
+        from . import updater
+        if what == "previews":
+            shutil.rmtree(config.DATA_DIR / "previews", ignore_errors=True)
+        elif what == "updates":
+            u = getattr(self.host, "updates", None)
+            keep = u.path if u and u.state == "ready" else None
+            updater.cleanup(keep=keep)
+        else:
+            raise ValueError(what)
+        return self.m_data_info()
+
+    def m_data_export_json(self):
+        """All tables of the catalogue as one JSON file (for your own scripts or archiving)."""
+        path, _ = QFileDialog.getSaveFileName(self.host.dialog_parent, tr("Export the catalogue as JSON"),
+                                              str(Path.home() / time.strftime("cosmas-catalogue-%Y%m%d.json")), "JSON (*.json)")
+        if not path:
+            return None
+        self.store.db.commit()
+
+        def job():
+            import sqlite3
+            from . import __version__
+            db = sqlite3.connect(f"file:{config.DB_PATH.as_posix()}?mode=ro", uri=True)
+            db.row_factory = sqlite3.Row
+            try:
+                rows = db.execute("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()
+                virtual = [r[0] for r in rows if (r[1] or "").upper().startswith("CREATE VIRTUAL")]
+                # full-text indexes and their shadow tables are derived data
+                tables = [r[0] for r in rows if r[0] not in virtual and not any(r[0].startswith(v + "_") for v in virtual)]
+                out = {"app": "Cosmas", "version": __version__, "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "tables": {}}
+                for t in tables:
+                    out["tables"][t] = [{k: (base64.b64encode(v).decode() if isinstance(v, bytes) else v) for k, v in dict(r).items()}
+                                        for r in db.execute(f'SELECT * FROM "{t}"')]
+            finally:
+                db.close()
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(out, f, ensure_ascii=False, indent=1, default=str)
+            os.replace(tmp, path)
+            return {"path": path, "tables": len(out["tables"]), "rows": sum(len(v) for v in out["tables"].values())}
+        return self._bg(job)
+
+    # ------------------------------------------------------------ diagnostics, feedback
+    def m_diag_copy(self):
+        from . import feedback
+        from PySide6.QtGui import QGuiApplication
+        text = feedback.diagnostics_text(self.settings)
+        QGuiApplication.clipboard().setText(text)
+        return {"chars": len(text)}
+
+    def m_diag_open_logs(self):
+        from . import applog
+        applog.LOG_DIR.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(applog.LOG_DIR))
+        return True
+
+    def m_feedback_snap(self):
+        """Screenshot of the window taken when the dialog opens (before it covers the app)."""
+        grab = getattr(self.host, "grab_screenshot", None)
+        self._fb_shot = grab() if grab else None
+        return {"ok": bool(self._fb_shot), "data": self._fb_shot}
+
+    def _fb_payload(self, kind, message, email="", attach_log=False, attach_screenshot=False, include_system=True,
+                    view=None, traceback_text=None):
+        from . import feedback
+        shot = getattr(self, "_fb_shot", None) if attach_screenshot else None
+        return feedback.build_payload(kind, message, self.settings, email=email, view=view, include_log=attach_log,
+                                      include_system=include_system, screenshot=shot, traceback_text=traceback_text)
+
+    def m_feedback_preview(self, **kw):
+        p = self._fb_payload(**kw)
+        if p.get("screenshot"):
+            p["screenshot"] = f"<JPEG, {len(p['screenshot']) * 3 // 4 // 1024} kB>"
+        return {"json": json.dumps(p, ensure_ascii=False, indent=2), "signed_in": bool(self.settings.get("sync_token"))}
+
+    def m_feedback_send(self, **kw):
+        from . import feedback
+        p = self._fb_payload(**kw)
+        settings = dict(self.settings)
+
+        def job():
+            try:
+                return feedback.submit(p, settings)
+            except feedback.SendError as e:
+                raise websync.SyncError(tr("The report was not accepted ({error}).", error=e)) from None
+        return self._bg(job)
+
+    def m_feedback_queue(self):
+        from . import feedback
+        return {"queued": len(feedback.queued())}
 
 
 def fmt_date(t):

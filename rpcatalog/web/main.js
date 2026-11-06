@@ -4,6 +4,7 @@
 'use strict';
 
 window.PANE = new URLSearchParams(location.search).get('pane');
+document.title = tr('Cosmas');   // Cosmas in English, Kosmas in Czech
 
 /* refresh after the other page (main window / pane under the player) changed something */
 const syncRefresh = debounce(async (methods) => {
@@ -42,6 +43,8 @@ function playerKeys(e) {
   else if (e.key === 'i' && !e.ctrlKey) act = 'clip_in';
   else if (e.key === 'o' && !e.ctrlKey) act = 'clip_out';
   else if (e.key === 't' && !e.ctrlKey) act = 'thumb';
+  else if (e.key === '.' && !e.ctrlKey) act = 'frame+';
+  else if (e.key === ',' && !e.ctrlKey) act = 'frame-';
   else if (e.ctrlKey && /^[1-9]$/.test(e.key)) act = 't' + e.key;
   else if (e.key === 'F5') { API.call('rescan'); toast(tr('Looking for new recordings…')); e.preventDefault(); return; }
   if (act) { e.preventDefault(); API.call('player.action', { act }); }
@@ -87,6 +90,7 @@ async function bootDetailPane() {
   applyAppearance();
   App.on('synced', () => {});
   Views.buildRail();
+  initHelp();                     // updates, feedback, error prompt (help.js)
   (async () => {
     const missing = Shell.games().map(g => g.game).filter(g => !(App.gameArt[g] || {}).icon);
     const tried = new Set(App.ui.artTried || []);

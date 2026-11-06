@@ -81,6 +81,11 @@ def lang():
     return _lang
 
 
+def app_name():
+    """The product name in the UI language: Cosmas in English, Kosmas in Czech (after Cosmas of Prague)."""
+    return tr("Cosmas")
+
+
 def _fill(s, kw):
     if not kw:
         return s

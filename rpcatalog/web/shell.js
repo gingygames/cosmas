@@ -67,7 +67,7 @@ const Shell = {
         h('.pill'), h('.gi', { style: extra.style || {} }, content));
       return g;
     };
-    el.appendChild(item('home', h('img.logo', { src: 'icon.svg', alt: 'Kosmas', draggable: false }), tr('Whole catalog – all games'), () => { this.setGuild('home'); App.go('home'); }));
+    el.appendChild(item('home', h('img.logo', { src: 'icon.svg', alt: tr('Cosmas'), draggable: false }), tr('Whole catalog – all games'), () => { this.setGuild('home'); App.go('home'); }));
     el.appendChild(h('.gsep'));
     for (const g of this.games()) {
       const initials = g.game.split(/\s+/).map(w => w[0]).join('').slice(0, 3);
@@ -99,7 +99,7 @@ const Shell = {
   /* ---------- channel column ---------- */
   renderChanHead() {
     const sv = App.scope.server && App.serversById.get(App.scope.server);
-    const title = this.guild === 'home' ? 'Kosmas' : (sv ? `${this.guild} · ${sv.name}` : this.guild);
+    const title = this.guild === 'home' ? tr('Cosmas') : (sv ? `${this.guild} · ${sv.name}` : this.guild);
     clear(this.chanHead).append(h('span.ellipsis', title), icon('chevron-down', 'faint'));
     this.chanHead.onclick = e => menu(e, [
       { label: tr('Load new recordings'), icon: 'refresh-cw', onClick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } },
@@ -195,7 +195,7 @@ const Shell = {
   renderUser() {
     clear(this.user).append(
       h('.ub-avatar', 'K'),
-      h('.grow', { style: { minWidth: 0 } }, h('.ub-name.ellipsis', 'Kosmas'), h('.ub-sub.ellipsis', trn(App.media.length, '{n} video', '{n} videos') + ' · ' + trn(App.events.length, '{n} event', '{n} events'))),
+      h('.grow', { style: { minWidth: 0 } }, h('.ub-name.ellipsis', tr('Cosmas')), h('.ub-sub.ellipsis', trn(App.media.length, '{n} video', '{n} videos') + ' · ' + trn(App.events.length, '{n} event', '{n} events'))),
       h('button.npb', { title: tr('Load new recordings (F5)'), onclick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } }, icon('refresh-cw')),
       h('button.npb', { title: tr('Settings'), onclick: () => App.go('settings') }, icon('settings')));
   },

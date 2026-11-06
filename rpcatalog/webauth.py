@@ -69,7 +69,7 @@ def connect_url(server, redirect_uri, state, challenge, device=None):
 
 # ------------------------------------------------------------------ loopback server
 _PAGE = """<!doctype html><html lang="{lang}"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Kosmas</title><style>body{{font:16px system-ui,sans-serif;background:#16181d;color:#eceef1;display:grid;place-items:center;
+<title>{app}</title><style>body{{font:16px system-ui,sans-serif;background:#16181d;color:#eceef1;display:grid;place-items:center;
 height:100vh;margin:0}}div{{max-width:420px;padding:28px;text-align:center}}h1{{font-size:22px;margin:0 0 10px}}p{{color:#aab0bb}}</style>
 <div><h1>{title}</h1><p>{text}</p></div></html>"""
 
@@ -89,7 +89,7 @@ class CallbackServer:
                 pass
 
             def _page(self, status, title, text):
-                body = _PAGE.format(lang=i18n.lang(), title=html.escape(title), text=html.escape(text)).encode("utf-8")
+                body = _PAGE.format(lang=i18n.lang(), app=html.escape(i18n.app_name()), title=html.escape(title), text=html.escape(text)).encode("utf-8")
                 self.send_response(status)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
@@ -101,18 +101,18 @@ class CallbackServer:
             def do_GET(self):
                 u = urllib.parse.urlsplit(self.path)
                 if u.path != "/callback":
-                    self._page(404, "Kosmas", tr("Nothing here."))
+                    self._page(404, i18n.app_name(), tr("Nothing here."))
                     return
                 q = dict(urllib.parse.parse_qsl(u.query))
                 if not secrets.compare_digest(q.get("state", ""), outer.state) or outer.done.is_set():
-                    self._page(400, "Kosmas", tr("This sign-in link does not belong to the running sign-in. Start it again in Kosmas."))
+                    self._page(400, "Cosmas", tr("This sign-in link does not belong to the running sign-in. Start it again in Cosmas."))
                     return
                 if q.get("code"):
                     outer.result = {"code": q["code"]}
-                    self._page(200, tr("Kosmas is connected"), tr("You can close this tab and return to Kosmas."))
+                    self._page(200, tr("Cosmas is connected"), tr("You can close this tab and return to Cosmas."))
                 else:
                     outer.result = {"error": q.get("error") or "invalid_request"}
-                    self._page(200, tr("Sign-in cancelled"), tr("Kosmas was not connected. You can close this tab."))
+                    self._page(200, tr("Sign-in cancelled"), tr("Cosmas was not connected. You can close this tab."))
                 outer.done.set()
 
         self.httpd = http.server.HTTPServer((host, 0), Handler)   # OSError when loopback is unavailable
@@ -137,7 +137,7 @@ class CallbackServer:
                 if cancel is not None and cancel.is_set():
                     raise Cancelled(tr("Sign-in cancelled."))
                 if time.monotonic() > end:
-                    raise SyncError(tr("Sign-in timed out – the browser did not come back to Kosmas. Try again or use a code."))
+                    raise SyncError(tr("Sign-in timed out – the browser did not come back to Cosmas. Try again or use a code."))
         finally:
             self.close()
         if self.result.get("error") == "access_denied":

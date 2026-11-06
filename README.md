@@ -1,17 +1,17 @@
 **English** · [Čeština](README.cs.md)
 
-<p align="center"><img src="docs/img/banner.png" alt="Kosmas – the chronicle of your roleplay nights" width="100%"></p>
+<p align="center"><img src="docs/img/banner.png" alt="Cosmas – the chronicle of your roleplay nights" width="100%"></p>
 
 <p align="center">
   <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Download for Windows</b></a> ·
-  <a href="https://gingygames.com/kosmas/">Web chronicle</a> ·
+  <a href="https://cosmas.gingygames.com">Website</a> · <a href="https://gingygames.com/kosmas/">Web chronicle</a> ·
   <a href="#install">Install</a> · <a href="#sign-in-and-sync-with-the-web">Sync</a> ·
   <a href="#ai-on-your-pc-or-a-paid-service">AI</a> · <a href="#privacy">Privacy</a> · <a href="#build-from-source">Build from source</a>
 </p>
 
-# Kosmas — the chronicle of your roleplay nights
+# Cosmas — the chronicle of your roleplay nights
 
-**Kosmas** (formerly Kronikář, named after Cosmas of Prague, the oldest Czech chronicler) is a Windows app that turns your
+**Cosmas** (in Czech **Kosmas**; formerly Kronikář – named after Cosmas of Prague, the oldest Czech chronicler) is a Windows app that turns your
 [Medal](https://medal.tv) recordings into a roleplay chronicle:
 - a **library** of your recordings and clips, grouped by game and evening;
 - **events** with a write-up, a dated journal and attachments, on a **timeline** (chronicle, Gantt, calendar, character lanes);
@@ -22,7 +22,8 @@
 - optional **sync with the web chronicle** at [gingygames.com/kosmas](https://gingygames.com/kosmas/) – share a character or an event by link,
   or use your characters with the community Discord bot.
 
-The interface is in English, or in Czech when Windows is set to Czech or Slovak (Settings → Language: Automatic / English / Čeština).
+The interface is in English, or in Czech when Windows is set to Czech or Slovak (Settings → General → Language: Automatic /
+English / Čeština). In English the app is called Cosmas, in Czech Kosmas – the installer names the shortcuts in its language.
 
 | | |
 |:-:|:-:|
@@ -32,25 +33,29 @@ The interface is in English, or in Czech when Windows is set to Czech or Slovak 
 <sub>Screenshots use made-up demo data.</sub>
 
 ## Download
-Get **Kosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
-(also linked from [gingygames.com/kosmas](https://gingygames.com/kosmas/)). 64-bit Windows 10 (1809 or newer) or Windows 11.
+Get **Cosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
+(also linked from [cosmas.gingygames.com](https://cosmas.gingygames.com)). Each release has a `.sha256` file next to the installer. 64-bit Windows 10 (1809 or newer) or Windows 11.
 
 ## Install
 1. Run the installer and click **Next → Install**.
    - It installs for your user only (`%LOCALAPPDATA%\Programs\Kronikar`): no admin rights, no Python, nothing else needed –
      the video player (libmpv) and ffmpeg are bundled.
    - Shortcuts go to the Start menu and to the desktop (you can untick the desktop one).
-2. **Updating:** run a newer installer. It replaces the program and keeps your data; an existing 1.0 install (Kronikář) is updated
-   in place and its old shortcuts are replaced.
-3. **Uninstalling:** *Windows Settings → Apps → Kosmas*. You're asked whether to delete your catalogue too (default: keep it);
+2. **Updating:** Cosmas checks for new versions by itself (shortly after the start, then every 12 hours) and shows
+   **Update x.y.z** in the title bar. *Update now* downloads the installer in the background, checks it against the published SHA-256,
+   and *Restart and install* closes the app cleanly, installs silently and starts it again. Settings → General → Updates: automatic
+   checks on/off, download in the background, stable or beta channel, *Check now*, *Skip this version*. Running a newer installer by
+   hand works too; it keeps your data, and older installs (Kronikář 1.0, Kosmas 1.1) are updated in place with their shortcuts
+   replaced.
+3. **Uninstalling:** *Windows Settings → Apps → Cosmas*. You're asked whether to delete your catalogue too (default: keep it);
    your videos are never deleted.
 
 ## First run
-- Kosmas looks for your Medal folders by itself (`Videos\Medal`, `X:\Medal`). Add other folders in **Settings → Recording folders**.
+- Cosmas looks for your Medal folders by itself (`Videos\Medal`, `X:\Medal`). Add other folders in **Settings → Library**.
   Medal's own database is only ever read, never written.
-- Your catalogue lives in `%LOCALAPPDATA%\Kronikar` (catalog.db, settings, thumbnails, attachments, transcripts). Back this folder up;
-  Settings → Catalog data shows the exact path and opens it.
-- If you used Kosmas before from a source checkout or a portable copy, the first start finds that catalogue and **asks** whether to copy
+- Your catalogue lives in `%LOCALAPPDATA%\Kronikar` (catalog.db, settings, thumbnails, attachments, transcripts). Settings → Data & backups shows the exact path
+  and opens it. The catalogue (catalog.db) is backed up automatically every day into `backups\` (the newest 7 are kept).
+- If you used Cosmas before from a source checkout or a portable copy, the first start finds that catalogue and **asks** whether to copy
   it in. The original folder is never moved or changed.
 - Want to try things out without cluttering your chronicle? Mark records as test data (⋯ → *Mark as test record*): they are hidden
   unless **Settings → Test data → Show test data** is on, they never sync, and *Delete test data* removes them (after a backup).
@@ -70,7 +75,7 @@ browser and lets you share them.
 The first time you transcribe something, you choose where the AI should run. The choice lives in **Transcripts → Where AI runs**, and you can change it at any time, even separately for each part (speech, vision, chronicle).
 
 **On this PC: free and private.**
-- Kosmas detects your graphics card, memory and CPU and recommends models your PC can handle (marked with ★ in the list).
+- Cosmas detects your graphics card, memory and CPU and recommends models your PC can handle (marked with ★ in the list).
 - It installs Ollama (used for vision and the chronicle) and downloads models with a single click.
 
 **Paid service: fast, even on a weak PC.**
@@ -79,7 +84,7 @@ The first time you transcribe something, you choose where the AI should run. The
 - Each model shows an **estimated cost per hour of recording**, as well as for your entire untranscribed library.
 - The page also shows what you actually spent over the last 30 days.
 
-| Service | Speech | Vision | Kosmas AI | Notes |
+| Service | Speech | Vision | Cosmas AI | Notes |
 |---|---|---|---|---|
 | **This computer** | Whisper (NVIDIA or CPU) | Ollama | Ollama | free |
 | **Groq** | Whisper large-v3 ≈ $0.33/h · turbo ≈ $0.12/h | Qwen 3.8 ≈ $0.52/h | GPT-OSS 120B ≈ $0.01/h | cheapest speech transcription, also has a free tier |
@@ -91,7 +96,7 @@ The first time you transcribe something, you choose where the AI should run. The
 <sub>Estimates per hour of recording, based on November 2026 price lists (the app shows prices in CZK; converted here at 23 CZK/$).
 They assume 3 audio tracks and roughly 150 described frames per hour. Speech is billed per track. Actual cost depends on your settings and content.</sub>
 
-**Recommended local AI by graphics card** (Kosmas picks this for you):
+**Recommended local AI by graphics card** (Cosmas picks this for you):
 
 | Graphics memory (VRAM) | Vision and chronicle (Ollama) | Speech (Whisper) |
 |---|---|---|
@@ -103,7 +108,7 @@ They assume 3 audio tracks and roughly 150 described frames per hour. Speech is 
 | 4 GB | `qwen3.5:2b` + `qwen3.5:4b` | large-v3-turbo on GPU (NVIDIA) |
 | no dedicated card | small models, very slow; a paid service is recommended | medium/small on CPU |
 
-- GPU speech transcription works on NVIDIA only. Kosmas downloads the CUDA libraries (~1.5 GB) with one click when needed.
+- GPU speech transcription works on NVIDIA only. Cosmas downloads the CUDA libraries (~1.5 GB) with one click when needed.
 - On AMD and Intel cards, Ollama runs via Vulkan; speech then goes through the CPU or a paid service.
 
 ## Layout
@@ -173,9 +178,27 @@ The button next to them pops the player out into its own window; F / double-clic
 Another button switches the layout: player beside the content, or on top with the content below.
 Video decoding runs on the GPU (libmpv, `hwdec=auto-safe`, `vo=gpu-next`).
 
+## Settings
+Settings are grouped in sections with a side menu – **General** (language, appearance, start minimized, keep running in the
+notification area, updates), **Library** (folders, looking for new recordings, splitting, game names), **Player** (default tracks,
+continue where you left off, jump lengths, volume up to 200 %, hardware or software decoding), **Moments & events**, **AI**,
+**Web & sync**, **Data & backups**, **Privacy & diagnostics**, **Keyboard shortcuts** and **About**. Changes are saved at once.
+
+## Feedback and bug reports
+The **?** button in the title bar (or Settings → Privacy & diagnostics) opens **Send feedback / Report a bug**: pick bug, idea,
+question or other, write a message, optionally an e-mail for an answer, and choose what to attach – the end of the log, a screenshot
+of the app window, system info (Windows and app version, GPU, RAM). *Preview* shows exactly what is sent. Tokens, keys, e-mail
+addresses and your user folder are removed from logs first. You get a reference number; without internet the report waits and is
+sent later. After an unexpected error the app offers to send a report with the details attached.
+
 ## Data
 - Everything you edit is stored in the data folder: `%LOCALAPPDATA%\Kronikar` when installed, `data/` when running from source.
-  It holds catalog.db, settings.json, thumbs/, attachments/ and analysis/. Back it up.
+  It holds catalog.db, settings.json, thumbs/, attachments/, analysis/, backups/ and logs/.
+- **Backups:** catalog.db is backed up automatically (daily, the newest 7 kept; both adjustable) and on *Back up now*.
+  *Restore…* puts a backup back after a restart; the catalogue it replaces is saved as a backup first. Attachments and thumbnails are
+  separate files – copy the whole folder for a complete backup. *Export as JSON…* writes every table to one file.
+- **Logs:** `logs\cosmas.log` (rotating, a few MB at most); Settings → Privacy & diagnostics opens the folder or copies a diagnostics
+  summary.
 - Medal's database is only ever read. Deleting videos moves the files to the Recycle Bin.
 - `extras/multitrack-mix.lua` – a standalone script for plain mpv.
 
@@ -202,7 +225,7 @@ Video decoding runs on the GPU (libmpv, `hwdec=auto-safe`, `vo=gpu-next`).
   Export MP4 (all audio tracks, into `data/clips`). `T` = use the current frame as the video thumbnail.
   Tagging a character at a moment is now `C`.
 
-## Transcripts, vision and Kosmas AI in detail
+## Transcripts, vision and Cosmas AI in detail
 When AI runs on your PC, nothing leaves it. With a paid service, only the audio (speech) or frames and transcript text go to the service you picked.
 - **Starting:** the **Transcript** section in the video panel; for several videos, right-click → Transcript; for the whole library, the
   **Transcripts** page → "Transcribe missing". The queue runs in the background, one video at a time; if it's interrupted (even by closing the app),
@@ -217,7 +240,7 @@ When AI runs on your PC, nothing leaves it. With a paid service, only the audio 
   or confirmed by you (click a character next to a frame → "Yes, it's…" / "Who is this…") serve as references; everyone else is recognized
   by similarity – references from the same evening take priority, older ones count for less (outfits change). Each character has an
   "Appearance in recordings" gallery. The models (~130 MB) are downloaded to `data/models` on first use and run on the CPU.
-- **Kosmas AI:** after transcription, a stronger text model works through the recording in blocks (split at pauses between conversations;
+- **Cosmas AI:** after transcription, a stronger text model works through the recording in blocks (split at pauses between conversations;
   the pauses are marked in the text), keeping a running memory of the story, a summary of the previous session of the same game, and knowledge of
   the characters, places and factions in your database. It produces chapters, a session summary, mentions (saved straight onto characters, places and
   factions) and **suggestions** for new events, characters, places and factions – each accepted with one click (Transcripts page → Suggestions,
@@ -228,10 +251,10 @@ When AI runs on your PC, nothing leaves it. With a paid service, only the audio 
 - **Queue and performance:** the **Transcripts** page – the current video with its step, progress, time estimate and speed, the queue order
   (drag to reorder), history, and GPU/VRAM/temperature/CPU/RAM load. There's also an indicator in the left column. While you're playing (a game from Steam,
   Epic, Xbox, GOG… or from a list you set), transcription pauses itself and resumes after you finish.
-- **Settings:** Transcripts → Where AI runs (services, models, accounts, prices) and Transcripts → Settings (language, tracks, frame density, sensitivity, name tags, faces, Kosmas AI model and
+- **Settings:** Transcripts → Where AI runs (services, models, accounts, prices) and Transcripts → Settings (language, tracks, frame density, sensitivity, name tags, faces, Cosmas AI model and
   block length, context about the game and server, priority, pause while gaming).
 - Output: `analysis/<id>/` in the data folder (transcript in parts, frames, faces, `chronicle.json`, `timeline.md` – the whole session as text).
-- Speed on an RTX 4090: speech ~45× faster than real time, 3–9 s to describe a frame, Kosmas AI ~1 min per block.
+- Speed on an RTX 4090: speech ~45× faster than real time, 3–9 s to describe a frame, Cosmas AI ~1 min per block.
 
 ## Game artwork
 Icons in the left strip and library banners are filled in automatically from Steam on this PC the first time you launch the app.
@@ -271,12 +294,12 @@ Medal icons, a file, a URL, the clipboard or a frame from a video – all with c
 **Building the installer:** run `.venv\Scripts\python.exe installer\build.py`. The script:
 1. downloads an embeddable Python 3.12;
 2. bundles the packages from `installer/requirements-dist.txt`, libmpv, ffmpeg and the `Kronikar.exe` launcher with its icon;
-3. uses Inno Setup to create `build/Kosmas-Setup-<version>.exe`. The version is taken from `rpcatalog/__init__.py`.
+3. uses Inno Setup to create `build/Cosmas-Setup-<version>.exe`. The version is taken from `rpcatalog/__init__.py`.
 
 `installer/make_icon.py` regenerates the icon from `rpcatalog/web/icon.svg`.
 
 ## Privacy
-Kosmas is **local first**: your catalogue is a SQLite file on your PC and everything works offline.
+Cosmas is **local first**: your catalogue is a SQLite file on your PC and everything works offline.
 - **Nothing is uploaded unless you sign in and sync.** Then only the chronicle goes to the web (characters, factions, places, players' names,
   events, entries, moments, images you attached, video titles and YouTube links). Video files are never uploaded; for a local video only its
   title, length and path relative to your recordings folder are sent. Player contacts and Discord bot tokens never leave your PC;
@@ -284,13 +307,16 @@ Kosmas is **local first**: your catalogue is a SQLite file on your PC and everyt
 - What you sync is private on the web until you share it.
 - **AI on this PC** keeps everything on the PC. With a **paid service**, only the audio (speech) or frames and transcript text go to the
   service you picked; API keys are stored encrypted in Windows Credential Manager.
-- Medal's database is read-only for Kosmas; deleting a video moves it to the Recycle Bin.
+- Medal's database is read-only for Cosmas; deleting a video moves it to the Recycle Bin.
+- **Update checks** only ask gingygames.com (or GitHub) for the newest version; nothing about you is sent. **Reports** are sent only
+  when you send one, with exactly what the preview shows.
 
 ## Licence
 This repository doesn't have a licence file yet, so no licence is granted for the code. Bundled third-party components keep their own
 licences: libmpv (mpv), FFmpeg (GPL build), Qt/PySide6 (LGPL), Lucide icons (ISC).
 
 ## Links
+- Website: https://cosmas.gingygames.com
 - Web chronicle: https://gingygames.com/kosmas/
 - Download: https://github.com/gingygames/kosmas/releases/latest
 - Issues and ideas: https://github.com/gingygames/kosmas/issues

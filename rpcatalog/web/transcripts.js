@@ -10,7 +10,7 @@ const hist = { gpu: [], cpu: [] };
 function mount(r, params) {
   root = r;
   if (params && params.tab) tab = params.tab;
-  Shell.header({ icon: 'captions', title: tr('transcripts'), topic: tr('speech, picture and Kosmas AI – on your PC or through a paid service') });
+  Shell.header({ icon: 'captions', title: tr('transcripts'), topic: tr('speech, picture and Cosmas AI – on your PC or through a paid service') });
   render();
   offs.push(TR.on(ev => { if (tab === 'queue' && ev.phase !== undefined) renderQueueLive(); }));
   timer = setInterval(pollStats, 2000);
@@ -141,7 +141,7 @@ async function renderOverview() {
     h('.row', h('b', tr('Library')), h('.grow'), h('span.small.faint', tr('{done} of {count} videos · {time} of {total}', { done, count: ov.count, time: fmt.durHuman(ov.total_s - ov.missing_s), total: fmt.durHuman(ov.total_s) }))),
     h('.trs-bar.big', h('i', { style: { width: pct + '%', background: 'var(--ok)' } })),
     ov.missing_ids.length ? h('.row.wrap', { style: { marginTop: '10px', gap: '12px' } },
-      h('label.row.small', vision, tr('also picture in conversations')), h('label.row.small', chron, tr('Kosmas AI')),
+      h('label.row.small', vision, tr('also picture in conversations')), h('label.row.small', chron, tr('Cosmas AI')),
       h('.grow'),
       h('button.btn.primary', { onclick: async () => {
         if (!await AISetup.ensure()) return;
@@ -187,7 +187,7 @@ async function pollStats() {
 async function renderProposals(body) {
   const props = await API.call('analysis.proposals', {});
   if (!props.length) {
-    body.append(emptyState('sparkles', tr('No suggestions'), tr('Kosmas AI suggests events, characters, places and factions after processing a recording (the “Chronicle” step).')));
+    body.append(emptyState('sparkles', tr('No suggestions'), tr('Cosmas AI suggests events, characters, places and factions after processing a recording (the “Chronicle” step).')));
     return;
   }
   const groups = new Map();
@@ -267,8 +267,8 @@ async function renderSettings(body) {
       slider('ai_look_half_life', tr('Reference ageing'), 3, 180, 1, ' ' + tr('days'), tr('After how many days an older reference (different clothes?) gets an extra half weight.')),
       h('.trp-opt.col', h('span', tr('After confirming or changing settings')),
         h('button.btn.sm', { onclick: async e => { e.target.disabled = true; const n = await API.call('analysis.rematch_all'); e.target.disabled = false; toast(trn(n, 'Re-matched {n} video', 'Re-matched {n} videos')); } }, icon('refresh-cw'), tr('Re-match all videos')))),
-    card('sparkles', tr('Kosmas AI'), tr('After transcription it goes through the recording in blocks (split at pauses between conversations) with a running memory of the story, a summary of the previous evening and knowledge of characters, places and factions from the database. It suggests chapters, events and new entries.'),
-      toggle('ai_chapters', tr('Run Kosmas AI after transcription')),
+    card('sparkles', tr('Cosmas AI'), tr('After transcription it goes through the recording in blocks (split at pauses between conversations) with a running memory of the story, a summary of the previous evening and knowledge of characters, places and factions from the database. It suggests chapters, events and new entries.'),
+      toggle('ai_chapters', tr('Run Cosmas AI after transcription')),
       slider('ai_chapter_minutes', tr('Block length'), 5, 40, 5, ' min', tr('Shorter = more detailed chapters, longer processing.')),
       toggle('ai_chapter_bookmarks', tr('Chapters as moments'), tr('Shown on the player timeline and in Moments.')),
       h('.trp-opt.col.wide', h('span', tr('About the game and server (for all models)')), ctx)),

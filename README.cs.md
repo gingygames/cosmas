@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Stáhnout pro Windows</b></a> ·
-  <a href="https://gingygames.com/kosmas/">Webová kronika</a> ·
+  <a href="https://cosmas.gingygames.com">Web aplikace</a> · <a href="https://gingygames.com/kosmas/">Webová kronika</a> ·
   <a href="#instalace">Instalace</a> · <a href="#přihlášení-a-synchronizace-s-webem">Synchronizace</a> ·
   <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#soukromí">Soukromí</a> · <a href="#sestavení-ze-zdrojových-kódů">Ze zdrojových kódů</a>
 </p>
@@ -32,23 +32,27 @@ Rozhraní je anglicky, nebo česky, když máš Windows v češtině či sloven�
 <sub>Snímky ukazují smyšlená ukázková data (anglické rozhraní).</sub>
 
 ## Stažení
-Stáhni **Kosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
-(odkaz je i na [gingygames.com/kosmas](https://gingygames.com/kosmas/)). 64bitové Windows 10 (1809 a novější) nebo Windows 11.
+Stáhni **Cosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://github.com/gingygames/kosmas/releases/latest)
+(odkaz je i na [cosmas.gingygames.com](https://cosmas.gingygames.com)). U každého vydání je vedle instalátoru soubor `.sha256`. 64bitové Windows 10 (1809 a novější) nebo Windows 11.
 
 ## Instalace
 1. Spusť instalátor a klikni na **Další → Instalovat**.
    - Instaluje se jen pro tvého uživatele (`%LOCALAPPDATA%\Programs\Kronikar`): bez práv správce, bez Pythonu, nic dalšího –
      přehrávač (libmpv) i ffmpeg jsou uvnitř.
    - Zástupci se vytvoří v nabídce Start a na ploše (ten na ploše můžeš odškrtnout).
-2. **Aktualizace:** spusť novější instalátor. Nahradí program a data nechá; existující instalaci 1.0 (Kronikář) aktualizuje na místě
-   a staré zástupce nahradí.
+2. **Aktualizace:** Kosmas sám hlídá nové verze (chvíli po spuštění a pak každých 12 hodin) a v záhlaví okna ukáže
+   **Aktualizace x.y.z**. *Aktualizovat* stáhne instalátor na pozadí a ověří ho podle zveřejněného SHA-256, *Restartovat a nainstalovat*
+   aplikaci řádně zavře, potichu nainstaluje novou verzi a znovu ji spustí. Nastavení → Obecné → Aktualizace: automatická kontrola,
+   stahování na pozadí, kanál stabilní nebo beta, *Zkontrolovat*, *Tuhle verzi přeskočit*. Funguje i ruční spuštění novějšího
+   instalátoru; data zůstanou a starší instalace (Kronikář 1.0, Kosmas 1.1) se aktualizují na místě včetně zástupců.
+   Anglicky se aplikace jmenuje **Cosmas**, česky **Kosmas** – zástupce pojmenuje instalátor podle svého jazyka.
 3. **Odinstalace:** *Nastavení Windows → Aplikace → Kosmas*. Zeptá se, jestli smazat i katalog (výchozí je ponechat); videa se nikdy nemažou.
 
 ## První spuštění
-- Kosmas sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v **Nastavení → Složky se záznamy**.
+- Kosmas sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v **Nastavení → Knihovna**.
   Databázi Medalu jen čte, nikdy do ní nezapisuje.
-- Katalog je v `%LOCALAPPDATA%\Kronikar` (catalog.db, nastavení, náhledy, přílohy, přepisy). Tuhle složku zálohuj;
-  Nastavení → Data katalogu ukáže přesnou cestu a otevře ji.
+- Katalog je v `%LOCALAPPDATA%\Kronikar` (catalog.db, nastavení, náhledy, přílohy, přepisy). Nastavení → Data a zálohy ukáže přesnou cestu
+  a otevře ji. Katalog (catalog.db) se každý den sám zálohuje do `backups\` (ponechá se 7 nejnovějších).
 - Pokud jsi Kosmase dřív spouštěl ze zdrojových kódů nebo z přenosné kopie, první spuštění ten katalog najde a **zeptá se**,
   jestli ho má zkopírovat. Původní složka se nikdy nepřesouvá ani nemění.
 - Chceš si něco vyzkoušet a nezaneřádit kroniku? Označ záznamy jako testovací (⋯ → *Označit jako testovací záznam*): jsou skryté,
@@ -173,9 +177,26 @@ Tlačítko vedle otevře přehrávač ve vlastním okně, F / dvojklik = celá o
 Další tlačítko přepne rozložení: přehrávač vedle obsahu, nebo nahoře s obsahem pod ním.
 Dekódování videa běží na GPU (libmpv, `hwdec=auto-safe`, `vo=gpu-next`).
 
+## Nastavení
+Nastavení je rozdělené do sekcí s postranní nabídkou – **Obecné** (jazyk, vzhled, spouštění minimalizovaně, běh v oznamovací
+oblasti, aktualizace), **Knihovna** (složky, hledání nových záznamů, dělení, názvy her), **Přehrávač** (výchozí stopy, pokračování
+tam, kde jsi skončil, délky skoků, hlasitost až 200 %, hardwarové nebo softwarové dekódování), **Momenty a události**, **AI**,
+**Web a synchronizace**, **Data a zálohy**, **Soukromí a diagnostika**, **Klávesové zkratky** a **O aplikaci**. Změny se ukládají hned.
+
+## Zpětná vazba a hlášení chyb
+Tlačítko **?** v záhlaví okna (nebo Nastavení → Soukromí a diagnostika) otevře **Poslat zpětnou vazbu / Nahlásit chybu**: vyber chybu,
+nápad, dotaz nebo jiné, napiš zprávu, případně e-mail pro odpověď a zvol, co přiložit – konec logu, snímek okna aplikace, informace
+o systému (verze Windows a aplikace, grafika, RAM). *Náhled* ukáže přesně to, co se odešle. Z logů se předtím odstraní tokeny, klíče,
+e-mailové adresy a tvoje uživatelská složka. Dostaneš číslo hlášení; bez internetu hlášení počká a odešle se později. Po nečekané
+chybě aplikace sama nabídne poslat hlášení s podrobnostmi.
+
 ## Data
 - Vše, co upravíš, je v datové složce: po instalaci `%LOCALAPPDATA%\Kronikar`, při spuštění ze zdrojových kódů `data/`.
-  Jsou v ní catalog.db, settings.json, thumbs/, attachments/ a analysis/. Zálohuj ji.
+  Jsou v ní catalog.db, settings.json, thumbs/, attachments/, analysis/, backups/ a logs/.
+- **Zálohy:** catalog.db se zálohuje automaticky (denně, ponechá se 7 nejnovějších; obojí jde změnit) a tlačítkem *Zálohovat teď*.
+  *Obnovit…* vrátí zálohu po restartu; nahrazovaný katalog se předtím sám zazálohuje. Přílohy a náhledy jsou samostatné soubory –
+  pro úplnou zálohu zkopíruj celou složku. *Exportovat jako JSON…* zapíše všechny tabulky do jednoho souboru.
+- **Logy:** `logs\cosmas.log` (rotuje, nejvýš pár MB); Nastavení → Soukromí a diagnostika otevře složku nebo zkopíruje diagnostiku.
 - Databázi Medalu aplikace jen čte. Mazání videí posílá soubory do Koše.
 - `extras/multitrack-mix.lua` – samostatný skript pro obyčejné mpv.
 
@@ -271,7 +292,7 @@ ikony z Medalu, soubor, URL, schránka nebo snímek z videa – vše s ořezem.
 **Sestavení instalátoru:** spusť `.venv\Scripts\python.exe installer\build.py`. Skript:
 1. stáhne vestavěný Python 3.12;
 2. přibalí balíčky z `installer/requirements-dist.txt`, libmpv, ffmpeg a spouštěč `Kronikar.exe` s ikonou;
-3. přes Inno Setup vytvoří `build/Kosmas-Setup-<verze>.exe`. Verze se bere z `rpcatalog/__init__.py`.
+3. přes Inno Setup vytvoří `build/Cosmas-Setup-<verze>.exe`. Verze se bere z `rpcatalog/__init__.py`.
 
 Ikonu z `rpcatalog/web/icon.svg` přegeneruje `installer/make_icon.py`.
 
@@ -285,12 +306,15 @@ Kosmas je **local first**: katalog je soubor SQLite na tvém PC a všechno fungu
 - **AI na tomto PC** nechá všechno v PC. U **placené služby** jde do vybrané služby jen zvuk (řeč) nebo snímky a text přepisu;
   API klíče jsou šifrovaně ve Správci přihlašovacích údajů Windows.
 - Databázi Medalu Kosmas jen čte; smazané video jde do Koše.
+- **Kontrola aktualizací** se gingygames.com (nebo GitHubu) ptá jen na nejnovější verzi; nic o tobě se neposílá. **Hlášení** se posílá
+  jen když ho sám odešleš, a přesně to, co ukáže náhled.
 
 ## Licence
 Repozitář zatím nemá soubor s licencí, takže ke kódu žádná licence udělená není. Přibalené komponenty mají vlastní licence:
 libmpv (mpv), FFmpeg (GPL build), Qt/PySide6 (LGPL), ikony Lucide (ISC).
 
 ## Odkazy
+- Web aplikace: https://cosmas.gingygames.com
 - Webová kronika: https://gingygames.com/kosmas/
 - Stažení: https://github.com/gingygames/kosmas/releases/latest
 - Chyby a nápady: https://github.com/gingygames/kosmas/issues
