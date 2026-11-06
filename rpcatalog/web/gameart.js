@@ -20,21 +20,21 @@ document.head.appendChild(h('style', `
 
 async function useImage(game, img, appid, onDone) {
   const data = img.data || await API.call('game.image_data', img.path ? { path: img.path } : { url: img.url }).catch(() => null);
-  if (!data) return toast('Obrázek nejde načíst', 'err');
+  if (!data) return toast(tr("The image can't be loaded"), 'err');
   menu({ x: innerWidth / 2 - 100, y: innerHeight / 2 - 40 }, [
-    { label: 'Použít jako ikonu (vlevo)…', icon: 'square', onClick: async () => {
-      const c = await cropDialog(data, { ratio: 1, title: `Ikona – ${game}`, okLabel: 'Nastavit ikonu' });
+    { label: tr('Use as icon (left)…'), icon: 'square', onClick: async () => {
+      const c = await cropDialog(data, { ratio: 1, title: tr('Icon – {game}', { game }), okLabel: tr('Set icon') });
       if (c) { App.gameArt = await API.call('game.art_set', { game, kind: 'icon', data_b64: c, appid }); onDone(); }
     } },
-    { label: 'Použít jako banner (knihovna)…', icon: 'rectangle-horizontal', onClick: async () => {
-      const c = await cropDialog(data, { ratio: 3.1, title: `Banner – ${game}`, okLabel: 'Nastavit banner' });
+    { label: tr('Use as banner (library)…'), icon: 'rectangle-horizontal', onClick: async () => {
+      const c = await cropDialog(data, { ratio: 3.1, title: tr('Banner – {game}', { game }), okLabel: tr('Set banner') });
       if (c) { App.gameArt = await API.call('game.art_set', { game, kind: 'banner', data_b64: c, appid }); onDone(); }
     } },
   ]);
 }
 
 function grid(game, images, appid, onDone) {
-  return h('.ga-grid', images.map(i => h('.ga-img', { title: 'Klik = použít', onclick: () => useImage(game, i, appid, onDone) },
+  return h('.ga-grid', images.map(i => h('.ga-img', { title: tr('Click = use'), onclick: () => useImage(game, i, appid, onDone) },
     h('img', { src: i.src || i.url, loading: 'lazy', onerror: e => e.target.closest('.ga-img').remove() }), h('span', i.kind))));
 }
 
@@ -44,10 +44,10 @@ async function gameArtDialog(game) {
     const a = (App.gameArt || {})[game] || {};
     clear(now).append(
       h('.ga-icon', { style: a.icon ? { backgroundImage: `url("${a.icon}")` } : {} }, a.icon ? null : game.slice(0, 2)),
-      h('.ga-banner', { style: a.banner ? { backgroundImage: `url("${a.banner}")` } : {} }, a.banner ? null : 'bez banneru'),
+      h('.ga-banner', { style: a.banner ? { backgroundImage: `url("${a.banner}")` } : {} }, a.banner ? null : tr('no banner')),
       h('.col', { style: { gap: '4px' } },
-        a.icon ? h('button.btn.sm.ghost', { onclick: async () => { App.gameArt = await API.call('game.art_reset', { game, kind: 'icon' }); refresh(); } }, 'Zrušit ikonu') : null,
-        a.banner ? h('button.btn.sm.ghost', { onclick: async () => { App.gameArt = await API.call('game.art_reset', { game, kind: 'banner' }); refresh(); } }, 'Zrušit banner') : null));
+        a.icon ? h('button.btn.sm.ghost', { onclick: async () => { App.gameArt = await API.call('game.art_reset', { game, kind: 'icon' }); refresh(); } }, tr('Remove icon')) : null,
+        a.banner ? h('button.btn.sm.ghost', { onclick: async () => { App.gameArt = await API.call('game.art_reset', { game, kind: 'banner' }); refresh(); } }, tr('Remove banner')) : null));
     Shell.renderGuilds();
     App.emit('gameart');
   };
@@ -58,7 +58,7 @@ async function gameArtDialog(game) {
   const instBox = h('div');
   const renderInstalled = list => {
     clear(instBox);
-    if (!list.length) instBox.appendChild(h('.faint.small', 'Hra se stejným názvem ve Steamu na tomto PC není – vyber ji ze seznamu nebo hledej v obchodě.'));
+    if (!list.length) instBox.appendChild(h('.faint.small', tr("There's no game with the same name in Steam on this PC – pick it from the list or search the store.")));
     list.forEach(g => instBox.append(h('.small', { style: { margin: '6px 0 4px' } }, g.name), grid(game, g.images, g.appid, onDone)));
   };
   renderInstalled(src.installed);
@@ -66,40 +66,40 @@ async function gameArtDialog(game) {
     if (!e.target.value) return;
     const g = await API.call('game.art_installed', { name: e.target.value });
     if (g) renderInstalled([g]);
-  } }, h('option', { value: '' }, 'Jiná hra ze Steamu na tomto PC…'), src.all_installed.map(n => h('option', { value: n }, n)));
+  } }, h('option', { value: '' }, tr('Another game from Steam on this PC…')), src.all_installed.map(n => h('option', { value: n }, n)));
 
   const term = h('input.input', { value: game, style: { width: '320px' }, onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') search(); } });
   const results = h('div');
   async function search() {
-    clear(results).appendChild(h('.faint.small', 'Hledám v obchodě Steamu…'));
+    clear(results).appendChild(h('.faint.small', tr('Searching the Steam store…')));
     const r = await API.call('game.art_search', { term: term.value.trim() }).catch(() => null);
     clear(results);
-    if (!r || !r.length) { results.appendChild(h('.faint.small', 'Nic nenalezeno.')); return; }
+    if (!r || !r.length) { results.appendChild(h('.faint.small', tr('Nothing found.'))); return; }
     r.slice(0, 5).forEach(g => results.append(h('.small', { style: { margin: '6px 0 4px' } }, g.name), grid(game, g.images, g.appid, onDone)));
   }
 
   const own = h('.row.wrap', { style: { gap: '6px' } },
-    h('button.btn.sm', { onclick: async () => { const d = await API.call('game.art_pick_file'); if (d) useImage(game, { data: d }, null, onDone); } }, icon('image-up'), 'Ze souboru…'),
+    h('button.btn.sm', { onclick: async () => { const d = await API.call('game.art_pick_file'); if (d) useImage(game, { data: d }, null, onDone); } }, icon('image-up'), tr('From file…')),
     h('button.btn.sm', { onclick: async () => {
       try {
         const items = await navigator.clipboard.read();
         for (const it of items) { const t = it.types.find(x => x.startsWith('image/')); if (t) { useImage(game, { data: await readAsDataURL(await it.getType(t)) }, null, onDone); return; } }
-        toast('Ve schránce není obrázek', 'err');
-      } catch (e) { toast('Schránku nejde přečíst', 'err'); }
-    } }, icon('clipboard-paste'), 'Ze schránky'),
-    h('button.btn.sm', { onclick: async () => { const u = await promptDialog('Obrázek z webu', 'Adresa obrázku (URL)', '', { placeholder: 'https://…' }); if (u) useImage(game, { url: u.trim() }, null, onDone); } }, icon('link'), 'Z URL…'),
-    h('button.btn.sm', { disabled: !App.player.media_id, onclick: async () => { const g = await grabFrame(); if (g) useImage(game, { data: g.data }, null, onDone); } }, icon('camera'), 'Snímek z videa'));
+        toast(tr('There is no image in the clipboard'), 'err');
+      } catch (e) { toast(tr("The clipboard can't be read"), 'err'); }
+    } }, icon('clipboard-paste'), tr('From clipboard')),
+    h('button.btn.sm', { onclick: async () => { const u = await promptDialog(tr('Image from the web'), tr('Image address (URL)'), '', { placeholder: 'https://…' }); if (u) useImage(game, { url: u.trim() }, null, onDone); } }, icon('link'), tr('From URL…')),
+    h('button.btn.sm', { disabled: !App.player.media_id, onclick: async () => { const g = await grabFrame(); if (g) useImage(game, { data: g.data }, null, onDone); } }, icon('camera'), tr('Screenshot from video')));
 
   body.append(now,
     h('.row', { style: { marginTop: '8px' } }, h('button.btn.sm.primary', { onclick: async () => {
       const r = await API.call('game.art_auto', { games: [game], overwrite: true });
-      App.gameArt = r.art; refresh(); toast(r.done.length ? 'Nastaveno ze Steamu' : 'Ve Steamu na tomto PC jsem hru nenašel', r.done.length ? 'ok' : 'err');
-    } }, icon('wand-sparkles'), 'Automaticky ze Steamu'), h('span.faint.small', 'Klikni na libovolný obrázek níže – vybereš, jestli je to ikona nebo banner, a ořízneš ho.')),
-    h('.ga-sec', h('h4', 'Steam na tomto PC'), instSel, instBox),
-    h('.ga-sec', h('h4', 'Obchod Steam'), h('.row', term, h('button.btn.sm', { onclick: search }, icon('search'), 'Hledat')), results),
-    src.medal.length ? h('.ga-sec', h('h4', 'Ikony z Medalu'), grid(game, src.medal, null, onDone)) : null,
-    h('.ga-sec', h('h4', 'Vlastní obrázek'), own));
-  modal({ title: `Obrázky hry – ${game}`, icon: 'image', xwide: true, body });
+      App.gameArt = r.art; refresh(); toast(r.done.length ? tr('Set from Steam') : tr("I couldn't find the game in Steam on this PC"), r.done.length ? 'ok' : 'err');
+    } }, icon('wand-sparkles'), tr('Automatically from Steam')), h('span.faint.small', tr("Click any image below – you'll choose whether it's the icon or the banner, and crop it."))),
+    h('.ga-sec', h('h4', tr('Steam on this PC')), instSel, instBox),
+    h('.ga-sec', h('h4', tr('Steam store')), h('.row', term, h('button.btn.sm', { onclick: search }, icon('search'), tr('Search'))), results),
+    src.medal.length ? h('.ga-sec', h('h4', tr('Icons from Medal')), grid(game, src.medal, null, onDone)) : null,
+    h('.ga-sec', h('h4', tr('Custom image')), own));
+  modal({ title: tr('Game images – {game}', { game }), icon: 'image', xwide: true, body });
 }
 
 window.gameArtDialog = gameArtDialog;

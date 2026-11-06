@@ -37,7 +37,7 @@ const css = `
 `;
 document.head.appendChild(h('style', css));
 
-const SRC = { manual: 'ručně', medal: 'Medal (klávesa)', auto: 'Medal (automaticky)' };
+const SRC = { manual: tr('manually'), medal: tr('Medal (hotkey)'), auto: tr('Medal (automatic)') };
 
 /** "1:02:03", "2:03", "75", "1:02.5" -> seconds; null for empty/invalid */
 function parseClock(v) {
@@ -48,7 +48,7 @@ function parseClock(v) {
   return parts.reduce((acc, x) => acc * 60 + x, 0);
 }
 
-function bmTitle(b) { return b.title || (b.t_end ? 'Úsek bez názvu' : 'Záložka bez názvu'); }
+function bmTitle(b) { return b.title || (b.t_end ? tr('Untitled segment') : tr('Untitled bookmark')); }
 function bmColor(b) { return b.color || b.event_color || (b.source === 'auto' ? 'var(--text-3)' : 'var(--accent)'); }
 
 function playBm(b, popout = false) {
@@ -69,72 +69,72 @@ async function bmEditor(bm) {
     let changed = false;
     const st = { title: b.title || '', note: b.note || '', t: b.t, t_end: b.t_end, color: b.color || '', event_id: b.event_id, chars: [...(b.chars || [])] };
     const playing = () => App.player && App.player.media_id === b.media_id;
-    const title = h('input.input', { value: st.title, placeholder: b.t_end ? 'Např. Výslech u brány' : 'Co se tady stalo?', autofocus: true });
+    const title = h('input.input', { value: st.title, placeholder: b.t_end ? tr('E.g. Interrogation at the gate') : tr('What happened here?'), autofocus: true });
     const tIn = h('input.input.tin', { value: fmt.clock(st.t) });
-    const eIn = h('input.input.tin', { value: st.t_end != null ? fmt.clock(st.t_end) : '', placeholder: 'konec (nepovinné)' });
+    const eIn = h('input.input.tin', { value: st.t_end != null ? fmt.clock(st.t_end) : '', placeholder: tr('end (optional)') });
     const nowBtn = target => h('button.btn.sm.ghost', {
-      title: 'Aktuální pozice přehrávače', disabled: !playing(),
+      title: tr('Current player position'), disabled: !playing(),
       onclick: () => { target.value = fmt.clock(App.player.pos); },
-    }, icon('locate-fixed'), 'Teď');
-    const note = h('textarea.input', { rows: 5, placeholder: 'Poznámka – co se dělo, kdo co řekl, souvislosti…' }, st.note);
+    }, icon('locate-fixed'), tr('Now'));
+    const note = h('textarea.input', { rows: 5, placeholder: tr('Note – what happened, who said what, context…') }, st.note);
     const evBox = h('.row.wrap');
     const charBox = h('.row.wrap');
     const swBox = h('.row', { style: { gap: '6px' } });
     const renderEv = () => {
       const e = st.event_id && App.eventsById.get(st.event_id);
       clear(evBox).append(
-        e ? h('span.chip.on', { onclick: () => App.go('events', { id: e.id }) }, h('span.dot', { style: { background: e.color } }), e.title) : h('span.faint.small', 'Nepřiřazeno'),
+        e ? h('span.chip.on', { onclick: () => App.go('events', { id: e.id }) }, h('span.dot', { style: { background: e.color } }), e.title) : h('span.faint.small', tr('Not assigned')),
         h('button.btn.sm', {
           onclick: async () => {
-            const r = await pickEvent({ title: 'Přiřadit záložku k události', moment: b.abs || (b.media && b.media.start ? b.media.start + st.t : null), withNote: false });
+            const r = await pickEvent({ title: tr('Assign bookmark to an event'), moment: b.abs || (b.media && b.media.start ? b.media.start + st.t : null), withNote: false });
             if (r) { st.event_id = r.id; renderEv(); }
           },
-        }, icon('link'), e ? 'Změnit' : 'Vybrat událost'),
-        e ? h('button.btn.sm.ghost.icon', { title: 'Odebrat z události', onclick: () => { st.event_id = null; renderEv(); } }, icon('x')) : null);
+        }, icon('link'), e ? tr('Change') : tr('Choose event')),
+        e ? h('button.btn.sm.ghost.icon', { title: tr('Remove from event'), onclick: () => { st.event_id = null; renderEv(); } }, icon('x')) : null);
     };
     const renderChars = () => {
       clear(charBox).append(...st.chars.map(id => App.charsById.get(id)).filter(Boolean).map(c =>
         charChip(c, { onRemove: () => { st.chars = st.chars.filter(x => x !== c.id); renderChars(); } })),
-      h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(st.chars, { title: 'Kdo je v tomto momentu?' }); if (ids) { st.chars = ids; renderChars(); } } }, icon('user-plus'), 'Označit'));
+      h('button.btn.sm', { onclick: async () => { const ids = await pickCharacters(st.chars, { title: tr('Who is in this moment?') }); if (ids) { st.chars = ids; renderChars(); } } }, icon('user-plus'), tr('Tag characters')));
     };
     const renderSw = () => {
-      clear(swBox).append(h('span.sw' + (!st.color ? '.on' : ''), { title: 'Podle události', style: { background: 'repeating-linear-gradient(45deg,#333 0 4px,#555 4px 8px)' }, onclick: () => { st.color = ''; renderSw(); } }),
+      clear(swBox).append(h('span.sw' + (!st.color ? '.on' : ''), { title: tr('By event'), style: { background: 'repeating-linear-gradient(45deg,#333 0 4px,#555 4px 8px)' }, onclick: () => { st.color = ''; renderSw(); } }),
         ...PALETTE.map(c => h('span.sw' + (st.color === c ? '.on' : ''), { style: { background: c }, onclick: () => { st.color = c; renderSw(); } })));
     };
     renderEv(); renderChars(); renderSw();
 
     const save = async () => {
       const t = parseClock(tIn.value), te = parseClock(eIn.value);
-      if (t == null) { toast('Neplatný čas začátku', 'err'); return false; }
+      if (t == null) { toast(tr('Invalid start time'), 'err'); return false; }
       await API.call('bm.update', { id: b.id, title: title.value.trim(), note: note.value, t, t_end: te,
         color: st.color, event_id: st.event_id || null, chars: st.chars });
       changed = true;
     };
     const m = b.media;
     modal({
-      title: b.t_end ? 'Úsek videa' : 'Záložka', icon: 'bookmark', wide: true,
+      title: b.t_end ? tr('Video segment') : tr('Bookmark'), icon: 'bookmark', wide: true,
       body: h('.bm-ed.col', { style: { gap: '14px' } },
         m ? h('.row.small.muted', icon('film'), h('span.ellipsis', `${m.name} · ${m.game}`), b.abs ? h('span.faint', '· ' + fmt.dt(b.abs)) : null,
           h('span.bm-src', '· ' + (SRC[b.source] || b.source))) : null,
         title,
         h('.kv2',
-          h('.k', 'Začátek'), h('.row', tIn, nowBtn(tIn)),
-          h('.k', 'Konec'), h('.row', eIn, nowBtn(eIn), h('span.faint.small', 'vyplň a ze záložky je virtuální klip')),
-          h('.k', 'Událost'), evBox,
-          h('.k', 'Postavy'), charBox,
-          h('.k', 'Barva'), swBox),
+          h('.k', tr('Start time')), h('.row', tIn, nowBtn(tIn)),
+          h('.k', tr('End time')), h('.row', eIn, nowBtn(eIn), h('span.faint.small', tr('fill it in and the bookmark becomes a virtual clip'))),
+          h('.k', tr('Event')), evBox,
+          h('.k', tr('Characters')), charBox,
+          h('.k', tr('Color')), swBox),
         note,
         h('.row',
-          h('button.btn.sm', { onclick: () => playBm({ ...b, t: parseClock(tIn.value) ?? b.t, t_end: parseClock(eIn.value) }) }, icon('play'), parseClock(eIn.value) ? 'Přehrát úsek' : 'Přehrát'),
-          h('button.btn.sm.ghost', { onclick: () => playBm({ ...b, t: parseClock(tIn.value) ?? b.t, t_end: parseClock(eIn.value) }, true) }, icon('picture-in-picture-2'), 'V okně'))),
+          h('button.btn.sm', { onclick: () => playBm({ ...b, t: parseClock(tIn.value) ?? b.t, t_end: parseClock(eIn.value) }) }, icon('play'), parseClock(eIn.value) ? tr('Play segment') : tr('Play')),
+          h('button.btn.sm.ghost', { onclick: () => playBm({ ...b, t: parseClock(tIn.value) ?? b.t, t_end: parseClock(eIn.value) }, true) }, icon('picture-in-picture-2'), tr('In a window')))),
       onClose: () => { if (changed) bmChanged(); resolve(changed); },
       actions: [
-        { label: 'Smazat', danger: true, icon: 'trash-2', onClick: async () => {
-          if (!await confirmDialog('Smazat záložku?', b.source === 'manual' ? 'Záložka se smaže.' : 'Záložka z Medalu se skryje a při dalším načtení se znovu neobjeví.', { danger: true, okLabel: 'Smazat' })) return false;
+        { label: tr('Delete'), danger: true, icon: 'trash-2', onClick: async () => {
+          if (!await confirmDialog(tr('Delete bookmark?'), b.source === 'manual' ? tr('The bookmark will be deleted.') : tr('The Medal bookmark will be hidden and will not reappear on the next scan.'), { danger: true, okLabel: tr('Delete') })) return false;
           await API.call('bm.delete', { id: b.id }); changed = true;
         } },
-        { label: 'Zrušit' },
-        { label: 'Uložit', primary: true, icon: 'check', onClick: save },
+        { label: tr('Cancel') },
+        { label: tr('Save'), primary: true, icon: 'check', onClick: save },
       ],
     });
     title.addEventListener('keydown', e => { if (e.key === 'Enter') { save().then(r => { if (r !== false) $('.backdrop:last-child .btn.ghost.icon')?.click(); }); } });
@@ -145,7 +145,7 @@ async function bmEditor(bm) {
 function bmRow(b, { showMedia = false, onChange, hideEvent = false } = {}) {
   const ev = b.event_id && App.eventsById.get(b.event_id);
   const edit = async () => { if (await bmEditor(b)) onChange && onChange(); };
-  return h('.bm-row', { style: { '--bm': bmColor(b) }, title: 'Klik = přehrát · dvojklik = upravit', onclick: () => playBm(b), ondblclick: edit },
+  return h('.bm-row', { style: { '--bm': bmColor(b) }, title: tr('Click = play · double-click = edit'), onclick: () => playBm(b), ondblclick: edit },
     h('.flag'),
     h('.tc', fmt.clock(b.t), b.t_end ? h('small', '→ ' + fmt.clock(b.t_end)) : (b.abs ? h('small', fmt.time(b.abs)) : null)),
     h('.grow', { style: { minWidth: 0 } },
@@ -155,18 +155,18 @@ function bmRow(b, { showMedia = false, onChange, hideEvent = false } = {}) {
     b.chars && b.chars.length ? avatarStack(b.chars, 20, 3) : null,
     ev && !hideEvent ? h('span.ev', { style: { '--evc': ev.color }, onclick: e => { e.stopPropagation(); App.go('events', { id: ev.id, tab: 'media' }); } }, icon('calendar-range'), ' ', ev.title) : null,
     h('.acts',
-      !ev ? h('button.btn.sm.ghost.icon', { title: 'Přiřadit k události', onclick: async e => {
+      !ev ? h('button.btn.sm.ghost.icon', { title: tr('Assign to event'), onclick: async e => {
         e.stopPropagation();
-        const r = await pickEvent({ title: 'Přiřadit záložku k události', moment: b.abs, withNote: false });
-        if (r) { await API.call('bm.update', { id: b.id, event_id: r.id }); toast('Přiřazeno k události'); await bmChanged(); onChange && onChange(); }
+        const r = await pickEvent({ title: tr('Assign bookmark to an event'), moment: b.abs, withNote: false });
+        if (r) { await API.call('bm.update', { id: b.id, event_id: r.id }); toast(tr('Assigned to event')); await bmChanged(); onChange && onChange(); }
       } }, icon('link')) : null,
-      h('button.btn.sm.ghost.icon', { title: 'Upravit', onclick: e => { e.stopPropagation(); edit(); } }, icon('pencil'))));
+      h('button.btn.sm.ghost.icon', { title: tr('Edit'), onclick: e => { e.stopPropagation(); edit(); } }, icon('pencil'))));
 }
 
 /** Clickable mini timeline of a video's bookmarks. */
 function bmStrip(media, bms, { onChange } = {}) {
   const dur = media.duration || 1;
-  const strip = h('.bm-strip', { title: 'Klik = přehrát od tohoto místa' });
+  const strip = h('.bm-strip', { title: tr('Click = play from this point') });
   strip.addEventListener('click', e => {
     if (e.target !== strip) return;
     const r = strip.getBoundingClientRect();
@@ -214,17 +214,17 @@ async function render() {
   clear(body);
   const tb = $('.toolbar', root);
   clear(tb).append(
-    h('input.input', { placeholder: 'Hledat v záložkách…', value: F.q, style: { width: '240px' }, oninput: debounce(e => { F.q = e.target.value; render(); }, 250) }),
-    h('.seg', [['all', 'Vše'], ['free', `Nepřiřazené${free ? ' (' + free + ')' : ''}`], ['linked', 'V událostech']].map(([k, l]) =>
+    h('input.input', { placeholder: tr('Search bookmarks…'), value: F.q, style: { width: '240px' }, oninput: debounce(e => { F.q = e.target.value; render(); }, 250) }),
+    h('.seg', [['all', tr('All')], ['free', tr('Unassigned') + (free ? ' (' + free + ')' : '')], ['linked', tr('In events')]].map(([k, l]) =>
       h('button' + (F.state === k ? '.on' : ''), { onclick: () => { F.state = k; render(); } }, l))),
     h('select.input', { style: { width: 'auto' }, onchange: e => { F.game = e.target.value; render(); } },
-      h('option', { value: '' }, 'Všechny hry'), games.map(g => h('option', { value: g, selected: g === F.game }, g))),
+      h('option', { value: '' }, tr('All games')), games.map(g => h('option', { value: g, selected: g === F.game }, g))),
     h('label.row.small.muted', { style: { gap: '6px', cursor: 'pointer' } },
-      h('input', { type: 'checkbox', checked: F.auto, onchange: e => { F.auto = e.target.checked; render(); } }), 'i automatické herní momenty'));
+      h('input', { type: 'checkbox', checked: F.auto, onchange: e => { F.auto = e.target.checked; render(); } }), tr('include automatic game moments')));
 
   if (!ordered.length) {
-    body.appendChild(emptyState('bookmark', 'Zatím žádné záložky',
-      'Při přehrávání stiskni B (záložka) nebo Shift+B na začátku a konci úseku. Záložky, které uděláš v Medalu klávesou, se načtou samy.'));
+    body.appendChild(emptyState('bookmark', tr('No bookmarks yet'),
+      tr('While playing, press B (bookmark) or Shift+B at the start and end of a segment. Bookmarks you make in Medal with the hotkey are loaded automatically.')));
     return;
   }
   for (const bms of ordered) {
@@ -235,22 +235,22 @@ async function render() {
         h('.bm-th', { 'data-rmid': m.id }, m.thumb ? h('img', { src: m.thumb, loading: 'lazy' }) : h('.noimg', icon('film')), resumeBar(full || m)),
         h('.grow', { style: { minWidth: 0 } },
           h('.ellipsis', { style: { fontWeight: 600 } }, m.name),
-          h('.small.muted', `${m.game} · ${fmt.dt(m.start)} · ${fmt.dur(m.duration)} · ${bms.length} ${fmt.plural(bms.length, 'záložka', 'záložky', 'záložek')}`)),
-        h('button.btn.sm', { onclick: () => addBookmarkHere(m.id).then(render) }, icon('bookmark-plus'), 'Přidat'),
-        h('button.btn.sm.ghost.icon', { title: 'Ukázat v knihovně', onclick: () => App.go('library', { select: [m.id] }) }, icon('clapperboard'))),
+          h('.small.muted', `${m.game} · ${fmt.dt(m.start)} · ${fmt.dur(m.duration)} · ${trn(bms.length, '{n} bookmark', '{n} bookmarks')}`)),
+        h('button.btn.sm', { onclick: () => addBookmarkHere(m.id).then(render) }, icon('bookmark-plus'), tr('Add')),
+        h('button.btn.sm.ghost.icon', { title: tr('Show in library'), onclick: () => App.go('library', { select: [m.id] }) }, icon('clapperboard'))),
       bmStrip(full || m, bms, { onChange: render }),
       h('div', bms.map(b => bmRow(b, { onChange: render })))));
   }
 }
 
 Views.register('moments', {
-  title: 'Momenty a záložky', short: 'Momenty', icon: 'bookmark', order: 15,
+  title: tr('Moments and bookmarks'), short: tr('Moments'), icon: 'bookmark', order: 15,
   mount(el, params = {}) {
     root = el;
     F.game = params.game || '';
     el.append(h('.moments.page', { style: { padding: '16px 24px', overflow: 'auto', height: '100%' } },
       h('.toolbar', { style: { padding: 0 } }), h('.mom-body')));
-    Shell.header({ icon: 'bookmark', title: 'momenty', topic: 'B = záložka · Shift+B = začátek a konec úseku · dvojklik = upravit' });
+    Shell.header({ icon: 'bookmark', title: tr('moments'), topic: tr('B = bookmark · Shift+B = segment start and end · double-click = edit') });
     unsub = [App.on('bookmarks', render), App.on('events', render)];
     render();
   },

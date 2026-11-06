@@ -136,15 +136,15 @@ function renderTree() {
         kids.length ? icon(open ? 'chevron-down' : 'chevron-right') : null),
       h('span.bar', { style: { background: e.color || 'var(--accent)' } }),
       h('span.nm.ellipsis', e.title),
-      e.link_count ? h('span.cnt', { title: 'Záznamy' }, icon('film'), e.link_count) : null,
-      h('span.dt', e.start_time ? fmt.d(e.start_time).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' }) : ''));
+      e.link_count ? h('span.cnt', { title: tr('Recordings') }, icon('film'), e.link_count) : null,
+      h('span.dt', e.start_time ? fmt.d(e.start_time).toLocaleDateString(I18N.locale, { day: 'numeric', month: 'numeric' }) : ''));
       wireDnD(node, e);
       tree.appendChild(node);
       if (open) walk(e.id, depth + 1);
     }
   };
   walk(null, 0);
-  if (!App.events.length) tree.appendChild(h('.faint.small', { style: { padding: '14px 10px' } }, 'Zatím žádné události. Vytvoř první, nebo si je nech navrhnout ze záznamů.'));
+  if (!App.events.length) tree.appendChild(h('.faint.small', { style: { padding: '14px 10px' } }, tr('No events yet. Create the first one, or let them be suggested from your recordings.')));
   const rootDrop = h('div', { style: { height: '60px' } });
   rootDrop.addEventListener('dragover', ev => { if (ev.dataTransfer.types.includes('application/x-event')) { ev.preventDefault(); rootDrop.classList.add('drop-target'); } });
   rootDrop.addEventListener('dragleave', () => rootDrop.classList.remove('drop-target'));
@@ -174,7 +174,7 @@ function wireDnD(node, e) {
     const media = ev.dataTransfer.getData('application/x-media');
     if (media) {
       const n = await API.call('link.add', { event_id: e.id, media_ids: JSON.parse(media) });
-      toast(`Připojeno k „${e.title}“: ${n}`);
+      toast(tr('Linked to “{title}”: {n}', { title: e.title, n }));
       await App.refresh('events', 'media');
       if (current === e.id) renderPage();
       return;
@@ -193,11 +193,11 @@ function wireDnD(node, e) {
 
 function nodeMenu(ev, e) {
   menu(ev, [
-    { label: 'Otevřít', icon: 'arrow-up-right', onClick: () => open_(e.id) },
-    { label: 'Nová podudálost', icon: 'corner-down-right', onClick: () => newEvent(e.id) },
-    { label: 'Přesunout na nejvyšší úroveň', icon: 'arrow-up-to-line', disabled: !e.parent_id, onClick: async () => { await API.call('event.move', { id: e.id, parent_id: null }); App.loadEvents(); } },
+    { label: tr('Open'), icon: 'arrow-up-right', onClick: () => open_(e.id) },
+    { label: tr('New sub-event'), icon: 'corner-down-right', onClick: () => newEvent(e.id) },
+    { label: tr('Move to top level'), icon: 'arrow-up-to-line', disabled: !e.parent_id, onClick: async () => { await API.call('event.move', { id: e.id, parent_id: null }); App.loadEvents(); } },
     { sep: true },
-    { label: 'Smazat…', icon: 'trash-2', danger: true, onClick: () => deleteEvent(e) },
+    { label: tr('Delete…'), icon: 'trash-2', danger: true, onClick: () => deleteEvent(e) },
   ]);
 }
 
@@ -208,7 +208,7 @@ function open_(id) {
 }
 
 async function newEvent(parentId = null, defaults = {}) {
-  const title = await promptDialog(parentId ? 'Nová podudálost' : 'Nová událost', 'Název', '', { placeholder: 'např. Přepadení karavany u Ratajů' });
+  const title = await promptDialog(parentId ? tr('New sub-event') : tr('New event'), tr('Title'), '', { placeholder: tr('e.g. Ambush of the caravan near Rataje') });
   if (!title) return;
   const parent = parentId ? App.eventsById.get(parentId) : null;
   const id = await API.call('event.create', { title, parent_id: parentId, start: defaults.start ?? parent?.start_time ?? null, end: defaults.end ?? parent?.end_time ?? null });
@@ -221,7 +221,10 @@ async function deleteEvent(e) {
   const kids = [];
   const walk = id => App.childrenOf(id).forEach(c => { kids.push(c); walk(c.id); });
   walk(e.id);
-  const ok = await confirmDialog('Smazat událost', `Smazat „${e.title}“${kids.length ? ` a ${kids.length} ${fmt.plural(kids.length, 'podudálost', 'podudálosti', 'podudálostí')}` : ''}?\n\nSmaže se zápis, deník a přílohy této události. Videa zůstanou.`, { danger: true, okLabel: 'Smazat' });
+  const q = kids.length
+    ? trn(kids.length, 'Delete “{title}” and {n} sub-event?', 'Delete “{title}” and {n} sub-events?', { title: e.title })
+    : tr('Delete “{title}”?', { title: e.title });
+  const ok = await confirmDialog(tr('Delete event'), q + '\n\n' + tr('The write-up, journal and attachments of this event will be deleted. Videos are kept.'), { danger: true, okLabel: tr('Delete') });
   if (!ok) return;
   await API.call('event.delete', { id: e.id });
   if (current === e.id || kids.some(k => k.id === current)) current = null;
@@ -239,7 +242,7 @@ async function renderPage() {
   if (!ev) { current = null; renderDashboard(); return; }
   clear(main);
   Shell.header({ icon: 'calendar-range', title: ev.title, topic: [fmt.range(ev.start_time, ev.end_time), ev.ingame_date, ev.location].filter(Boolean).join(' · ') });
-  Shell.setContext({ label: 'V této události', chars: [...new Set(ev.char_links.map(l => l.character_id))] });
+  Shell.setContext({ label: tr('In this event'), chars: [...new Set(ev.char_links.map(l => l.character_id))] });
   const save = debounce(async fields => { await API.call('event.update', { id: ev.id, ...fields }); App.loadEvents(); }, 250);
   const saveNow = async fields => { await API.call('event.update', { id: ev.id, ...fields }); Object.assign(ev, fields); await App.loadEvents(); };
 
@@ -247,20 +250,20 @@ async function renderPage() {
   const cover = ev.cover_id ? ev.attachments.find(a => a.id === ev.cover_id) : null;
   const coverImg = h('.img', { style: cover ? { backgroundImage: `url("${cover.url}")` } :
     { background: `color-mix(in srgb, ${ev.color || '#888'} 38%, var(--bg-2))` } });
-  const ttl = h('input.ttl', { value: ev.title, placeholder: 'Název události', onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); },
-    onchange: e => saveNow({ title: e.target.value.trim() || 'Bez názvu' }) });
+  const ttl = h('input.ttl', { value: ev.title, placeholder: tr('Event title'), onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); },
+    onchange: e => saveNow({ title: e.target.value.trim() || tr('Untitled') }) });
   const path = App.eventPath(ev.id).slice(0, -1);
   main.appendChild(h('.ev-cover', coverImg, h('.shade'),
     h('.acts',
-      h('button.btn.sm', { title: 'Obálka z příloh', onclick: e => coverMenu(e) }, icon('image'), 'Obálka'),
-      h('button.btn.sm.icon', { title: 'Další', onclick: e => menu(e, [
-        { label: 'Nová podudálost', icon: 'corner-down-right', onClick: () => newEvent(ev.id) },
-        { label: 'Zobrazit na časové ose', icon: 'chart-gantt', onClick: () => App.go('timeline', { focus: ev.id }) },
+      h('button.btn.sm', { title: tr('Cover from attachments'), onclick: e => coverMenu(e) }, icon('image'), tr('Cover')),
+      h('button.btn.sm.icon', { title: tr('More'), onclick: e => menu(e, [
+        { label: tr('New sub-event'), icon: 'corner-down-right', onClick: () => newEvent(ev.id) },
+        { label: tr('Show on timeline'), icon: 'chart-gantt', onClick: () => App.go('timeline', { focus: ev.id }) },
         { sep: true },
-        { label: 'Smazat událost…', icon: 'trash-2', danger: true, onClick: () => deleteEvent(App.eventsById.get(ev.id)) },
+        { label: tr('Delete event…'), icon: 'trash-2', danger: true, onClick: () => deleteEvent(App.eventsById.get(ev.id)) },
       ]) }, icon('ellipsis'))),
     h('.inner',
-      h('.crumbs', h('a', { onclick: () => { current = null; renderPage(); renderTree(); } }, icon('calendar-range'), ' Události'),
+      h('.crumbs', h('a', { onclick: () => { current = null; renderPage(); renderTree(); } }, icon('calendar-range'), ' ' + tr('Events')),
         path.map(p => [icon('chevron-right'), h('a', { onclick: () => open_(p.id) }, p.title)])),
       ttl)));
 
@@ -275,30 +278,30 @@ async function renderPage() {
   }
   const body = h('.ev-body');
   body.appendChild(h('.ev-meta',
-    h('.box', h('.lbl', icon('clock'), 'Kdy (reálně)'), h('.row', startIn), h('.row', endIn),
+    h('.box', h('.lbl', icon('clock'), tr('When (real time)')), h('.row', startIn), h('.row', endIn),
       h('button.btn.sm.ghost', { style: { alignSelf: 'flex-start' }, onclick: async () => {
         const r = await API.call('event.range_from_links', { id: ev.id });
-        if (!r) { toast('Událost zatím nemá připojené záznamy', 'err'); return; }
-        startIn.value = fmt.toInput(r.start); endIn.value = fmt.toInput(r.end); App.loadEvents(); toast('Čas nastaven podle záznamů');
-      } }, icon('wand-sparkles'), 'Podle záznamů')),
-    h('.box', h('.lbl', icon('server'), 'Server'),
+        if (!r) { toast(tr('The event has no linked recordings yet'), 'err'); return; }
+        startIn.value = fmt.toInput(r.start); endIn.value = fmt.toInput(r.end); App.loadEvents(); toast(tr('Time set from recordings'));
+      } }, icon('wand-sparkles'), tr('From recordings'))),
+    h('.box', h('.lbl', icon('server'), tr('Server')),
       serverPicker(ev.server_id, async id => { await saveNow({ server_id: id }); renderPage(); }, App.scope.game),
-      h('.lbl', icon('scroll-text'), 'Datum ve hře'),
-      h('input.input', { value: ev.ingame_date || '', placeholder: 'např. 14. den po žních, 1403', onkeydown: e => e.stopPropagation(), onchange: e => saveNow({ ingame_date: e.target.value }) }),
-      h('.lbl', icon('map-pin'), 'Místo'),
+      h('.lbl', icon('scroll-text'), tr('In-game date')),
+      h('input.input', { value: ev.ingame_date || '', placeholder: tr('e.g. 14th day after the harvest, 1403'), onkeydown: e => e.stopPropagation(), onchange: e => saveNow({ ingame_date: e.target.value }) }),
+      h('.lbl', icon('map-pin'), tr('Place')),
       (() => {
         const pl = ev.place_id && (App.places || []).find(p => p.id === ev.place_id);
         return h('.row', pl ? h('span.chip.on', { onclick: () => App.go('places', { id: pl.id }) }, icon('map-pin'), pl.name)
-          : h('input.input', { value: ev.location || '', placeholder: 'např. Rataje, krčma', onkeydown: e => e.stopPropagation(), onchange: e => saveNow({ location: e.target.value }) }),
-        h('button.btn.sm', { title: 'Vybrat z katalogu míst', onclick: async () => {
-          const id = await pickPlace('Kde se událost stala?'); if (!id) return;
+          : h('input.input', { value: ev.location || '', placeholder: tr('e.g. Rataje, tavern'), onkeydown: e => e.stopPropagation(), onchange: e => saveNow({ location: e.target.value }) }),
+        h('button.btn.sm', { title: tr('Pick from the place catalog'), onclick: async () => {
+          const id = await pickPlace(tr('Where did the event take place?')); if (!id) return;
           App.places = await API.call('places.list');
           const p2 = App.places.find(x => x.id === id);
           await saveNow({ place_id: id, location: p2 ? p2.name : '' }); renderPage();
-        } }, icon('map'), pl ? '' : 'Z katalogu'),
-        pl ? h('button.btn.sm.ghost.icon', { title: 'Odpojit místo', onclick: async () => { await saveNow({ place_id: null }); renderPage(); } }, icon('x')) : null);
+        } }, icon('map'), pl ? '' : tr('From catalog')),
+        pl ? h('button.btn.sm.ghost.icon', { title: tr('Unlink place'), onclick: async () => { await saveNow({ place_id: null }); renderPage(); } }, icon('x')) : null);
       })()),
-    h('.box', h('.lbl', icon('palette'), 'Barva a štítky'),
+    h('.box', h('.lbl', icon('palette'), tr('Color and tags')),
       h('.ev-swatches', PALETTE.map(c => h('span' + (c === ev.color ? '.on' : ''), { style: { background: c },
         onclick: async () => { await saveNow({ color: c }); renderPage(); renderTree(); } }))),
       tagEditor(ev.tags || [], tags => API.call('event.update', { id: ev.id, tags }).then(() => App.loadEvents())))));
@@ -311,27 +314,27 @@ async function renderPage() {
   [...roleOf.keys()].map(id => App.charsById.get(id)).filter(Boolean).forEach(c => charsRow.appendChild(charChip(c, {
     role: roleOf.get(c.id),
     onClick: e => menu(e, [
-      { label: 'Profil postavy', icon: 'user', onClick: () => App.go('characters', { id: c.id }) },
-      { label: 'Upravit roli…', icon: 'pencil', onClick: async () => { const r = await promptDialog('Role v události', c.name, roleOf.get(c.id) || '', { placeholder: 'např. oběť, svědek, vůdce' }); if (r !== null) { await API.call('char.link', { character_id: c.id, target_type: 'event', target_id: ev.id, role: r }); renderPage(); } } },
-      { label: 'Odebrat z události', icon: 'x', danger: true, onClick: async () => { await API.call('char.unlink', { character_id: c.id, target_type: 'event', target_id: ev.id }); App.refresh('events', 'chars'); renderPage(); } },
+      { label: tr('Character profile'), icon: 'user', onClick: () => App.go('characters', { id: c.id }) },
+      { label: tr('Edit role…'), icon: 'pencil', onClick: async () => { const r = await promptDialog(tr('Role in event'), c.name, roleOf.get(c.id) || '', { placeholder: tr('e.g. victim, witness, leader') }); if (r !== null) { await API.call('char.link', { character_id: c.id, target_type: 'event', target_id: ev.id, role: r }); renderPage(); } } },
+      { label: tr('Remove from event'), icon: 'x', danger: true, onClick: async () => { await API.call('char.unlink', { character_id: c.id, target_type: 'event', target_id: ev.id }); App.refresh('events', 'chars'); renderPage(); } },
     ]),
   })));
   const onlyMentioned = [...new Set([...mentioned, ...entryMentions])].filter(id => !roleOf.has(id)).map(id => App.charsById.get(id)).filter(Boolean);
-  onlyMentioned.forEach(c => charsRow.appendChild(h('span', { title: 'Zmíněno v textu' }, charChip(c, { role: 'zmínka' }))));
+  onlyMentioned.forEach(c => charsRow.appendChild(h('span', { title: tr('Mentioned in text') }, charChip(c, { role: tr('mention') }))));
   charsRow.appendChild(h('button.btn.sm', { onclick: async () => {
-    const ids = await pickCharacters([...roleOf.keys()], { title: 'Postavy v události' });
+    const ids = await pickCharacters([...roleOf.keys()], { title: tr('Characters in event') });
     if (!ids) return;
     for (const id of ids) if (!roleOf.has(id)) await API.call('char.link', { character_id: id, target_type: 'event', target_id: ev.id, role: '' });
     for (const id of roleOf.keys()) if (!ids.includes(id)) await API.call('char.unlink', { character_id: id, target_type: 'event', target_id: ev.id });
     App.refresh('events', 'chars'); renderPage();
-  } }, icon('user-plus'), 'Přidat postavy'));
-  body.appendChild(h('.section-title', icon('users'), 'Postavy', h('.line')));
+  } }, icon('user-plus'), tr('Add characters')));
+  body.appendChild(h('.section-title', icon('users'), tr('Characters'), h('.line')));
   body.appendChild(charsRow);
 
   // tabs
   const counts = { journal: ev.entries.length, media: ev.links.length, files: ev.attachments.length, children: ev.children.length };
-  const tabs = [['write', 'file-text', 'Zápis'], ['journal', 'notebook-pen', 'Deník'], ['media', 'film', 'Záznamy'],
-    ['files', 'paperclip', 'Přílohy'], ['children', 'git-branch', 'Podudálosti']];
+  const tabs = [['write', 'file-text', tr('Write-up')], ['journal', 'notebook-pen', tr('Journal')], ['media', 'film', tr('Recordings')],
+    ['files', 'paperclip', tr('Attachments')], ['children', 'git-branch', tr('Sub-events')]];
   const tabBar = h('.ev-tabs', tabs.map(([k, ic, label]) => h('button' + (tab === k ? '.on' : ''), { onclick: () => { tab = k; renderPage(); } },
     icon(ic), label, counts[k] ? h('span.n', counts[k]) : null)));
   body.appendChild(tabBar);
@@ -349,11 +352,11 @@ async function renderPage() {
 function coverMenu(e) {
   const imgs = ev.attachments.filter(a => a.kind === 'image').concat(ev.entries.flatMap(en => en.attachments.filter(a => a.kind === 'image')));
   menu(e, [
-    ...imgs.slice(0, 12).map(a => ({ label: a.caption || a.orig_name || 'obrázek', icon: 'image', onClick: async () => { await API.call('event.update', { id: ev.id, cover_id: a.id }); App.loadEvents(); renderPage(); } })),
+    ...imgs.slice(0, 12).map(a => ({ label: a.caption || a.orig_name || tr('image'), icon: 'image', onClick: async () => { await API.call('event.update', { id: ev.id, cover_id: a.id }); App.loadEvents(); renderPage(); } })),
     imgs.length ? { sep: true } : null,
-    { label: 'Nahrát obrázek…', icon: 'upload', onClick: async () => { const got = await API.call('att.pick', { owner_type: 'event', owner_id: ev.id, images_only: true }); if (got.length) { await API.call('event.update', { id: ev.id, cover_id: got[0].id }); App.loadEvents(); renderPage(); } } },
-    { label: 'Snímek z přehrávače', icon: 'camera', onClick: async () => { const a = await API.call('att.snapshot', { owner_type: 'event', owner_id: ev.id }); await API.call('event.update', { id: ev.id, cover_id: a.id }); App.loadEvents(); renderPage(); } },
-    ev.cover_id ? { label: 'Odebrat obálku', icon: 'x', onClick: async () => { await API.call('event.update', { id: ev.id, cover_id: null }); App.loadEvents(); renderPage(); } } : null,
+    { label: tr('Upload image…'), icon: 'upload', onClick: async () => { const got = await API.call('att.pick', { owner_type: 'event', owner_id: ev.id, images_only: true }); if (got.length) { await API.call('event.update', { id: ev.id, cover_id: got[0].id }); App.loadEvents(); renderPage(); } } },
+    { label: tr('Screenshot from player'), icon: 'camera', onClick: async () => { const a = await API.call('att.snapshot', { owner_type: 'event', owner_id: ev.id }); await API.call('event.update', { id: ev.id, cover_id: a.id }); App.loadEvents(); renderPage(); } },
+    ev.cover_id ? { label: tr('Remove cover'), icon: 'x', onClick: async () => { await API.call('event.update', { id: ev.id, cover_id: null }); App.loadEvents(); renderPage(); } } : null,
   ]);
 }
 
@@ -361,11 +364,11 @@ function coverMenu(e) {
 function paneWrite(pane) {
   const ed = RichEditor({
     html: ev.body_html || '', ownerType: 'event', ownerId: ev.id, minHeight: 320,
-    placeholder: 'Popiš, co se stalo… Piš @ pro označení postavy, vkládej screeny přes Ctrl+V.',
+    placeholder: tr('Describe what happened… Type @ to tag a character, paste screenshots with Ctrl+V.'),
     onChange: async html => { await API.call('event.update', { id: ev.id, body_html: html }); ev.body_html = html; App.refresh('events', 'chars'); },
   });
   pane.appendChild(ed.el);
-  pane.appendChild(h('.faint.tiny', { style: { marginTop: '8px' } }, icon('save'), ' Ukládá se automaticky.'));
+  pane.appendChild(h('.faint.tiny', { style: { marginTop: '8px' } }, icon('save'), ' ' + tr('Saved automatically.')));
 }
 
 /* ---- journal ---- */
@@ -374,10 +377,10 @@ function paneJournal(pane) {
     h('button.btn.primary', { onclick: async () => {
       const id = await API.call('entry.create', { event_id: ev.id, title: '', entry_time: Date.now() / 1000 });
       await App.loadEvents(); await renderPage(); setTimeout(() => { const el = $(`[data-entry="${id}"] .ttl`); el && el.focus(); }, 60);
-    } }, icon('plus'), 'Nový zápis'),
-    h('span.faint.small', 'Datované poznámky k události – průběh, deník postavy, svědectví, důkazy…')));
+    } }, icon('plus'), tr('New entry')),
+    h('span.faint.small', tr('Dated notes on the event – progress, character journal, testimonies, evidence…'))));
   if (!ev.entries.length) {
-    pane.appendChild(emptyState('notebook-pen', 'Deník je prázdný', 'Každý zápis má vlastní datum (reálné i herní), text, označené postavy a přílohy.'));
+    pane.appendChild(emptyState('notebook-pen', tr('The journal is empty'), tr('Each entry has its own date (real and in-game), text, tagged characters and attachments.')));
     return;
   }
   for (const en of ev.entries) {
@@ -386,20 +389,20 @@ function paneJournal(pane) {
     const renderAtts = () => {
       clear(atts);
       en.attachments.forEach((a, i) => atts.appendChild(attCard(a, { small: true, list: en.attachments, index: i, onChange: () => renderPage() })));
-      atts.appendChild(h('button.btn.sm.ghost', { onclick: async () => { const got = await API.call('att.pick', { owner_type: 'entry', owner_id: en.id }); en.attachments.push(...got); renderAtts(); } }, icon('paperclip'), 'Příloha'));
-      atts.appendChild(h('button.btn.sm.ghost', { onclick: async () => { const a = await API.call('att.snapshot', { owner_type: 'entry', owner_id: en.id }); en.attachments.push(a); renderAtts(); } }, icon('camera'), 'Snímek'));
+      atts.appendChild(h('button.btn.sm.ghost', { onclick: async () => { const got = await API.call('att.pick', { owner_type: 'entry', owner_id: en.id }); en.attachments.push(...got); renderAtts(); } }, icon('paperclip'), tr('Attachment')));
+      atts.appendChild(h('button.btn.sm.ghost', { onclick: async () => { const a = await API.call('att.snapshot', { owner_type: 'entry', owner_id: en.id }); en.attachments.push(a); renderAtts(); } }, icon('camera'), tr('Screenshot')));
     };
     renderAtts();
     const ed = RichEditor({ html: en.body_html, ownerType: 'entry', ownerId: en.id, minHeight: 90,
-      placeholder: 'Co se stalo… (@ = postava, Ctrl+V = screenshot)', onChange: html => save({ body_html: html }) });
+      placeholder: tr('What happened… (@ = character, Ctrl+V = screenshot)'), onChange: html => save({ body_html: html }) });
     pane.appendChild(h('.entry', { 'data-entry': en.id },
       h('.pin'),
       h('.head',
-        h('input.input.bare.ttl', { value: en.title || '', placeholder: 'Nadpis zápisu', onkeydown: e => e.stopPropagation(), onchange: e => save({ title: e.target.value }) }),
-        h('input.input', { type: 'datetime-local', title: 'Reálné datum a čas', value: fmt.toInput(en.entry_time), onchange: e => save({ entry_time: fmt.fromInput(e.target.value) }) }),
-        h('input.input.ig', { value: en.ingame_date || '', placeholder: 'datum ve hře', title: 'Datum ve hře', onkeydown: e => e.stopPropagation(), onchange: e => save({ ingame_date: e.target.value }) }),
-        h('button.btn.ghost.icon.sm', { title: 'Smazat zápis', onclick: async () => {
-          if (await confirmDialog('Smazat zápis', 'Smazat tento zápis včetně jeho příloh?', { danger: true, okLabel: 'Smazat' })) {
+        h('input.input.bare.ttl', { value: en.title || '', placeholder: tr('Entry title'), onkeydown: e => e.stopPropagation(), onchange: e => save({ title: e.target.value }) }),
+        h('input.input', { type: 'datetime-local', title: tr('Real date and time'), value: fmt.toInput(en.entry_time), onchange: e => save({ entry_time: fmt.fromInput(e.target.value) }) }),
+        h('input.input.ig', { value: en.ingame_date || '', placeholder: tr('in-game date'), title: tr('In-game date'), onkeydown: e => e.stopPropagation(), onchange: e => save({ ingame_date: e.target.value }) }),
+        h('button.btn.ghost.icon.sm', { title: tr('Delete entry'), onclick: async () => {
+          if (await confirmDialog(tr('Delete entry'), tr('Delete this entry including its attachments?'), { danger: true, okLabel: tr('Delete') })) {
             await API.call('entry.delete', { id: en.id }); App.refresh('events', 'chars'); renderPage();
           }
         } }, icon('trash-2'))),
@@ -412,23 +415,23 @@ async function paneMedia(pane) {
   const links = [...ev.links].sort((a, b) => ((a.media.start || 0) + (a.offset || 0)) - ((b.media.start || 0) + (b.offset || 0)));
   const total = links.reduce((s, l) => s + (l.media.duration || 0), 0);
   pane.appendChild(h('.row', { style: { marginBottom: '12px' } },
-    h('span.muted', `${links.length} ${fmt.plural(links.length, 'záznam', 'záznamy', 'záznamů')} · ${fmt.durHuman(total)}`),
+    h('span.muted', trn(links.length, '{n} recording', '{n} recordings') + ' · ' + fmt.durHuman(total)),
     h('.grow'),
-    h('button.btn', { onclick: () => App.go('library', { select: links.map(l => l.media_id) }) }, icon('clapperboard'), 'Ukázat v knihovně'),
+    h('button.btn', { onclick: () => App.go('library', { select: links.map(l => l.media_id) }) }, icon('clapperboard'), tr('Show in library')),
     h('button.btn', { onclick: async () => {
       const ids = await pickFromLibrary();
       if (ids && ids.length) { await API.call('link.add', { event_id: ev.id, media_ids: ids }); await App.refresh('events', 'media'); renderPage(); }
-    } }, icon('plus'), 'Přidat záznamy')));
-  if (!links.length) pane.appendChild(h('.faint.small', { style: { margin: '0 0 14px' } }, 'Přetáhni videa z Knihovny na událost ve stromu vlevo, nebo použij návrhy níže.'));
+    } }, icon('plus'), tr('Add recordings'))));
+  if (!links.length) pane.appendChild(h('.faint.small', { style: { margin: '0 0 14px' } }, tr('Drag videos from the Library onto an event in the tree on the left, or use the suggestions below.')));
 
   // moments (bookmarks / virtual clips) of this event, in story order
   const refresh = async () => { ev = await API.call('event.get', { id: ev.id }); renderPage(); };
   const bms = [...(ev.bookmarks || [])].sort((a, b) => (a.abs || a.t) - (b.abs || b.t));
   const momBox = h('div', { style: { marginBottom: '18px' } },
-    h('.section-title', icon('bookmark'), `Momenty${bms.length ? ' · ' + bms.length : ''}`, h('.line')));
+    h('.section-title', icon('bookmark'), tr('Moments') + (bms.length ? ' · ' + bms.length : ''), h('.line')));
   if (bms.length) momBox.append(...bms.map(b => bmRow(b, { showMedia: true, onChange: refresh, hideEvent: true })));
   else momBox.appendChild(h('.faint.small', { style: { padding: '2px 8px' } },
-    'Záložky a úseky z videí přiřazené k této události. Při přehrávání stiskni P (záložka rovnou do události) nebo B a přiřaď později.'));
+    tr('Bookmarks and video ranges assigned to this event. During playback press P (bookmark straight into the event) or B and assign it later.')));
   pane.appendChild(momBox);
   // unassigned bookmarks inside this event's recordings -> quick assign
   if (links.length) {
@@ -437,16 +440,16 @@ async function paneMedia(pane) {
       const t0 = ev.start_time, t1 = ev.end_time;
       const cand = all.filter(b => !b.event_id && linkedIds.has(b.media_id) && (!t0 || !t1 || !b.abs || (b.abs >= t0 - 600 && b.abs <= t1 + 600)));
       if (!cand.length) return;
-      momBox.appendChild(h('.small.muted', { style: { margin: '10px 8px 4px' } }, icon('sparkles'), ` Nepřiřazené záložky v těchto záznamech (${cand.length})`,
+      momBox.appendChild(h('.small.muted', { style: { margin: '10px 8px 4px' } }, icon('sparkles'), ' ' + tr('Unassigned bookmarks in these recordings ({n})', { n: cand.length }),
         h('button.btn.sm.ghost', { style: { marginLeft: '8px' }, onclick: async () => {
           for (const b of cand) await API.call('bm.update', { id: b.id, event_id: ev.id });
-          toast(`Přiřazeno ${cand.length}`); await bmChanged(); refresh();
-        } }, icon('check-check'), 'Přiřadit všechny')));
+          toast(tr('Assigned {n}', { n: cand.length })); await bmChanged(); refresh();
+        } }, icon('check-check'), tr('Assign all'))));
       momBox.append(...cand.map(b => h('div', { style: { opacity: .75 } }, bmRow(b, { showMedia: true, onChange: refresh }))));
     });
   }
 
-  pane.appendChild(h('.section-title', icon('film'), 'Záznamy', h('.line')));
+  pane.appendChild(h('.section-title', icon('film'), tr('Recordings'), h('.line')));
   for (const l of links) {
     const m = l.media;
     const moment = (m.start || 0) + (l.offset || 0);
@@ -454,28 +457,28 @@ async function paneMedia(pane) {
       mediaTile(m, { onClick: () => API.call('media.play', { id: m.id, offset: l.offset }) }),
       h('.col', { style: { gap: '6px' } },
         h('.row', h('b.ellipsis', m.name), h('span.badge.' + m.type, KIND[m.type].label)),
-        h('.small.muted', icon('clock'), ' ', fmt.dt(moment), l.offset != null ? h('span', ' · ve videu od ', h('span.kbd', fmt.clock(l.offset))) : ` · ${fmt.dur(m.duration)}`),
-        h('input.input.note', { value: l.note || '', placeholder: 'Poznámka – co je v tomhle záběru důležité', onkeydown: e => e.stopPropagation(),
+        h('.small.muted', icon('clock'), ' ', fmt.dt(moment), l.offset != null ? h('span', ' · ' + tr('in video from') + ' ', h('span.kbd', fmt.clock(l.offset))) : ` · ${fmt.dur(m.duration)}`),
+        h('input.input.note', { value: l.note || '', placeholder: tr('Note – what matters in this shot'), onkeydown: e => e.stopPropagation(),
           onchange: e => API.call('link.update', { id: l.id, note: e.target.value }) }),
         m.duration ? bmStrip(m, bms.filter(b => b.media_id === m.id), { onChange: refresh }) : null),
       h('.col', { style: { gap: '6px' } },
-        h('button.btn.sm', { onclick: () => API.call('media.play', { id: m.id, offset: l.offset }) }, icon('play'), l.offset != null ? fmt.clock(l.offset) : 'Přehrát'),
-        h('button.btn.sm.ghost.danger', { onclick: async () => { await API.call('link.delete', { id: l.id }); await App.refresh('events', 'media'); renderPage(); } }, icon('unlink'), 'Odebrat'))));
+        h('button.btn.sm', { onclick: () => API.call('media.play', { id: m.id, offset: l.offset }) }, icon('play'), l.offset != null ? fmt.clock(l.offset) : tr('Play')),
+        h('button.btn.sm.ghost.danger', { onclick: async () => { await API.call('link.delete', { id: l.id }); await App.refresh('events', 'media'); renderPage(); } }, icon('unlink'), tr('Remove')))));
   }
   // suggestions
   const sugBox = h('div');
-  pane.appendChild(h('.section-title', icon('sparkles'), 'Návrhy', h('.line')));
+  pane.appendChild(h('.section-title', icon('sparkles'), tr('Suggestions'), h('.line')));
   pane.appendChild(sugBox);
-  sugBox.appendChild(h('.faint.small', 'Hledám…'));
+  sugBox.appendChild(h('.faint.small', tr('Searching…')));
   const sug = await API.call('event.suggest', { id: ev.id });
   clear(sugBox);
-  if (!sug.length) { sugBox.appendChild(h('.faint.small', 'Žádné návrhy. Nastav události čas, nebo připoj první záznam – podle něj pak najdu další.')); return; }
+  if (!sug.length) { sugBox.appendChild(h('.faint.small', tr('No suggestions. Set the event time, or link the first recording – I will find more based on it.'))); return; }
   const high = sug.filter(s => s.score >= 80);
   if (high.length) sugBox.appendChild(h('.row', { style: { marginBottom: '8px' } },
     h('button.btn.primary.sm', { onclick: async () => {
       for (const s of high) await API.call('link.add', { event_id: ev.id, media_ids: [s.media.id], offset: s.offset });
-      toast(`Připojeno ${high.length}`); await App.refresh('events', 'media'); renderPage();
-    } }, icon('check-check'), `Připojit vše nad 80 % (${high.length})`)));
+      toast(tr('Linked {n}', { n: high.length })); await App.refresh('events', 'media'); renderPage();
+    } }, icon('check-check'), tr('Link all above 80% ({n})', { n: high.length }))));
   for (const s of sug.slice(0, 24)) {
     const col = s.score >= 80 ? 'var(--ok)' : s.score >= 50 ? 'var(--accent)' : 'var(--text-3)';
     sugBox.appendChild(h('.sg',
@@ -486,14 +489,14 @@ async function paneMedia(pane) {
       h('button.btn.sm', { onclick: async () => {
         await API.call('link.add', { event_id: ev.id, media_ids: [s.media.id], offset: s.offset });
         await App.refresh('events', 'media'); renderPage();
-      } }, icon('plus'), 'Připojit')));
+      } }, icon('plus'), tr('Attach'))));
   }
 }
 
 function pickFromLibrary() {
   return new Promise(resolve => {
     const sel = new Set(); let done = false;
-    const q = h('input.input', { placeholder: 'Hledat…', autofocus: true });
+    const q = h('input.input', { placeholder: tr('Search…'), autofocus: true });
     const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '10px', marginTop: '12px', maxHeight: '60vh', overflow: 'auto' } });
     const render = () => {
       clear(grid);
@@ -505,10 +508,10 @@ function pickFromLibrary() {
       });
     };
     q.addEventListener('input', render); q.addEventListener('keydown', e => e.stopPropagation());
-    modal({ title: 'Vybrat záznamy', icon: 'film', xwide: true, body: h('div', q, grid),
+    modal({ title: tr('Select recordings'), icon: 'film', xwide: true, body: h('div', q, grid),
       onClose: () => { if (!done) resolve(null); },
-      actions: [{ label: 'Zrušit', onClick: () => { done = true; resolve(null); } },
-        { label: 'Připojit vybrané', primary: true, onClick: () => { done = true; resolve([...sel]); } }] });
+      actions: [{ label: tr('Cancel'), onClick: () => { done = true; resolve(null); } },
+        { label: tr('Link selected'), primary: true, onClick: () => { done = true; resolve([...sel]); } }] });
     render();
   });
 }
@@ -518,35 +521,35 @@ function attCard(a, { small = false, list = null, index = 0, onChange } = {}) {
   const el = h('.att' + (small ? '.sm' : ''), {
     onclick: () => { if (a.kind === 'image') { const imgs = (list || [a]).filter(x => x.kind === 'image'); lightbox(imgs, Math.max(0, imgs.indexOf(a))); } else API.call('att.open', { id: a.id }); },
     oncontextmenu: e => menu(e, [
-      { label: 'Otevřít', icon: 'external-link', onClick: () => API.call('att.open', { id: a.id }) },
-      a.media_id ? { label: `Přehrát video od ${fmt.clock(a.media_offset)}`, icon: 'play', onClick: () => API.call('att.play_source', { id: a.id }) } : null,
-      a.kind === 'image' && ev ? { label: 'Nastavit jako obálku', icon: 'image', onClick: async () => { await API.call('event.update', { id: ev.id, cover_id: a.id }); App.loadEvents(); renderPage(); } } : null,
-      { label: 'Upravit popisek…', icon: 'pencil', onClick: async () => { const c = await promptDialog('Popisek', 'Popisek přílohy', a.caption || ''); if (c !== null) { await API.call('att.update', { id: a.id, caption: c }); a.caption = c; onChange && onChange(); } } },
-      { label: 'Zobrazit ve složce', icon: 'folder-open', onClick: () => API.call('att.reveal', { id: a.id }) },
+      { label: tr('Open'), icon: 'external-link', onClick: () => API.call('att.open', { id: a.id }) },
+      a.media_id ? { label: tr('Play video from {time}', { time: fmt.clock(a.media_offset) }), icon: 'play', onClick: () => API.call('att.play_source', { id: a.id }) } : null,
+      a.kind === 'image' && ev ? { label: tr('Set as cover'), icon: 'image', onClick: async () => { await API.call('event.update', { id: ev.id, cover_id: a.id }); App.loadEvents(); renderPage(); } } : null,
+      { label: tr('Edit caption…'), icon: 'pencil', onClick: async () => { const c = await promptDialog(tr('Caption'), tr('Attachment caption'), a.caption || ''); if (c !== null) { await API.call('att.update', { id: a.id, caption: c }); a.caption = c; onChange && onChange(); } } },
+      { label: tr('Show in folder'), icon: 'folder-open', onClick: () => API.call('att.reveal', { id: a.id }) },
       { sep: true },
-      { label: 'Smazat', icon: 'trash-2', danger: true, onClick: async () => { if (await confirmDialog('Smazat přílohu', `Smazat „${a.caption || a.orig_name}“?`, { danger: true, okLabel: 'Smazat' })) { await API.call('att.delete', { id: a.id }); onChange && onChange(); } } },
+      { label: tr('Delete'), icon: 'trash-2', danger: true, onClick: async () => { if (await confirmDialog(tr('Delete attachment'), tr('Delete “{title}”?', { title: a.caption || a.orig_name }), { danger: true, okLabel: tr('Delete') })) { await API.call('att.delete', { id: a.id }); onChange && onChange(); } } },
     ]),
   },
   a.kind === 'image' ? h('.im', { style: { backgroundImage: `url("${a.url}")` } }) : h('.fi', icon('file-text')),
-  a.media_id ? h('span.att-src', { title: 'Přehrát zdrojové video v tomto čase',
+  a.media_id ? h('span.att-src', { title: tr('Play the source video at this time'),
     onclick: e => { e.stopPropagation(); API.call('att.play_source', { id: a.id }); } },
-  icon('play'), a.media_offset != null ? fmt.clock(a.media_offset) : 'video') : null,
-  h('.cap', h('.ellipsis', a.caption || a.orig_name || 'příloha'), h('.faint.ellipsis', a.taken_at ? fmt.dt(a.taken_at) : fmt.size(a.size))));
+  icon('play'), a.media_offset != null ? fmt.clock(a.media_offset) : tr('video')) : null,
+  h('.cap', h('.ellipsis', a.caption || a.orig_name || tr('attachment')), h('.faint.ellipsis', a.taken_at ? fmt.dt(a.taken_at) : fmt.size(a.size))));
   return el;
 }
 window.attCard = attCard;
 
 function paneFiles(pane) {
-  const zone = h('.dropzone', icon('upload'), ' Přetáhni sem soubory nebo screenshoty, nebo je vlož přes ', h('span.kbd', 'Ctrl+V'),
+  const zone = h('.dropzone', icon('upload'), ' ' + tr('Drop files or screenshots here, or paste them with') + ' ', h('span.kbd', 'Ctrl+V'),
     h('.row', { style: { justifyContent: 'center', marginTop: '10px' } },
-      h('button.btn.sm', { onclick: async () => { await API.call('att.pick', { owner_type: 'event', owner_id: ev.id }); renderPage(); } }, icon('paperclip'), 'Vybrat soubory'),
-      h('button.btn.sm', { onclick: async () => { await API.call('att.snapshot', { owner_type: 'event', owner_id: ev.id }); toast('Snímek uložen'); renderPage(); } }, icon('camera'), 'Snímek z přehrávače')));
+      h('button.btn.sm', { onclick: async () => { await API.call('att.pick', { owner_type: 'event', owner_id: ev.id }); renderPage(); } }, icon('paperclip'), tr('Choose files')),
+      h('button.btn.sm', { onclick: async () => { await API.call('att.snapshot', { owner_type: 'event', owner_id: ev.id }); toast(tr('Screenshot saved')); renderPage(); } }, icon('camera'), tr('Screenshot from player'))));
   zone.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); zone.classList.add('drop-target'); } });
   zone.addEventListener('dragleave', () => zone.classList.remove('drop-target'));
   zone.addEventListener('drop', async e => { e.preventDefault(); zone.classList.remove('drop-target'); await uploadFiles('event', ev.id, e.dataTransfer.files); renderPage(); });
   pane.appendChild(zone);
-  const all = [...ev.attachments, ...ev.entries.flatMap(en => en.attachments.map(a => ({ ...a, fromEntry: en.title || 'zápis' })))];
-  if (!all.length) { pane.appendChild(h('.faint.small', 'Zatím žádné přílohy.')); return; }
+  const all = [...ev.attachments, ...ev.entries.flatMap(en => en.attachments.map(a => ({ ...a, fromEntry: en.title || tr('entry') })))];
+  if (!all.length) { pane.appendChild(h('.faint.small', tr('No attachments yet.'))); return; }
   const grid = h('.att-grid');
   all.sort((a, b) => (a.taken_at || a.created_at) - (b.taken_at || b.created_at))
     .forEach((a, i) => grid.appendChild(attCard(a, { list: all, index: i, onChange: () => renderPage() })));
@@ -555,9 +558,9 @@ function paneFiles(pane) {
 
 /* ---- sub-events ---- */
 function paneChildren(pane) {
-  pane.appendChild(h('.row', { style: { marginBottom: '12px' } }, h('button.btn.primary', { onclick: () => newEvent(ev.id) }, icon('plus'), 'Nová podudálost')));
+  pane.appendChild(h('.row', { style: { marginBottom: '12px' } }, h('button.btn.primary', { onclick: () => newEvent(ev.id) }, icon('plus'), tr('New sub-event'))));
   const kids = App.childrenOf(ev.id);
-  if (!kids.length) { pane.appendChild(emptyState('git-branch', 'Žádné podudálosti', 'Rozděl větší příběh na kapitoly – např. „Vyšetřování“ → „Výslech svědka“, „Zatčení“.')); return; }
+  if (!kids.length) { pane.appendChild(emptyState('git-branch', tr('No sub-events'), tr('Split a larger story into chapters – e.g. “Investigation” → “Questioning a witness”, “Arrest”.'))); return; }
   const list = h('.child-list');
   kids.forEach(k => list.appendChild(h('.list-row', { onclick: () => open_(k.id) },
     h('span.dot', { style: { background: k.color, width: '10px', height: '10px' } }),
@@ -569,21 +572,21 @@ function paneChildren(pane) {
 /* ---------------- dashboard (no selection) ---------------- */
 async function renderDashboard() {
   clear(main);
-  Shell.header({ icon: 'calendar-range', title: 'události', topic: `${App.events.length} ${fmt.plural(App.events.length, 'událost', 'události', 'událostí')}` });
+  Shell.header({ icon: 'calendar-range', title: tr('events'), topic: trn(App.events.length, '{n} event', '{n} events') });
   Shell.setContext(null);
   const unlinkedSessions = App.media.filter(m => !m.linked && m.type !== 'clip' && (m.duration || 0) >= (App.settings.short_session_seconds || 60));
   const dash = h('.ev-dash');
-  main.appendChild(h('.page-head', h('div', h('h1', 'Události'), h('.sub', `${App.events.length} ${fmt.plural(App.events.length, 'událost', 'události', 'událostí')} · ${App.chars.length} ${fmt.plural(App.chars.length, 'postava', 'postavy', 'postav')}`)),
-    h('.grow'), h('button.btn.primary', { onclick: () => newEvent() }, icon('plus'), 'Nová událost')));
+  main.appendChild(h('.page-head', h('div', h('h1', tr('Events')), h('.sub', trn(App.events.length, '{n} event', '{n} events') + ' · ' + trn(App.chars.length, '{n} character', '{n} characters'))),
+    h('.grow'), h('button.btn.primary', { onclick: () => newEvent() }, icon('plus'), tr('New event'))));
   if (unlinkedSessions.length) {
     dash.appendChild(h('.cta', icon('sparkles', 'big'),
-      h('.grow', h('b', `${unlinkedSessions.length} ${fmt.plural(unlinkedSessions.length, 'záznam ještě není', 'záznamy ještě nejsou', 'záznamů ještě není')} v žádné události`),
-        h('.small.muted', 'Seskupím je podle herních večerů a navrhnu z nich události – stačí zaškrtnout a pojmenovat.')),
-      h('button.btn.primary', { onclick: propose }, icon('wand-sparkles'), 'Navrhnout události')));
+      h('.grow', h('b', trn(unlinkedSessions.length, '{n} recording is not in any event yet', '{n} recordings are not in any event yet')),
+        h('.small.muted', tr('I will group them by game nights and suggest events from them – just tick and name them.'))),
+      h('button.btn.primary', { onclick: propose }, icon('wand-sparkles'), tr('Suggest events'))));
   }
   const recent = [...App.events].sort((a, b) => (b.start_time || b.created_at || 0) - (a.start_time || a.created_at || 0)).slice(0, 18);
   if (recent.length) {
-    dash.appendChild(h('.section-title', 'Poslední události', h('.line')));
+    dash.appendChild(h('.section-title', tr('Recent events'), h('.line')));
     dash.appendChild(h('.ev-cards', recent.map(e => h('.ev-card', { onclick: () => open_(e.id) },
       h('.cv', { style: e.cover ? { backgroundImage: `url("${e.cover}")` } : { background: `linear-gradient(135deg, ${e.color}66, ${e.color}11)` } }),
       h('.bd', h('.t.ellipsis', e.title), h('.small.faint', [fmt.range(e.start_time, e.end_time), e.location].filter(Boolean).join(' · ')),
@@ -591,44 +594,44 @@ async function renderDashboard() {
         h('.row', { style: { marginTop: '8px' } }, avatarStack(e.chars || [], 22), h('.grow'),
           e.link_count ? h('span.chip', icon('film'), e.link_count) : null, e.entry_count ? h('span.chip', icon('notebook-pen'), e.entry_count) : null))))));
   } else if (!unlinkedSessions.length) {
-    dash.appendChild(emptyState('calendar-range', 'Zatím žádné události', 'Vytvoř první událost a připoj k ní záznamy z knihovny.'));
+    dash.appendChild(emptyState('calendar-range', tr('No events yet'), tr('Create the first event and link recordings from the library to it.')));
   }
   main.appendChild(dash);
 }
 
 /* ---------------- proposals ---------------- */
 async function propose() {
-  const gameSel = h('select.input', { style: { width: '220px' } }, h('option', { value: '' }, 'Všechny hry'),
+  const gameSel = h('select.input', { style: { width: '220px' } }, h('option', { value: '' }, tr('All games')),
     App.games.map(([g, n]) => h('option', { value: g }, `${g} (${n})`)));
   const gap = h('input.input', { type: 'number', min: 5, max: 600, value: App.settings.event_gap_minutes || 45, style: { width: '90px' } });
   const list = h('div', { style: { maxHeight: '60vh', overflow: 'auto', marginTop: '12px' } });
   let props = [];
   const load = async () => {
-    clear(list).appendChild(h('.faint', 'Počítám…'));
+    clear(list).appendChild(h('.faint', tr('Calculating…')));
     props = await API.call('event.propose', { gap: Number(gap.value), game: gameSel.value || null });
     clear(list);
-    if (!props.length) { list.appendChild(h('.faint', 'Nic k navržení – všechny záznamy už jsou v událostech.')); return; }
+    if (!props.length) { list.appendChild(h('.faint', tr('Nothing to suggest – all recordings are already in events.'))); return; }
     props.forEach(p => {
       p.on = false;
       const cb = h('input', { type: 'checkbox', style: { accentColor: 'var(--accent)', width: '17px', height: '17px', marginTop: '4px' }, onchange: e => { p.on = e.target.checked; } });
       const title = h('input.input.bare', { value: p.title, style: { fontWeight: 600, fontSize: '14px' }, onkeydown: e => e.stopPropagation(), oninput: e => { p.title = e.target.value; } });
       const total = p.media.reduce((s, m) => s + (m.duration || 0), 0);
       list.appendChild(h('.prop', cb,
-        h('div', title, h('.small.faint', `${fmt.range(p.start, p.end)} · ${p.media.length} ${fmt.plural(p.media.length, 'záznam', 'záznamy', 'záznamů')} · ${fmt.durHuman(total)} nahráno`),
+        h('div', title, h('.small.faint', `${fmt.range(p.start, p.end)} · ${trn(p.media.length, '{n} recording', '{n} recordings')} · ${tr('{duration} recorded', { duration: fmt.durHuman(total) })}`),
           h('.strip', p.media.slice(0, 8).map(m => mediaTile(m)))),
         h('span.chip', p.game)));
     });
   };
   gameSel.onchange = load; gap.onchange = load;
   modal({
-    title: 'Navrhnout události ze záznamů', icon: 'wand-sparkles', xwide: true,
-    body: h('div', h('.muted.small', 'Záznamy, které ještě nejsou v žádné události, seskupené podle herních večerů. Zaškrtni, pojmenuj a vytvoř – záznamy se k událostem rovnou připojí.'),
-      h('.row', { style: { marginTop: '12px' } }, h('span.small', 'Hra'), gameSel, h('span.small', 'nová skupina po pauze'), gap, h('span.small', 'min')), list),
-    actions: [{ label: 'Zrušit' }, { label: 'Vytvořit zaškrtnuté', primary: true, icon: 'check', onClick: async () => {
+    title: tr('Suggest events from recordings'), icon: 'wand-sparkles', xwide: true,
+    body: h('div', h('.muted.small', tr('Recordings that are not in any event yet, grouped by game nights. Tick, name and create – the recordings are linked to the events right away.')),
+      h('.row', { style: { marginTop: '12px' } }, h('span.small', tr('Game')), gameSel, h('span.small', tr('new group after a break of')), gap, h('span.small', tr('min'))), list),
+    actions: [{ label: tr('Cancel') }, { label: tr('Create selected'), primary: true, icon: 'check', onClick: async () => {
       const chosen = props.filter(p => p.on);
-      if (!chosen.length) { toast('Nic není zaškrtnuté', 'err'); return false; }
+      if (!chosen.length) { toast(tr('Nothing is selected'), 'err'); return false; }
       const ids = await API.call('event.create_many', { items: chosen.map(p => ({ title: p.title, start: p.start, end: p.end, media_ids: p.media.map(m => m.id) })) });
-      toast(`Vytvořeno ${ids.length} ${fmt.plural(ids.length, 'událost', 'události', 'událostí')}`);
+      toast(trn(ids.length, 'Created {n} event', 'Created {n} events'));
       await App.refresh('events', 'media');
       open_(ids[ids.length - 1]);
     } }],
@@ -639,17 +642,17 @@ window.proposeEvents = propose;
 
 /* ---------------- mount ---------------- */
 Views.register('events', {
-  title: 'Události', short: 'Události', icon: 'calendar-range', order: 20,
+  title: tr('Events'), short: tr('Events'), icon: 'calendar-range', order: 20,
   mount(r, params) {
     root = r;
     if (params.id) { current = params.id; const e = App.eventsById.get(params.id); e && App.eventPath(e.id).forEach(p => collapsed.delete(p.id)); }
     if (params.tab) tab = params.tab;
     tree = h('.ev-tree');
     side = h('.ev-side',
-      h('.top', h('.row', h('h2', 'Strom'),
-        h('button.btn.sm.icon', { title: 'Navrhnout ze záznamů', onclick: propose }, icon('wand-sparkles')),
-        h('button.btn.sm.primary', { onclick: () => newEvent() }, icon('plus'), 'Nová')),
-      h('.search', icon('search'), h('input.input', { placeholder: 'Hledat událost…', value: filterQ, onkeydown: e => e.stopPropagation(),
+      h('.top', h('.row', h('h2', tr('Tree')),
+        h('button.btn.sm.icon', { title: tr('Suggest from recordings'), onclick: propose }, icon('wand-sparkles')),
+        h('button.btn.sm.primary', { onclick: () => newEvent() }, icon('plus'), tr('New'))),
+      h('.search', icon('search'), h('input.input', { placeholder: tr('Search events…'), value: filterQ, onkeydown: e => e.stopPropagation(),
         oninput: e => { filterQ = e.target.value; renderTree(); } }))),
       tree);
     main = h('.ev-main');

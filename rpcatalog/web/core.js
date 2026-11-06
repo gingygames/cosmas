@@ -94,10 +94,11 @@ function escapeHtml(s) {
 }
 
 /* ---------------- formatting ---------------- */
-const MONTHS = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec'];
-const MONTHS_GEN = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
-const DAYS = ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'];
-const DAYS_SHORT = ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'];
+/* month and day names from Intl in the UI locale (standalone month = Czech nominative "leden") */
+const _names = (n, opts, date) => Array.from({ length: n }, (_, i) => new Intl.DateTimeFormat(I18N.locale, opts).format(date(i)));
+const MONTHS = _names(12, { month: 'long' }, i => new Date(2000, i, 1));
+const DAYS = _names(7, { weekday: 'long' }, i => new Date(2000, 0, 2 + i));          // 2 Jan 2000 = Sunday
+const DAYS_SHORT = _names(7, { weekday: 'short' }, i => new Date(2000, 0, 2 + i));
 const pad = n => String(n).padStart(2, '0');
 const fmt = {
   dur(s) {
@@ -112,13 +113,17 @@ const fmt = {
   },
   clock(s) { return fmt.dur(s || 0); },
   d(t) { return new Date(t * 1000); },
-  dt(t) { if (!t) return '—'; const d = fmt.d(t); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; },
-  date(t) { if (!t) return '—'; const d = fmt.d(t); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; },
-  dateLong(t) { const d = fmt.d(t); return `${DAYS[d.getDay()]} ${d.getDate()}. ${MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`; },
+  dt(t) { if (!t) return '—'; return `${fmt.date(t)} ${fmt.time(t)}`; },
+  date(t) {
+    if (!t) return '—'; const d = fmt.d(t);
+    return I18N.lang === 'cs' ? `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`
+      : d.toLocaleDateString(I18N.locale, { day: 'numeric', month: 'short', year: 'numeric' });
+  },
+  dateLong(t) { return fmt.d(t).toLocaleDateString(I18N.locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); },
   time(t) { if (!t) return ''; const d = fmt.d(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; },
   month(t) { const d = fmt.d(t); return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`; },
   range(a, b) {
-    if (!a) return 'bez data';
+    if (!a) return tr('no date');
     if (!b) return fmt.dt(a);
     const da = fmt.d(a), db = fmt.d(b);
     if (da.toDateString() === db.toDateString()) return `${fmt.date(a)} · ${fmt.time(a)}–${fmt.time(b)}`;
@@ -126,61 +131,68 @@ const fmt = {
   },
   rel(t) {
     const diff = Date.now() / 1000 - t, day = 86400;
-    if (diff < 3600) return `před ${Math.max(1, Math.round(diff / 60))} min`;
-    if (diff < day) return `před ${Math.round(diff / 3600)} h`;
-    if (diff < 2 * day) return 'včera';
-    if (diff < 7 * day) return `před ${Math.round(diff / day)} dny`;
+    if (diff < 3600) return tr('{n} min ago', { n: Math.max(1, Math.round(diff / 60)) });
+    if (diff < day) return tr('{n} h ago', { n: Math.round(diff / 3600) });
+    if (diff < 2 * day) return tr('yesterday');
+    if (diff < 7 * day) return tr('{n} days ago', { n: Math.round(diff / day) });
     return fmt.date(t);
   },
   size(n) {
     if (!n) return '—'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
     while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-    return `${n.toFixed(i >= 2 ? 1 : 0).replace('.', ',')} ${u[i]}`;
+    const dig = i >= 2 ? 1 : 0;
+    return `${n.toLocaleString(I18N.locale, { minimumFractionDigits: dig, maximumFractionDigits: dig })} ${u[i]}`;
   },
   toInput(t) { if (!t) return ''; const d = fmt.d(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; },
   fromInput(v) { return v ? new Date(v).getTime() / 1000 : null; },
+  /** Czech plural forms (1 / 2–4 / 5+); UI text uses trn() from i18n.js */
   plural(n, one, few, many) { return n === 1 ? one : (n >= 2 && n <= 4 ? few : many); },
 };
 
 const KIND = {
-  clip: { label: 'Klip', plural: 'Klipy', color: '#5aa9e6', icon: 'scissors' },
-  session: { label: 'Záznam', plural: 'Celé záznamy', color: '#e3b341', icon: 'film' },
-  manual: { label: 'Nahrávka', plural: 'Ruční nahrávky', color: '#a77be8', icon: 'video' },
+  clip: { label: tr('Clip'), plural: tr('Clips'), color: '#5aa9e6', icon: 'scissors' },
+  session: { label: tr('Recording'), plural: tr('Full recordings'), color: '#e3b341', icon: 'film' },
+  manual: { label: tr('Manual recording'), plural: tr('Manual recordings'), color: '#a77be8', icon: 'video' },
 };
 const CHAR_KIND = {
-  mine: { label: 'Moje postava', plural: 'Moje postavy', icon: 'crown' },
-  player: { label: 'Postava', plural: 'Postavy', icon: 'user' },
+  mine: { label: tr('My character'), plural: tr('My characters'), icon: 'crown' },
+  player: { label: tr('Character'), plural: tr('Characters'), icon: 'user' },
   npc: { label: 'NPC', plural: 'NPC', icon: 'bot' },
 };
 const CHAR_STATUS = {
-  alive: { label: 'Žije', color: '#5cc98a' },
-  dead: { label: 'Mrtvý/á', color: '#ef6b73' },
-  missing: { label: 'Nezvěstný/á', color: '#ef9a4b' },
-  unknown: { label: 'Neznámo', color: '#6d7480' },
+  alive: { label: tr('Alive'), color: '#5cc98a' },
+  dead: { label: tr('Dead'), color: '#ef6b73' },
+  missing: { label: tr('Missing'), color: '#ef9a4b' },
+  unknown: { label: tr('Unknown'), color: '#6d7480' },
 };
 /* Relation types. A stored relation (a, b, kind) means: b is <b-role> of a, a is <a-role> of b.
    Forms: [masculine, feminine]. Symmetric types have no "a". */
 const REL_TYPES = [
-  ['Láska a rodina', [
-    ['manzel', ['manžel', 'manželka']], ['snoubenec', ['snoubenec', 'snoubenka']], ['partner', ['partner', 'partnerka']],
-    ['milenec', ['milenec', 'milenka']], ['ex', ['bývalý partner', 'bývalá partnerka']],
-    ['rodic', ['otec', 'matka'], ['syn', 'dcera']], ['prarodic', ['děd', 'babička'], ['vnuk', 'vnučka']],
-    ['sourozenec', ['bratr', 'sestra']], ['nevlastni', ['nevlastní bratr', 'nevlastní sestra']],
-    ['stryc', ['strýc', 'teta'], ['synovec', 'neteř']], ['bratranec', ['bratranec', 'sestřenice']],
-    ['tchan', ['tchán', 'tchyně'], ['zeť', 'snacha']], ['kmotr', ['kmotr', 'kmotra'], ['kmotřenec', 'kmotřenka']]]],
-  ['Přátelé a nepřátelé', [
-    ['pritel', ['přítel', 'přítelkyně']], ['kamarad', ['kamarád', 'kamarádka']], ['spojenec', ['spojenec', 'spojenkyně']],
-    ['znamy', ['známý', 'známá']], ['soused', ['soused', 'sousedka']], ['rival', ['rival', 'rivalka']],
-    ['nepritel', ['nepřítel', 'nepřítelkyně']], ['vrah', ['vrah', 'vražedkyně'], ['oběť', 'oběť']]]],
-  ['Služba a vrchnost', [
-    ['lenik', ['lenní pán', 'lenní paní'], ['vazal', 'vazalka']], ['vrchnost', ['vrchnost', 'vrchnost'], ['poddaný', 'poddaná']],
-    ['sluha', ['pán', 'paní'], ['služebník', 'služebná']], ['velitel', ['velitel', 'velitelka'], ['podřízený', 'podřízená']],
-    ['mistr', ['mistr', 'mistrová'], ['učeň', 'učednice']], ['ochrance', ['ochránce', 'ochránkyně'], ['chráněnec', 'chráněnkyně']],
-    ['druh', ['druh ve zbrani', 'družka ve zbrani']]]],
-  ['Obchod a peníze', [
-    ['obchod', ['obchodní partner', 'obchodní partnerka']], ['dodavatel', ['dodavatel', 'dodavatelka'], ['zákazník', 'zákaznice']],
-    ['veritel', ['věřitel', 'věřitelka'], ['dlužník', 'dlužnice']], ['zamestnavatel', ['zaměstnavatel', 'zaměstnavatelka'], ['zaměstnanec', 'zaměstnankyně']]]],
+  ['Love and family', [
+    ['manzel', ['husband', 'wife']], ['snoubenec', ['fiancé', 'fiancée']], ['partner', ['partner', 'partner (f)']],
+    ['milenec', ['lover', 'lover (f)']], ['ex', ['ex-partner', 'ex-partner (f)']],
+    ['rodic', ['father', 'mother'], ['son', 'daughter']], ['prarodic', ['grandfather', 'grandmother'], ['grandson', 'granddaughter']],
+    ['sourozenec', ['brother', 'sister']], ['nevlastni', ['stepbrother', 'stepsister']],
+    ['stryc', ['uncle', 'aunt'], ['nephew', 'niece']], ['bratranec', ['cousin', 'cousin (f)']],
+    ['tchan', ['father-in-law', 'mother-in-law'], ['son-in-law', 'daughter-in-law']], ['kmotr', ['godfather', 'godmother'], ['godson', 'goddaughter']]]],
+  ['Friends and enemies', [
+    ['pritel', ['friend', 'friend (f)']], ['kamarad', ['mate', 'mate (f)']], ['spojenec', ['ally', 'ally (f)']],
+    ['znamy', ['acquaintance', 'acquaintance (f)']], ['soused', ['neighbour', 'neighbour (f)']], ['rival', ['rival', 'rival (f)']],
+    ['nepritel', ['enemy', 'enemy (f)']], ['vrah', ['murderer', 'murderess'], ['victim', 'victim']]]],
+  ['Service and lordship', [
+    ['lenik', ['liege lord', 'liege lady'], ['vassal', 'vassal (f)']], ['vrchnost', ['overlord', 'overlord'], ['subject', 'subject (f)']],
+    ['sluha', ['master', 'mistress'], ['servant', 'maidservant']], ['velitel', ['commander', 'commander (f)'], ['subordinate', 'subordinate (f)']],
+    ['mistr', ['master craftsman', 'master craftswoman'], ['apprentice', 'apprentice (f)']], ['ochrance', ['protector', 'protectress'], ['protégé', 'protégée']],
+    ['druh', ['brother in arms', 'sister in arms']]]],
+  ['Trade and money', [
+    ['obchod', ['business partner', 'business partner (f)']], ['dodavatel', ['supplier', 'supplier (f)'], ['customer', 'customer (f)']],
+    ['veritel', ['creditor', 'creditor (f)'], ['debtor', 'debtor (f)']], ['zamestnavatel', ['employer', 'employer (f)'], ['employee', 'employee (f)']]]],
 ];
+/* labels above are English source, translated here; " (f)" only tells feminine forms apart in the dictionary */
+for (const grp of REL_TYPES) {
+  grp[0] = tr(grp[0]);
+  for (const t of grp[1]) for (const f of t.slice(1)) for (let i = 0; i < f.length; i++) f[i] = tr(f[i]).replace(/ \(f\)$/, '');
+}
 const REL_BY_KEY = new Map(REL_TYPES.flatMap(([, list]) => list.map(t => [t[0], t])));
 /** Word for `who` in its role ('a' or 'b') of a relation kind, by who's gender. */
 function relWord(kind, role, who) {
@@ -303,14 +315,14 @@ function serverPicker(current, onPick, game = null) {
   const list = App.servers.filter(s => !game || s.game === game);
   const goTo = () => { Shell.setGuild(sv.game); App.setScope({ server: sv.id }); Shell.renderChannels(); App.go('library'); };
   return h('.row', { style: { gap: '6px' } },
-    h('span.chip' + (sv ? '.on' : ''), sv ? { title: `Přejít na server ${sv.name} (${sv.game})`, onclick: goTo } : null,
-      sv ? h('span.dot', { style: { background: sv.color } }) : null, sv ? sv.name : 'bez serveru', sv ? h('span.faint', ' · ' + sv.game) : null),
+    h('span.chip' + (sv ? '.on' : ''), sv ? { title: tr('Go to server {name} ({game})', { name: sv.name, game: sv.game }), onclick: goTo } : null,
+      sv ? h('span.dot', { style: { background: sv.color } }) : null, sv ? sv.name : tr('no server'), sv ? h('span.faint', ' · ' + sv.game) : null),
     h('button.btn.sm', { onclick: e => menu(e, [
-      ...list.map(s => ({ label: `${s.name}${game ? '' : ' · ' + s.game}${App.defaultServer(s.game) === s.id ? '  (výchozí)' : ''}`, onClick: () => onPick(s.id) })),
+      ...list.map(s => ({ label: `${s.name}${game ? '' : ' · ' + s.game}${App.defaultServer(s.game) === s.id ? '  (' + tr('default') + ')' : ''}`, onClick: () => onPick(s.id) })),
       list.length ? { sep: true } : null,
-      { label: 'Nový server…', icon: 'plus', onClick: () => serverDialog({ game }, { onSaved: id => onPick(id), switchScope: false }) },
-      { label: 'Bez serveru', onClick: () => onPick(null) },
-    ]) }, 'Změnit'));
+      { label: tr('New server…'), icon: 'plus', onClick: () => serverDialog({ game }, { onSaved: id => onPick(id), switchScope: false }) },
+      { label: tr('No server'), onClick: () => onPick(null) },
+    ]) }, tr('Change')));
 }
 
 /* ---------------- views / router ---------------- */
@@ -369,7 +381,7 @@ function modal({ title, body, actions = [], wide = false, xwide = false, onClose
     }, a.icon ? icon(a.icon) : null, a.label));
   }
   const box = h(`.modal${wide ? '.wide' : ''}${xwide ? '.xwide' : ''}`,
-    h('header', ic ? icon(ic) : null, h('h2', title), h('button.btn.ghost.icon', { onclick: close, title: 'Zavřít' }, icon('x'))),
+    h('header', ic ? icon(ic) : null, h('h2', title), h('button.btn.ghost.icon', { onclick: close, title: tr('Close') }, icon('x'))),
     h('.body', body), actions.length ? footer : null);
   const back = h('.backdrop', { onmousedown: e => { if (e.target === back) close(); } }, box);
   overlayRoot().appendChild(back);
@@ -378,14 +390,14 @@ function modal({ title, body, actions = [], wide = false, xwide = false, onClose
   return { close, box };
 }
 
-function confirmDialog(title, text, { danger = false, okLabel = 'Pokračovat' } = {}) {
+function confirmDialog(title, text, { danger = false, okLabel = tr('Continue') } = {}) {
   return new Promise(resolve => {
     let done = false;
     modal({
       title, body: h('p.muted', { style: { margin: '4px 0 6px', whiteSpace: 'pre-line' } }, text),
       onClose: () => { if (!done) resolve(false); },
       actions: [
-        { label: 'Zrušit', onClick: () => { done = true; resolve(false); } },
+        { label: tr('Cancel'), onClick: () => { done = true; resolve(false); } },
         { label: okLabel, primary: !danger, danger, onClick: () => { done = true; resolve(true); } },
       ],
     });
@@ -403,7 +415,7 @@ function promptDialog(title, label, value = '', { placeholder = '', multiline = 
     const m = modal({
       title, body: h('label.field', label, inp),
       onClose: () => { if (!done) resolve(null); },
-      actions: [{ label: 'Zrušit', onClick: () => { done = true; resolve(null); } },
+      actions: [{ label: tr('Cancel'), onClick: () => { done = true; resolve(null); } },
         { label: 'OK', primary: true, onClick: submit }],
     });
     setTimeout(() => inp.select && inp.select(), 40);
@@ -472,7 +484,7 @@ function charChip(c, { role, onClick, onRemove } = {}) {
 }
 /** red "where you left off" bar on a thumbnail */
 function resumeBar(m) {
-  return m.resume && m.duration ? h('.resume', { title: `Skončil jsi v ${fmt.clock(m.resume)}` },
+  return m.resume && m.duration ? h('.resume', { title: tr('You stopped at {time}', { time: fmt.clock(m.resume) }) },
     h('i', { style: { width: Math.min(100, m.resume / m.duration * 100) + '%' } })) : null;
 }
 /** saved position changed: update the cached media and every thumbnail of it on screen */
@@ -508,10 +520,10 @@ function emptyState(ic, title, text, action) {
 }
 
 /** Pick characters. Returns Promise<array of ids | null>. Allows creating new ones. */
-function pickCharacters(selected = [], { title = 'Postavy', multi = true } = {}) {
+function pickCharacters(selected = [], { title = tr('Characters'), multi = true } = {}) {
   return new Promise(resolve => {
     const sel = new Set(selected); let done = false;
-    const q = h('input.input', { placeholder: 'Hledat nebo napsat jméno nové postavy…', autofocus: true });
+    const q = h('input.input', { placeholder: tr('Search or type a new character’s name…'), autofocus: true });
     const list = h('.picker-list');
     const render = () => {
       clear(list);
@@ -535,29 +547,29 @@ function pickCharacters(selected = [], { title = 'Postavy', multi = true } = {})
             sel.add(id); q.value = ''; render();
           },
         }, h('.avatar', { style: { width: '30px', height: '30px', background: 'var(--accent-soft)', color: 'var(--accent)' } }, icon('plus')),
-        h('div', 'Vytvořit postavu ', h('b', `„${q.value.trim()}“`))));
+        h('div', tr('Create character') + ' ', h('b', tr('“{name}”', { name: q.value.trim() })))));
       }
-      if (!list.children.length) list.appendChild(h('.faint.small', { style: { padding: '10px' } }, 'Zatím žádné postavy – napiš jméno a vytvoř první.'));
+      if (!list.children.length) list.appendChild(h('.faint.small', { style: { padding: '10px' } }, tr('No characters yet – type a name and create the first one.')));
     };
     q.addEventListener('input', render);
     q.addEventListener('keydown', e => { if (e.key === 'Enter' && list.firstChild) list.firstChild.click(); });
     const m = modal({
       title, icon: 'users', body: h('div', q, list),
       onClose: () => { if (!done) resolve(null); },
-      actions: multi ? [{ label: 'Zrušit', onClick: () => { done = true; resolve(null); } },
-        { label: 'Hotovo', primary: true, onClick: () => { done = true; resolve([...sel]); } }] : [],
+      actions: multi ? [{ label: tr('Cancel'), onClick: () => { done = true; resolve(null); } },
+        { label: tr('Done'), primary: true, onClick: () => { done = true; resolve([...sel]); } }] : [],
     });
     render();
   });
 }
 
 /** Pick an event. opts.moment (unix s) ranks matching events first. Returns Promise<{id, note}|null>. */
-function pickEvent({ title = 'Připojit k události', moment = null, withNote = true } = {}) {
+function pickEvent({ title = tr('Link to event'), moment = null, withNote = true } = {}) {
   return new Promise(async resolve => {
     let done = false, chosen = null;
     const best = moment ? await API.call('events.at', { t: moment }) : [];
-    const q = h('input.input', { placeholder: 'Hledat událost…', autofocus: true });
-    const note = h('input.input', { placeholder: 'Poznámka k odkazu (nepovinné)' });
+    const q = h('input.input', { placeholder: tr('Search events…'), autofocus: true });
+    const note = h('input.input', { placeholder: tr('Note for the link (optional)') });
     const list = h('.picker-list');
     const row = (e, depth = 0) => h('.list-row' + (chosen === e.id ? '.sel' : ''), {
       style: { paddingLeft: 10 + depth * 18 + 'px' },
@@ -569,9 +581,9 @@ function pickEvent({ title = 'Připojit k události', moment = null, withNote = 
       clear(list);
       const term = q.value.trim().toLowerCase();
       if (!term && best.length) {
-        list.appendChild(h('.section-title', { style: { margin: '4px 6px' } }, icon('sparkles'), 'Odpovídá času', h('.line')));
+        list.appendChild(h('.section-title', { style: { margin: '4px 6px' } }, icon('sparkles'), tr('Matches the time'), h('.line')));
         best.forEach(id => App.eventsById.get(id) && list.appendChild(row(App.eventsById.get(id))));
-        list.appendChild(h('.section-title', { style: { margin: '10px 6px 4px' } }, 'Všechny události', h('.line')));
+        list.appendChild(h('.section-title', { style: { margin: '10px 6px 4px' } }, tr('All events'), h('.line')));
       }
       if (term) {
         App.events.filter(e => e.title.toLowerCase().includes(term)).forEach(e => list.appendChild(row(e)));
@@ -581,23 +593,23 @@ function pickEvent({ title = 'Připojit k události', moment = null, withNote = 
       }
       list.appendChild(h('.list-row', {
         onclick: async () => {
-          const name = await promptDialog('Nová událost', 'Název události', q.value.trim());
+          const name = await promptDialog(tr('New event'), tr('Event title'), q.value.trim());
           if (!name) return;
           const id = await API.call('event.create', { title: name, start: moment ? moment - 1800 : null, end: moment ? moment + 1800 : null });
           await App.loadEvents(); chosen = id; q.value = ''; render();
         },
-      }, icon('plus'), h('span', 'Nová událost…')));
+      }, icon('plus'), h('span', tr('New event…'))));
     };
     const finish = () => { done = true; resolve(chosen ? { id: chosen, note: note.value.trim() } : null); };
     q.addEventListener('input', render);
     if (best.length) chosen = best[0];
     const m = modal({
       title, icon: 'link', wide: false,
-      body: h('div', moment ? h('.small.muted', { style: { marginBottom: '8px' } }, icon('clock'), ' Okamžik ve hře: ', h('b', fmt.dt(moment))) : null,
+      body: h('div', moment ? h('.small.muted', { style: { marginBottom: '8px' } }, icon('clock'), ' ' + tr('In-game moment:') + ' ', h('b', fmt.dt(moment))) : null,
         q, list, withNote ? h('div', { style: { marginTop: '10px' } }, note) : null),
       onClose: () => { if (!done) resolve(null); },
-      actions: [{ label: 'Zrušit', onClick: () => { done = true; resolve(null); } },
-        { label: 'Připojit', primary: true, icon: 'link', onClick: () => { if (!chosen) return false; finish(); } }],
+      actions: [{ label: tr('Cancel'), onClick: () => { done = true; resolve(null); } },
+        { label: tr('Attach'), primary: true, icon: 'link', onClick: () => { if (!chosen) return false; finish(); } }],
     });
     render();
   });
@@ -626,13 +638,13 @@ function lightbox(items, index = 0) {
     const a = items[i]; img.src = a.url;
     cap.textContent = [a.caption || a.orig_name, a.taken_at ? fmt.dt(a.taken_at) : ''].filter(Boolean).join(' · ');
     srcBtn.classList.toggle('hidden', !a.media_id);
-    srcBtn.replaceChildren(icon('play'), a.media_offset != null ? `Přehrát video od ${fmt.clock(a.media_offset)}` : 'Přehrát zdrojové video');
+    srcBtn.replaceChildren(icon('play'), a.media_offset != null ? tr('Play video from {time}', { time: fmt.clock(a.media_offset) }) : tr('Play source video'));
   };
   const back = h('.backdrop', { style: { flexDirection: 'column' }, onclick: e => { if (e.target === back) close(); } },
     h('div', img, cap),
     h('.row', { style: { position: 'fixed', top: '16px', right: '16px' } },
       srcBtn,
-      h('button.btn.icon', { title: 'Otevřít v prohlížeči obrázků', onclick: () => API.call('att.open', { id: items[i].id }) }, icon('external-link')),
+      h('button.btn.icon', { title: tr('Open in image viewer'), onclick: () => API.call('att.open', { id: items[i].id }) }, icon('external-link')),
       h('button.btn.icon', { onclick: () => close() }, icon('x'))),
     items.length > 1 ? h('button.btn.icon', { style: { position: 'fixed', left: '16px', top: '50%' }, onclick: () => { i = (i - 1 + items.length) % items.length; show(); } }, icon('chevron-left')) : null,
     items.length > 1 ? h('button.btn.icon', { style: { position: 'fixed', right: '16px', top: '50%' }, onclick: () => { i = (i + 1) % items.length; show(); } }, icon('chevron-right')) : null);

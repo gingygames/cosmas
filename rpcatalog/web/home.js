@@ -49,11 +49,11 @@ async function render() {
   const sessions = media.filter(m => m.type !== 'clip' && (m.duration || 0) >= (App.settings.short_session_seconds || 60));
   const latest = sessions[0] || media[0];
   const box = h('.home-in');
-  Shell.header({ icon: 'house', title: 'přehled', topic: `${App.media.length} videí · ${App.events.length} událostí · ${App.chars.length} postav` });
+  Shell.header({ icon: 'house', title: tr('overview'), topic: [trn(App.media.length, '{n} video', '{n} videos'), trn(App.events.length, '{n} event', '{n} events'), trn(App.chars.length, '{n} character', '{n} characters')].join(' · ') });
 
   if (latest) {
     const sameDay = media.filter(m => m.id !== latest.id && m.start && latest.start && Math.abs(m.start - latest.start) < 6 * 3600).slice(0, 4);
-    box.appendChild(h('h3', 'Naposledy nahráno'));
+    box.appendChild(h('h3', tr('Recently recorded')));
     box.appendChild(h('.feat',
       h('.img', { 'data-rmid': latest.id, style: latest.thumb ? { backgroundImage: `url("${latest.thumb}")` } : {}, onclick: () => API.call('media.play', { id: latest.id }) },
         resumeBar(latest), h('.pl', h('span', icon('play')))),
@@ -61,63 +61,63 @@ async function render() {
         h('.kicker', latest.game),
         h('.ttl', latest.name),
         h('.meta', `${fmt.dateLong(latest.start)} · ${fmt.time(latest.start)} · ${fmt.durHuman(latest.duration)}`),
-        latest.linked ? h('.meta', icon('link'), ' Je v události') : h('.meta.faint', 'Zatím v žádné události'),
+        latest.linked ? h('.meta', icon('link'), ' ' + tr('In an event')) : h('.meta.faint', tr('Not in any event yet')),
         h('.row', { style: { marginTop: '10px' } },
-          h('button.btn.primary', { onclick: () => API.call('media.play', { id: latest.id }) }, icon('play'), 'Přehrát'),
-          h('button.btn', { onclick: () => App.go('library', { select: [latest.id] }) }, 'Detail'),
-          !latest.linked ? h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), 'Navrhnout událost') : null),
-        sameDay.length ? h('.small.faint', { style: { marginTop: '14px' } }, 'Ze stejného večera') : null,
+          h('button.btn.primary', { onclick: () => API.call('media.play', { id: latest.id }) }, icon('play'), tr('Play')),
+          h('button.btn', { onclick: () => App.go('library', { select: [latest.id] }) }, tr('Detail')),
+          !latest.linked ? h('button.btn', { onclick: () => App.go('events', { propose: true }) }, icon('wand-sparkles'), tr('Suggest event')) : null),
+        sameDay.length ? h('.small.faint', { style: { marginTop: '14px' } }, tr('From the same evening')) : null,
         sameDay.length ? h('.thumbs', sameDay.map(m => h('div', { 'data-rmid': m.id, title: m.name, style: m.thumb ? { backgroundImage: `url("${m.thumb}")` } : {},
           onclick: () => API.call('media.play', { id: m.id }) }, resumeBar(m)))) : null)));
   }
 
   const cont = App.media.filter(m => m.resume).sort((a, b) => (b.watched_at || 0) - (a.watched_at || 0)).slice(0, 6);
   if (cont.length) {
-    box.appendChild(h('h3', 'Pokračovat ve sledování'));
+    box.appendChild(h('h3', tr('Continue watching')));
     box.appendChild(h('.shelf', { style: { gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' } }, cont.map(m => h('div',
       mediaTile(m), h('.small.ellipsis', { style: { marginTop: '6px', fontWeight: 600 } }, m.name),
-      h('.tiny.faint', `${m.game} · zbývá ${fmt.durHuman((m.duration || 0) - m.resume)}`)))));
+      h('.tiny.faint', `${m.game} · ` + tr('{duration} left', { duration: fmt.durHuman((m.duration || 0) - m.resume) }))))));
   }
 
   const games = Shell.games();
   if (games.length) {
-    box.appendChild(h('h3', 'Hry', h('span.more', { onclick: () => App.go('library') }, 'Celá knihovna')));
+    box.appendChild(h('h3', tr('Games'), h('span.more', { onclick: () => App.go('library') }, tr('Whole library'))));
     box.appendChild(h('.shelf', games.map(g => h('.cap', { onclick: () => { Shell.setGuild(g.game); App.go('library', { game: g.game }); } },
       h('.im', { style: (g.banner || g.thumb) ? { backgroundImage: `url("${g.banner || g.thumb}")` } : { background: gameHue(g.game) } }, (g.banner || g.thumb) ? null : g.game.slice(0, 2)),
       h('.nm.ellipsis', g.game),
-      h('.sb', `${fmt.durHuman(g.dur)} nahráno · ${g.last ? fmt.rel(g.last) : ''}`)))));
+      h('.sb', tr('{duration} recorded', { duration: fmt.durHuman(g.dur) }) + ` · ${g.last ? fmt.rel(g.last) : ''}`)))));
   }
 
   const evs = [...App.events].filter(e => e.start_time && inScope(e)).sort((a, b) => b.start_time - a.start_time).slice(0, 6);
   const left = h('div'), right = h('div');
-  left.appendChild(h('h3', 'Poslední události', h('span.more', { onclick: () => App.go('events') }, 'Všechny')));
+  left.appendChild(h('h3', tr('Recent events'), h('span.more', { onclick: () => App.go('events') }, tr('See all'))));
   if (evs.length) {
     left.appendChild(h('.evrow', { style: { gridTemplateColumns: '1fr' } }, evs.map(e => h('.evc', { style: { '--c': e.color }, onclick: () => App.go('events', { id: e.id }) },
       h('.row', h('.t.grow.ellipsis', e.title), e.chars && e.chars.length ? avatarStack(e.chars, 20, 4) : null),
       h('.d', [fmt.range(e.start_time, e.end_time), e.ingame_date].filter(Boolean).join(' · ')),
       e.excerpt ? h('.x', e.excerpt) : null))));
   } else {
-    left.appendChild(h('.evc', { onclick: () => App.go('events', { propose: true }) }, h('.t', 'Zatím žádné události'),
-      h('.x', 'Klikni a nech si události navrhnout z herních večerů v knihovně.')));
+    left.appendChild(h('.evc', { onclick: () => App.go('events', { propose: true }) }, h('.t', tr('No events yet')),
+      h('.x', tr('Click to get events suggested from the game nights in your library.'))));
   }
-  right.appendChild(h('h3', 'Nepřiřazené momenty', h('span.more', { onclick: () => App.go('moments') }, 'Všechny')));
-  const momBox = h('.mom', h('.faint.small', { style: { padding: '8px' } }, 'Načítám…'));
+  right.appendChild(h('h3', tr('Unassigned moments'), h('span.more', { onclick: () => App.go('moments') }, tr('See all'))));
+  const momBox = h('.mom', h('.faint.small', { style: { padding: '8px' } }, tr('Loading…')));
   right.appendChild(momBox);
   box.appendChild(h('.twocol', left, right));
 
-  box.appendChild(h('h3', 'Nové v knihovně', h('span.more', { onclick: () => App.go('library') }, 'Knihovna')));
+  box.appendChild(h('h3', tr('New in the library'), h('span.more', { onclick: () => App.go('library') }, tr('Library'))));
   box.appendChild(h('.shelf', { style: { gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' } }, media.slice(0, 12).map(m => mediaTile(m))));
 
   clear(root).appendChild(h('.home', box));
 
   const bms = (await API.call('bm.list', { include_auto: false })).filter(b => !b.event_id).sort((a, b) => (b.abs || 0) - (a.abs || 0)).slice(0, 7);
   clear(momBox);
-  if (!bms.length) momBox.appendChild(h('.faint.small', { style: { padding: '8px' } }, 'Všechny záložky jsou přiřazené. Při přehrávání stiskni B.'));
+  if (!bms.length) momBox.appendChild(h('.faint.small', { style: { padding: '8px' } }, tr('All bookmarks are assigned. Press B while playing.')));
   else bms.forEach(b => momBox.appendChild(bmRow(b, { showMedia: true, onChange: render })));
 }
 
 Views.register('home', {
-  title: 'Přehled', short: 'Přehled', icon: 'house', order: 5,
+  title: tr('Overview'), short: tr('Overview'), icon: 'house', order: 5,
   mount(el) {
     root = el;
     Shell.setGuild('home');

@@ -43,21 +43,21 @@ document.head.appendChild(h('style', `
   background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent-2); }
 `));
 
-const FACTION_KINDS = [['rod', 'Rody', 'Rod', 'crown'], ['frakce', 'Frakce', 'Frakce', 'flag'], ['cech', 'Cechy', 'Cech', 'hammer'],
-  ['rad', 'Řády', 'Řád', 'shield'], ['mesto', 'Města a vesnice', 'Město / vesnice', 'castle'], ['jine', 'Ostatní', 'Jiné', 'circle-dot']];
+const FACTION_KINDS = [['rod', tr('Houses'), tr('House'), 'crown'], ['frakce', tr('Factions'), tr('Faction'), 'flag'], ['cech', tr('Guilds'), tr('Guild'), 'hammer'],
+  ['rad', tr('Orders'), tr('Order'), 'shield'], ['mesto', tr('Towns and villages'), tr('Town / village'), 'castle'], ['jine', tr('Others'), tr('Other'), 'circle-dot']];
 const FK = new Map(FACTION_KINDS.map(k => [k[0], k]));
-const PLACE_KINDS = [['hrad', 'Hrady a tvrze', 'Hrad / tvrz', 'castle'], ['mesto', 'Města', 'Město', 'building-2'],
-  ['vesnice', 'Vesnice', 'Vesnice', 'house'], ['krcma', 'Krčmy a hostince', 'Krčma', 'beer'], ['cirkev', 'Kostely a kláštery', 'Kostel / klášter', 'church'],
-  ['budova', 'Domy a dílny', 'Dům / dílna', 'warehouse'], ['priroda', 'Krajina', 'Les / krajina', 'trees'], ['jine', 'Ostatní', 'Jiné', 'map-pin']];
+const PLACE_KINDS = [['hrad', tr('Castles and forts'), tr('Castle / fort'), 'castle'], ['mesto', tr('Towns'), tr('Town'), 'building-2'],
+  ['vesnice', tr('Villages'), tr('Village'), 'house'], ['krcma', tr('Taverns and inns'), tr('Tavern'), 'beer'], ['cirkev', tr('Churches and monasteries'), tr('Church / monastery'), 'church'],
+  ['budova', tr('Houses and workshops'), tr('House / workshop'), 'warehouse'], ['priroda', tr('Landscape'), tr('Forest / landscape'), 'trees'], ['jine', tr('Others'), tr('Other'), 'map-pin']];
 const PK = new Map(PLACE_KINDS.map(k => [k[0], k]));
 const KINDS = { factions: FACTION_KINDS, places: PLACE_KINDS };
 
 /** Pick a place (or create one). Resolves to place id or null. */
-window.pickPlace = async function (title = 'Vybrat místo') {
+window.pickPlace = async function (title = tr('Select a place')) {
   const list = await API.call('places.list');
   return new Promise(resolve => {
     let done = false;
-    const q = h('input.input', { placeholder: 'Hledat místo nebo napsat nové…', autofocus: true });
+    const q = h('input.input', { placeholder: tr('Search for a place or type a new one…'), autofocus: true });
     const box = h('.picker-list');
     const render = () => {
       clear(box);
@@ -67,7 +67,7 @@ window.pickPlace = async function (title = 'Vybrat místo') {
       }, icon((PK.get(p.kind) || PK.get('jine'))[3]), h('.grow', p.name), h('.tiny.faint', p.owner_name || ''))));
       if (t && !list.some(p => p.name.toLowerCase() === t)) box.appendChild(h('.list-row', {
         onclick: async () => { const id = await API.call('place.create', { name: q.value.trim() }); App.places = await API.call('places.list'); done = true; resolve(id); m.close(); },
-      }, icon('plus'), h('span', 'Nové místo ', h('b', `„${q.value.trim()}“`))));
+      }, icon('plus'), h('span', tr('New place') + ' ', h('b', tr('“{name}”', { name: q.value.trim() })))));
     };
     q.addEventListener('input', render); q.addEventListener('keydown', e => e.stopPropagation());
     const m = modal({ title, icon: 'map-pin', body: h('div', q, box), onClose: () => { if (!done) resolve(null); } });
@@ -79,24 +79,24 @@ window.ptagChips = tags => (tags || []).length ? h('span.row', { style: { gap: '
 
 const CONF = {
   factions: {
-    title: 'frakce a rody', icon: 'shield', list: 'factions.list', get: 'faction.get', create: 'faction.create', update: 'faction.update',
-    del: 'faction.delete', img: 'faction.emblem', imgKey: 'emblem', owner: 'faction', noun: 'frakce', newLabel: 'Nová frakce / rod',
-    empty: 'Rody, frakce, cechy, města… Přidej je a připoj k nim postavy s rolí (hlava rodu, vazal, člen…).',
+    title: tr('factions and houses'), icon: 'shield', list: 'factions.list', get: 'faction.get', create: 'faction.create', update: 'faction.update',
+    del: 'faction.delete', img: 'faction.emblem', imgKey: 'emblem', owner: 'faction', noun: tr('faction'), newLabel: tr('New faction / house'),
+    empty: tr('Houses, factions, guilds, towns… Add them and attach characters with a role (head of the house, vassal, member…).'),
     memberIds: g => g.members.map(m => m.character_id), roleOf: (g, cid) => (g.members.find(m => m.character_id === cid) || {}).role,
-    addMembers: async (g, ids) => { const role = await promptDialog('Role ve frakci', 'Role (nepovinné)', '', { placeholder: 'např. hlava rodu, člen, vazal' }); if (role === null) return false; await API.call('faction.members_add', { id: g.id, character_ids: ids, role }); },
+    addMembers: async (g, ids) => { const role = await promptDialog(tr('Role in faction'), tr('Role (optional)'), '', { placeholder: tr('e.g. head of the house, member, vassal') }); if (role === null) return false; await API.call('faction.members_add', { id: g.id, character_ids: ids, role }); },
     setRole: (g, cid, role) => API.call('faction.members_add', { id: g.id, character_ids: [cid], role }),
     removeMember: (g, cid) => API.call('faction.member_remove', { id: g.id, character_id: cid }),
   },
   places: {
-    title: 'místa', icon: 'map', list: 'places.list', get: 'place.get', create: 'place.create', update: 'place.update',
-    del: 'place.delete', img: 'place.image', imgKey: 'image', owner: 'place', noun: 'místo', newLabel: 'Nové místo',
-    empty: 'Hrady, města, krčmy, lesy… Ke každému místu jde nastavit, komu patří (postava nebo frakce), kde leží a co se tam stalo.',
+    title: tr('places'), icon: 'map', list: 'places.list', get: 'place.get', create: 'place.create', update: 'place.update',
+    del: 'place.delete', img: 'place.image', imgKey: 'image', owner: 'place', noun: tr('place'), newLabel: tr('New place'),
+    empty: tr('Castles, towns, taverns, forests… For each place you can set who owns it (a character or a faction), where it lies and what happened there.'),
     memberIds: () => [], roleOf: () => '', addMembers: null, setRole: null, removeMember: null,
   },
   players: {
-    title: 'hráči', icon: 'gamepad-2', list: 'players.list', get: 'player.get', create: 'player.create', update: 'player.update',
-    del: 'player.delete', img: 'player.avatar', imgKey: 'avatar', owner: 'player', noun: 'hráč', newLabel: 'Nový hráč',
-    empty: 'Lidé za postavami. Jeden hráč může mít víc postav (i z minulosti). Štítky hráče (např. admin) se propíšou k jeho postavám a momentům.',
+    title: tr('players'), icon: 'gamepad-2', list: 'players.list', get: 'player.get', create: 'player.create', update: 'player.update',
+    del: 'player.delete', img: 'player.avatar', imgKey: 'avatar', owner: 'player', noun: tr('player'), newLabel: tr('New player'),
+    empty: tr("The people behind the characters. One player can have several characters (past ones too). A player's tags (e.g. admin) carry over to their characters and moments."),
     memberIds: g => g.characters, roleOf: () => '',
     addMembers: async (g, ids) => { for (const id of ids) await API.call('char.update', { id, player_id: g.id }); },
     setRole: null,
@@ -117,9 +117,9 @@ function makeView(kind) {
 
   function renderSide() {
     const side = $('.gp-side', root);
-    const search = h('input.input', { placeholder: 'Hledat…', value: q, onkeydown: e => e.stopPropagation(), oninput: debounce(e => { q = e.target.value; renderRows(); }, 120) });
+    const search = h('input.input', { placeholder: tr('Search…'), value: q, onkeydown: e => e.stopPropagation(), oninput: debounce(e => { q = e.target.value; renderRows(); }, 120) });
     clear(side).append(
-      h('.top', h('.row', h('b.grow', C.title[0].toUpperCase() + C.title.slice(1)), h('button.btn.sm.primary', { onclick: create }, icon('plus'), 'Nový')),
+      h('.top', h('.row', h('b.grow', C.title[0].toUpperCase() + C.title.slice(1)), h('button.btn.sm.primary', { onclick: create }, icon('plus'), tr('Create'))),
         h('.search', icon('search'), search)),
       h('.gp-list'));
     renderRows();
@@ -131,9 +131,9 @@ function makeView(kind) {
     if (!list.length) { box.appendChild(h('.faint.small', { style: { padding: '14px 8px' } }, C.empty)); return; }
     const row = g => h('.gp-row' + (cur && cur.id === g.id ? '.on' : ''), { onclick: () => open(g.id) },
       img(g), h('.grow', { style: { minWidth: 0 } }, h('.nm.ellipsis', g.name),
-        h('.meta.ellipsis', kind === 'factions' ? `${g.n} ${fmt.plural(g.n, 'člen', 'členové', 'členů')}`
-          : kind === 'places' ? [g.owner_name, g.n_events ? `${g.n_events} ${fmt.plural(g.n_events, 'událost', 'události', 'událostí')}` : ''].filter(Boolean).join(' · ') || (PK.get(g.kind) || PK.get('jine'))[2]
-          : [g.discord_name || g.contact, `${g.n} ${fmt.plural(g.n, 'postava', 'postavy', 'postav')}`].filter(Boolean).join(' · '))),
+        h('.meta.ellipsis', kind === 'factions' ? trn(g.n, '{n} member', '{n} members')
+          : kind === 'places' ? [g.owner_name, g.n_events ? trn(g.n_events, '{n} event', '{n} events') : ''].filter(Boolean).join(' · ') || (PK.get(g.kind) || PK.get('jine'))[2]
+          : [g.discord_name || g.contact, trn(g.n, '{n} character', '{n} characters')].filter(Boolean).join(' · '))),
       kind === 'players' ? ptagChips(splitTags(g.tags)) : null);
     if (KINDS[kind]) {
       const def = kind === 'factions' ? 'frakce' : 'jine';
@@ -147,7 +147,7 @@ function makeView(kind) {
   }
 
   async function create() {
-    const name = await promptDialog(C.newLabel, 'Název', '', { placeholder: kind === 'factions' ? 'např. páni z Vranova' : 'přezdívka hráče' });
+    const name = await promptDialog(C.newLabel, tr('Name'), '', { placeholder: kind === 'factions' ? tr('e.g. the lords of Vranov') : tr('player nickname') });
     if (!name) return;
     const id = await API.call(C.create, { name, color: PALETTE[Math.floor(Math.random() * PALETTE.length)] });
     await loadList(); editing = true; open(id);
@@ -167,12 +167,12 @@ function makeView(kind) {
       await API.call(C.img, { id: cur.id, att_id: att.id }); await refresh();
     };
     menu(e, [
-      { label: 'Vybrat obrázek ze souboru…', icon: 'image-up', onClick: async () => { if (await API.call(C.img, { id: cur.id })) refresh(); } },
-      { label: 'Vyříznout z přehrávaného videa', icon: 'crop', disabled: !App.player.media_id, onClick: async () => {
+      { label: tr('Choose image from file…'), icon: 'image-up', onClick: async () => { if (await API.call(C.img, { id: cur.id })) refresh(); } },
+      { label: tr('Crop from the playing video'), icon: 'crop', disabled: !App.player.media_id, onClick: async () => {
         const g = await grabFrame(); if (!g) return;
-        const d = await cropDialog(g.data, { ratio: 1, title: 'Vyříznout obrázek', okLabel: 'Použít' }); if (d) setFrom(d);
+        const d = await cropDialog(g.data, { ratio: 1, title: tr('Crop image'), okLabel: tr('Use') }); if (d) setFrom(d);
       } },
-      cur[C.imgKey] ? { label: 'Odebrat obrázek', icon: 'image-off', onClick: async () => { await API.call(C.update, { id: cur.id, [C.imgKey + '_id']: null }); refresh(); } } : null,
+      cur[C.imgKey] ? { label: tr('Remove image'), icon: 'image-off', onClick: async () => { await API.call(C.update, { id: cur.id, [C.imgKey + '_id']: null }); refresh(); } } : null,
     ]);
   }
 
@@ -180,12 +180,12 @@ function makeView(kind) {
 
   function renderDetail() {
     const d = $('.gp-detail', root); clear(d);
-    if (!cur) { d.appendChild(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } }, emptyState(C.icon, list.length ? 'Vyber vlevo' : 'Zatím nic', C.empty, h('button.btn.primary', { onclick: create }, icon('plus'), C.newLabel)))); return; }
+    if (!cur) { d.appendChild(h('div', { style: { height: '100%', display: 'grid', placeItems: 'center' } }, emptyState(C.icon, list.length ? tr('Select on the left') : tr('Nothing yet'), C.empty, h('button.btn.primary', { onclick: create }, icon('plus'), C.newLabel)))); return; }
     const g = cur;
-    const kindLabel = kind === 'factions' ? (FK.get(g.kind || 'frakce') || [])[2] : kind === 'places' ? (PK.get(g.kind || 'jine') || PK.get('jine'))[2] : 'Hráč';
-    Shell.header({ icon: C.icon, title: g.name, topic: kind === 'players' ? (g.discord_name || g.contact || 'hráč') : kindLabel });
+    const kindLabel = kind === 'factions' ? (FK.get(g.kind || 'frakce') || [])[2] : kind === 'places' ? (PK.get(g.kind || 'jine') || PK.get('jine'))[2] : tr('Player');
+    Shell.header({ icon: C.icon, title: g.name, topic: kind === 'players' ? (g.discord_name || g.contact || tr('player')) : kindLabel });
     d.style.setProperty('--gc', g.color || '#888');
-    const imgEl = img(g, 132, '.gp-img'); imgEl.appendChild(h('.ov', 'Změnit obrázek')); imgEl.onclick = imageMenu;
+    const imgEl = img(g, 132, '.gp-img'); imgEl.appendChild(h('.ov', tr('Change image'))); imgEl.onclick = imageMenu;
     const tags = splitTags(g.tags);
     const head = editing ? editForm(g) : h('.grow', { style: { minWidth: 0 } },
       h('.kind', kindLabel),
@@ -197,9 +197,9 @@ function makeView(kind) {
       g.summary ? h('.sum', g.summary) : null);
     d.appendChild(h('.gp-hero', imgEl, head,
       h('.row', { style: { alignSelf: 'flex-start' } },
-        h('button.btn' + (editing ? '.primary' : ''), { onclick: () => { editing = !editing; if (!editing) refresh(); else renderDetail(); } }, icon(editing ? 'check' : 'pencil'), editing ? 'Hotovo' : 'Upravit'),
-        h('button.btn.icon', { title: 'Další', onclick: e => menu(e, [{ label: `Smazat (${C.noun})`, icon: 'trash-2', danger: true, onClick: async () => {
-          if (!await confirmDialog('Smazat', `Smazat „${g.name}“? Postavy zůstanou.`, { danger: true, okLabel: 'Smazat' })) return;
+        h('button.btn' + (editing ? '.primary' : ''), { onclick: () => { editing = !editing; if (!editing) refresh(); else renderDetail(); } }, icon(editing ? 'check' : 'pencil'), editing ? tr('Done') : tr('Edit')),
+        h('button.btn.icon', { title: tr('More'), onclick: e => menu(e, [{ label: tr('Delete ({noun})', { noun: C.noun }), icon: 'trash-2', danger: true, onClick: async () => {
+          if (!await confirmDialog(tr('Delete'), tr('Delete “{name}”? Characters will remain.', { name: g.name }), { danger: true, okLabel: tr('Delete') })) return;
           await API.call(C.del, { id: g.id }); cur = null; await refresh(); renderSide(); renderDetail();
         } }]) }, icon('ellipsis')))));
 
@@ -212,44 +212,44 @@ function makeView(kind) {
       return h('.gp-m' + (c.status === 'dead' ? '.dead' : ''), {
         onclick: () => App.go('characters', { id: c.id }),
         oncontextmenu: e => menu(e, [
-          C.setRole ? { label: 'Změnit roli…', icon: 'pencil', onClick: async () => { const r = await promptDialog('Role', c.name, role || ''); if (r !== null) { await C.setRole(g, c.id, r); refresh(); } } } : null,
-          { label: 'Odebrat', icon: 'user-minus', danger: true, onClick: async () => { await C.removeMember(g, c.id); refresh(); } },
+          C.setRole ? { label: tr('Change role…'), icon: 'pencil', onClick: async () => { const r = await promptDialog(tr('Role'), c.name, role || ''); if (r !== null) { await C.setRole(g, c.id, r); refresh(); } } } : null,
+          { label: tr('Remove'), icon: 'user-minus', danger: true, onClick: async () => { await C.removeMember(g, c.id); refresh(); } },
         ]),
       }, avatar(c, 34), h('.grow', { style: { minWidth: 0 } }, h('.ellipsis', { style: { fontWeight: 600 } }, c.name),
         role ? h('.r.ellipsis', role) : h('.s.ellipsis', [CHAR_KIND[c.kind]?.label, st.label].filter(Boolean).join(' · '))));
     }));
     const left = h('div');
     if (kind !== 'places') left.append(
-      h('.section-title', kind === 'factions' ? `Členové — ${mem.length}` : `Postavy — ${mem.length}`,
+      h('.section-title', kind === 'factions' ? tr('Members — {n}', { n: mem.length }) : tr('Characters — {n}', { n: mem.length }),
         h('button.btn.sm.ghost', { style: { marginLeft: 'auto' }, onclick: async () => {
-          const picked = await pickCharacters(ids, { title: kind === 'factions' ? `Členové: ${g.name}` : `Postavy hráče ${g.name}` });
+          const picked = await pickCharacters(ids, { title: kind === 'factions' ? tr('Members: {name}', { name: g.name }) : tr('Characters of player {name}', { name: g.name }) });
           if (!picked) return;
           const add = picked.filter(x => !ids.includes(x)), rem = ids.filter(x => !picked.includes(x));
           if (add.length && await C.addMembers(g, add) === false) return;
           for (const x of rem) await C.removeMember(g, x);
           refresh();
-        } }, icon('user-plus'), 'Upravit')),
-      mem.length ? memBox : h('.faint.small', 'Zatím nikdo. Pravým tlačítkem na postavě změníš roli nebo ji odebereš.'));
+        } }, icon('user-plus'), tr('Edit'))),
+      mem.length ? memBox : h('.faint.small', tr('Nobody yet. Right-click a character to change their role or remove them.')));
     if (kind === 'places') left.append(...placeSections(g));
     if ((kind === 'places' || kind === 'factions') && window.mentionsSection)
       left.append(window.mentionsSection(kind === 'places' ? 'place' : 'faction', g.id));
-    left.append(h('.section-title', 'Historie a poznámky'));
-    editor = RichEditor({ html: g.body_html || '', placeholder: 'Historie, sídlo, cíle, spojenci a nepřátelé… (@ pro postavu)', ownerType: C.owner, ownerId: g.id, minHeight: 180,
+    left.append(h('.section-title', tr('History and notes')));
+    editor = RichEditor({ html: g.body_html || '', placeholder: tr('History, seat, goals, allies and enemies… (@ for a character)'), ownerType: C.owner, ownerId: g.id, minHeight: 180,
       onChange: html => API.call(C.update, { id: g.id, body_html: html }) });
     left.appendChild(editor.el);
     const right = h('div');
     if (kind === 'factions') right.append(...holdingsSection(g));
     if (kind === 'players') right.append(...discordSection(g));
     if (kind === 'factions' && g.events && g.events.length) {
-      right.append(h('.section-title', `Události členů — ${g.events.length}`),
+      right.append(h('.section-title', tr("Members' events — {n}", { n: g.events.length })),
         ...g.events.slice(0, 30).map(e => h('.gp-ev', { onclick: () => App.go('events', { id: e.id }) },
           h('span.dot', { style: { background: e.color } }), h('.grow.ellipsis', e.title), avatarStack(e.chars, 20, 4),
           h('span.tiny.faint', e.start_time ? fmt.date(e.start_time) : ''))));
     }
     if (kind === 'players') {
       const dead = mem.filter(c => c.status === 'dead' || c.status === 'missing');
-      right.append(h('.section-title', 'Přehled'),
-        h('.small.muted', `${mem.length} ${fmt.plural(mem.length, 'postava', 'postavy', 'postav')}` + (dead.length ? ` · ${dead.length} mrtvých nebo zmizelých` : '')));
+      right.append(h('.section-title', tr('Overview')),
+        h('.small.muted', trn(mem.length, '{n} character', '{n} characters') + (dead.length ? ' · ' + trn(dead.length, '{n} dead or missing', '{n} dead or missing') : '')));
     }
     d.appendChild(h('.gp-body', left, right));
   }
@@ -258,80 +258,80 @@ function makeView(kind) {
     const parent = g.parent_id && (App.places || []).find(p => p.id === g.parent_id);
     const own = g.owner_name ? h('a', { style: { cursor: 'pointer' }, onclick: () => App.go(g.owner_type === 'faction' ? 'factions' : 'characters', { id: g.owner_id }) }, g.owner_name) : null;
     return h('.small.muted', { style: { marginTop: '4px' } },
-      own ? h('span', icon('key-round'), ' Patří: ', own) : null,
-      parent ? h('span', { style: { marginLeft: '14px' } }, icon('map'), ' Leží v: ', h('a', { style: { cursor: 'pointer' }, onclick: () => open(parent.id) }, parent.name)) : null,
+      own ? h('span', icon('key-round'), ' ' + tr('Owned by') + ': ', own) : null,
+      parent ? h('span', { style: { marginLeft: '14px' } }, icon('map'), ' ' + tr('Located in') + ': ', h('a', { style: { cursor: 'pointer' }, onclick: () => open(parent.id) }, parent.name)) : null,
       g.ingame_location ? h('span', { style: { marginLeft: '14px' } }, icon('compass'), ' ', g.ingame_location) : null);
   }
 
   function placeSections(g) {
     const ev = g.events || [], kids = g.children || [];
     return [
-      h('.section-title', `Co se tu stalo — ${ev.length}`),
+      h('.section-title', tr('What happened here — {n}', { n: ev.length })),
       ev.length ? h('div', ev.map(e => h('.gp-ev', { onclick: () => App.go('events', { id: e.id }) }, h('span.dot', { style: { background: e.color } }),
         h('.grow.ellipsis', e.title), h('span.tiny.faint', e.start_time ? fmt.date(e.start_time) : ''))))
-        : h('.faint.small', 'Žádná událost. U události vyber místo v poli „Místo“.'),
-      h('.section-title', `Místa uvnitř — ${kids.length}`, h('button.btn.sm.ghost', { style: { marginLeft: 'auto' }, onclick: async () => {
-        const id = await pickPlace('Přidat místo dovnitř'); if (id && id !== g.id) { await API.call('place.update', { id, parent_id: g.id }); refresh(); }
-      } }, icon('plus'), 'Přidat')),
+        : h('.faint.small', tr("No events. Choose the place in an event's “Place” field.")),
+      h('.section-title', tr('Places inside — {n}', { n: kids.length }), h('button.btn.sm.ghost', { style: { marginLeft: 'auto' }, onclick: async () => {
+        const id = await pickPlace(tr('Add a place inside')); if (id && id !== g.id) { await API.call('place.update', { id, parent_id: g.id }); refresh(); }
+      } }, icon('plus'), tr('Add'))),
       kids.length ? h('.gp-mem', kids.map(k => h('.gp-m', { onclick: () => open(k.id) }, img(k, 34), h('.grow', h('div', { style: { fontWeight: 600 } }, k.name), h('.s', k.owner_name || (PK.get(k.kind) || PK.get('jine'))[2])))))
-        : h('.faint.small', 'Např. krčma ve městě, sklep na hradě.'),
+        : h('.faint.small', tr('E.g. a tavern in a town, a cellar in a castle.')),
     ];
   }
 
   function holdingsSection(g) {
     const hs = g.holdings || [];
     return [
-      h('.section-title', `Državy — ${hs.length}`, h('button.btn.sm.ghost', { style: { marginLeft: 'auto' }, onclick: async () => {
-        const id = await pickPlace(`Nová država: ${g.name}`); if (!id) return;
+      h('.section-title', tr('Holdings — {n}', { n: hs.length }), h('button.btn.sm.ghost', { style: { marginLeft: 'auto' }, onclick: async () => {
+        const id = await pickPlace(tr('New holding: {name}', { name: g.name })); if (!id) return;
         await API.call('place.update', { id, owner_type: 'faction', owner_id: g.id }); refresh();
-      } }, icon('plus'), 'Přidat')),
+      } }, icon('plus'), tr('Add'))),
       hs.length ? h('div', hs.map(p => h('.gp-ev', { onclick: () => App.go('places', { id: p.id }),
-        oncontextmenu: e => menu(e, [{ label: 'Odebrat z držav', icon: 'x', danger: true, onClick: async () => { await API.call('place.update', { id: p.id, owner_type: '', owner_id: null }); refresh(); } }]) },
+        oncontextmenu: e => menu(e, [{ label: tr('Remove from holdings'), icon: 'x', danger: true, onClick: async () => { await API.call('place.update', { id: p.id, owner_type: '', owner_id: null }); refresh(); } }]) },
       icon((PK.get(p.kind) || PK.get('jine'))[3]), h('.grow.ellipsis', p.name), h('span.tiny.faint', (PK.get(p.kind) || PK.get('jine'))[2]))))
-        : h('.faint.small', 'Hrady, vesnice, pozemky a jiná místa, která frakci patří.'),
+        : h('.faint.small', tr('Castles, villages, estates and other places the faction owns.')),
     ];
   }
 
   function discordSection(g) {
     return [
       h('.section-title', 'Discord'),
-      h('.small.muted', g.discord_id ? `Propojeno: ${g.discord_name || g.discord_id}` : 'Nepropojeno.'),
+      h('.small.muted', g.discord_id ? tr('Linked: {name}', { name: g.discord_name || g.discord_id }) : tr('Not linked.')),
       h('.row.wrap', { style: { marginTop: '8px', gap: '6px' } },
-        h('button.btn.sm', { title: 'Vlož Discord ID hráče – bot nemusí být na žádném serveru', onclick: async () => {
-          const uid = await promptDialog('Propojit podle Discord ID', 'Discord ID uživatele', g.discord_id || '',
-            { placeholder: 'Režim vývojáře → pravý klik na uživatele → Kopírovat ID uživatele' });
+        h('button.btn.sm', { title: tr("Enter the player's Discord ID – the bot doesn't need to be on any server"), onclick: async () => {
+          const uid = await promptDialog(tr('Link by Discord ID'), tr("User's Discord ID"), g.discord_id || '',
+            { placeholder: tr('Developer Mode → right-click the user → Copy User ID') });
           if (!uid) return;
           const m = await API.call('discord.link_by_id', { player_id: g.id, user_id: uid.trim() }).catch(() => null);
-          if (m) { toast(`Propojeno: ${m.display}`); refresh(); }
-        } }, icon('fingerprint'), g.discord_id ? 'Změnit ID' : 'Propojit podle ID'),
+          if (m) { toast(tr('Linked: {name}', { name: m.display })); refresh(); }
+        } }, icon('fingerprint'), g.discord_id ? tr('Change ID') : tr('Link by ID')),
         App.settings.discord_guild ? h('button.btn.sm', { onclick: async () => {
           const ms = await API.call('discord.members').catch(() => null); if (!ms) return;
           const picked = await pickDiscordMember(ms, g.name);
-          if (picked) { await API.call('discord.link_player', { player_id: g.id, member: picked }); toast('Propojeno s Discordem'); refresh(); }
-        } }, icon('users'), 'Vybrat ze serveru') : null,
-        g.discord_id ? h('button.btn.sm', { title: 'Znovu stáhnout jméno a avatar', onclick: async () => {
+          if (picked) { await API.call('discord.link_player', { player_id: g.id, member: picked }); toast(tr('Linked to Discord')); refresh(); }
+        } }, icon('users'), tr('Pick from server')) : null,
+        g.discord_id ? h('button.btn.sm', { title: tr('Re-fetch name and avatar'), onclick: async () => {
           const m = await API.call('discord.link_by_id', { player_id: g.id, user_id: g.discord_id }).catch(() => null);
-          if (m) { toast('Aktualizováno'); refresh(); }
+          if (m) { toast(tr('Updated')); refresh(); }
         } }, icon('refresh-cw')) : null,
-        g.discord_id ? h('button.btn.sm.ghost', { onclick: async () => { await API.call('player.update', { id: g.id, discord_id: '', discord_name: '' }); refresh(); } }, 'Zrušit') : null),
+        g.discord_id ? h('button.btn.sm.ghost', { onclick: async () => { await API.call('player.update', { id: g.id, discord_id: '', discord_name: '' }); refresh(); } }, tr('Unlink')) : null),
     ];
   }
 
   function ownerPicker(g, save) {
-    const label = g.owner_name || 'nikomu';
+    const label = g.owner_name || tr('nobody');
     return h('.row', h('span.chip' + (g.owner_type ? '.on' : ''), label),
       h('button.btn.sm', { onclick: e => menu(e, [
-        { head: 'Frakce a rody' }, ...(App.factions || []).map(f => ({ label: f.name, onClick: () => setOwner('faction', f.id, f.name) })),
-        { head: 'Postavy' }, { label: 'Vybrat postavu…', icon: 'user', onClick: async () => { const ids = await pickCharacters([], { title: 'Komu místo patří?', multi: false }); if (ids && ids[0]) setOwner('character', ids[0], App.charsById.get(ids[0])?.name); } },
-        { sep: true }, { label: 'Nikomu', onClick: () => setOwner('', null, '') },
-      ]) }, 'Změnit'));
+        { head: tr('Factions and houses') }, ...(App.factions || []).map(f => ({ label: f.name, onClick: () => setOwner('faction', f.id, f.name) })),
+        { head: tr('Characters') }, { label: tr('Select character…'), icon: 'user', onClick: async () => { const ids = await pickCharacters([], { title: tr('Who owns the place?'), multi: false }); if (ids && ids[0]) setOwner('character', ids[0], App.charsById.get(ids[0])?.name); } },
+        { sep: true }, { label: tr('Nobody'), onClick: () => setOwner('', null, '') },
+      ]) }, tr('Change')));
     function setOwner(t, id, name) { g.owner_type = t; g.owner_id = id; g.owner_name = name; save({ owner_type: t, owner_id: id }); renderDetail(); }
   }
 
   function parentPicker(g, save) {
     const parent = g.parent_id && list.find(p => p.id === g.parent_id);
     return h('.row', h('span.chip' + (parent ? '.on' : ''), parent ? parent.name : '—'),
-      h('button.btn.sm', { onclick: async () => { const id = await pickPlace('Kde místo leží?'); if (id && id !== g.id) { g.parent_id = id; save({ parent_id: id }); setTimeout(renderDetail, 350); } } }, 'Vybrat'),
+      h('button.btn.sm', { onclick: async () => { const id = await pickPlace(tr('Where is the place?')); if (id && id !== g.id) { g.parent_id = id; save({ parent_id: id }); setTimeout(renderDetail, 350); } } }, tr('Select')),
       parent ? h('button.btn.sm.ghost.icon', { onclick: () => { g.parent_id = null; save({ parent_id: null }); renderDetail(); } }, icon('x')) : null);
   }
 
@@ -343,22 +343,22 @@ function makeView(kind) {
       onclick: () => { g.color = col; save({ color: col }); renderDetail(); },
     })));
     return h('.grow', h('.gp-form',
-      h('.k', 'Název'), inp('name', 'Název'),
-      KINDS[kind] ? h('.k', 'Typ') : null,
+      h('.k', tr('Name')), inp('name', tr('Name')),
+      KINDS[kind] ? h('.k', tr('Type')) : null,
       KINDS[kind] ? h('.seg', { style: { flexWrap: 'wrap' } }, KINDS[kind].map(([k, , one, ic]) => h('button' + ((g.kind || (kind === 'factions' ? 'frakce' : 'jine')) === k ? '.on' : ''), { onclick: () => { g.kind = k; save({ kind: k }); renderDetail(); } }, icon(ic), one))) : null,
-      kind === 'places' ? h('.k', 'Patří') : null, kind === 'places' ? ownerPicker(g, save) : null,
-      kind === 'places' ? h('.k', 'Leží v') : null, kind === 'places' ? parentPicker(g, save) : null,
-      kind === 'places' ? h('.k', 'Poloha') : null, kind === 'places' ? inp('ingame_location', 'např. severně od Ratají, u brodu') : null,
-      kind === 'players' ? h('.k', 'Kontakt') : null, kind === 'players' ? inp('contact', 'Discord, Steam…') : null,
-      kind === 'players' ? h('.k', 'Štítky') : null, kind === 'players' ? inp('tags', 'např. admin, streamer (oddělené čárkou)') : null,
-      kind !== 'players' ? h('.k', 'Server') : null,
+      kind === 'places' ? h('.k', tr('Owned by')) : null, kind === 'places' ? ownerPicker(g, save) : null,
+      kind === 'places' ? h('.k', tr('Located in')) : null, kind === 'places' ? parentPicker(g, save) : null,
+      kind === 'places' ? h('.k', tr('Location')) : null, kind === 'places' ? inp('ingame_location', tr('e.g. north of Rataje, by the ford')) : null,
+      kind === 'players' ? h('.k', tr('Contact')) : null, kind === 'players' ? inp('contact', 'Discord, Steam…') : null,
+      kind === 'players' ? h('.k', tr('Tags')) : null, kind === 'players' ? inp('tags', tr('e.g. admin, streamer (comma-separated)')) : null,
+      kind !== 'players' ? h('.k', tr('Server')) : null,
       kind !== 'players' ? serverPicker(g.server_id, id => { g.server_id = id; save({ server_id: id }); setTimeout(renderDetail, 350); }, App.scope.game) : null,
-      h('.k', 'Barva'), sw,
-      h('.k', 'Krátce'), inp('summary', 'jednou větou')));
+      h('.k', tr('Color')), sw,
+      h('.k', tr('In brief')), inp('summary', tr('in one sentence'))));
   }
 
   return {
-    title: C.title, short: { factions: 'Frakce', players: 'Hráči', places: 'Místa' }[kind], icon: C.icon,
+    title: C.title, short: { factions: tr('Factions'), players: tr('Players'), places: tr('Places') }[kind], icon: C.icon,
     order: { factions: 31, players: 32, places: 33 }[kind], members: false,
     async mount(el, params = {}) {
       root = el; editing = false; cur = null;
@@ -381,7 +381,7 @@ Views.register('places', makeView('places'));
 window.pickDiscordMember = function (members, hint = '') {
   return new Promise(resolve => {
     let done = false;
-    const q = h('input.input', { placeholder: 'Hledat na serveru…', value: hint, autofocus: true });
+    const q = h('input.input', { placeholder: tr('Search the server…'), value: hint, autofocus: true });
     const box = h('.picker-list');
     const render = () => {
       clear(box);
@@ -389,10 +389,10 @@ window.pickDiscordMember = function (members, hint = '') {
       members.filter(m => !t || `${m.display} ${m.username} ${m.global_name}`.toLowerCase().includes(t)).slice(0, 200).forEach(m => box.appendChild(h('.list-row', {
         onclick: () => { done = true; resolve(m); md.close(); },
       }, h('img', { src: m.avatar, style: { width: '30px', height: '30px', borderRadius: '50%' } }), h('.grow', h('div', m.display), h('.tiny.faint', '@' + m.username)))));
-      if (!box.children.length) box.appendChild(h('.faint.small', { style: { padding: '8px' } }, 'Nikdo neodpovídá.'));
+      if (!box.children.length) box.appendChild(h('.faint.small', { style: { padding: '8px' } }, tr('No one matches.')));
     };
     q.addEventListener('input', render); q.addEventListener('keydown', e => e.stopPropagation());
-    const md = modal({ title: 'Člen Discord serveru', icon: 'message-circle', body: h('div', q, box), onClose: () => { if (!done) resolve(null); } });
+    const md = modal({ title: tr('Discord server member'), icon: 'message-circle', body: h('div', q, box), onClose: () => { if (!done) resolve(null); } });
     render();
   });
 };

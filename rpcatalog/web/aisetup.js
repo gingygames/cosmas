@@ -1,5 +1,5 @@
 /* ============================================================
-   Kde běží AI – this PC (Ollama, Whisper) or a paid service, with sign-in,
+   Where the AI runs – this PC (Ollama, Whisper) or a paid service, with sign-in,
    price estimates and model recommendations for the user's hardware
    ============================================================ */
 'use strict';
@@ -41,17 +41,18 @@ document.head.appendChild(h('style', `
 `));
 
 const TASKS = [
-  ['speech', 'audio-lines', 'Řeč', 'Přepis toho, co zaznělo'],
-  ['vision', 'scan-eye', 'Obraz', 'Popis snímků, jmenovky, postavy'],
-  ['text', 'sparkles', 'Kronikář AI', 'Kapitoly, události, shrnutí'],
+  ['speech', 'audio-lines', tr('Speech'), tr('Transcript of what was said')],
+  ['vision', 'scan-eye', tr('Vision'), tr('Screenshot descriptions, name tags, characters')],
+  ['text', 'sparkles', tr('Kosmas AI'), tr('Chapters, events, summaries')],
 ];
-const WHISPER = [['large-v3', 'Whisper large-v3 – nejpřesnější'], ['large-v3-turbo', 'Whisper large-v3 turbo – rychlejší'],
-  ['medium', 'Whisper medium – pro procesor'], ['small', 'Whisper small – slabší PC']];
-const LEVEL = { great: 'Lokální AI poběží výborně', ok: 'Lokální AI poběží slušně', weak: 'Lokálně jen malé modely',
-  slow: 'Lokálně jen pomalu', none: 'Lokální AI tu nepoběží' };
+const WHISPER = [['large-v3', tr('Whisper large-v3 – most accurate')], ['large-v3-turbo', tr('Whisper large-v3 turbo – faster')],
+  ['medium', tr('Whisper medium – for the CPU')], ['small', tr('Whisper small – weaker PC')]];
+const LEVEL = { great: tr('Local AI will run great'), ok: tr('Local AI will run decently'), weak: tr('Only small models locally'),
+  slow: tr('Only slowly locally'), none: tr('Local AI will not run here') };
 let info = null, progress = {};
-const czk = v => v < 0.05 ? 'pod 5 haléřů' : v < 10 ? `${v.toFixed(1).replace('.', ',')} Kč` : `${Math.round(v)} Kč`;
-const gbs = n => (n / 2 ** 30).toFixed(n < 10 * 2 ** 30 ? 1 : 0).replace('.', ',') + ' GB';
+const dec = (v, d) => Number(v).toLocaleString(I18N.locale, { minimumFractionDigits: d, maximumFractionDigits: d });
+const czk = v => v < 0.05 ? tr('less than CZK 0.05') : tr('{amount} CZK', { amount: v < 10 ? dec(v, 1) : dec(Math.round(v), 0) });
+const gbs = n => dec(n / 2 ** 30, n < 10 * 2 ** 30 ? 1 : 0) + ' GB';
 
 API.on('ai', ev => {
   progress[ev.task] = ev;
@@ -65,7 +66,7 @@ API.on('ai', ev => {
 });
 
 function paintProgress(el, ev) {
-  clear(el).append(h('span', ev.msg || 'Pracuji…'),
+  clear(el).append(h('span', ev.msg || tr('Working…')),
     ev.p != null ? h('.trs-bar', h('i', { style: { width: Math.round(ev.p * 100) + '%' } })) : null);
 }
 function progEl(task) {
@@ -105,7 +106,7 @@ function taskRow(task, ic, label, sub) {
   const s = App.settings, eff = info.effective[task];
   const local = task === 'speech' ? 'local' : 'ollama';
   const pid = eff.provider, isLocal = pid === local;
-  const opts = [[local, 'Tento počítač – zdarma'], ...info.providers.filter(p => p.models[task]).map(p => [p.id, p.label])];
+  const opts = [[local, tr('This computer – free')], ...info.providers.filter(p => p.models[task]).map(p => [p.id, p.label])];
   const provSel = h('select.input', { onchange: e => setProvider(task, e.target.value) },
     opts.map(([v, l]) => h('option', { value: v, selected: v === pid ? 'selected' : null }, l)));
   let modelSel, price = 0, status = [], warn = false;
@@ -115,7 +116,7 @@ function taskRow(task, ic, label, sub) {
       WHISPER.map(([v, l]) => h('option', { value: v, selected: v === cur ? 'selected' : null }, l + (v === info.hw.whisper.model ? ' ★' : ''))));
     if (info.cuda.nvidia && !info.cuda.libs) {
       warn = true;
-      status.push('Zatím běží na procesoru (pomaleji).', h('button.btn.sm', { onclick: () => API.call('ai.install_cuda').then(refreshAll) }, icon('zap'), 'Zrychlit na grafické kartě (stáhne ~1,5 GB)'), progEl('cuda'));
+      status.push(tr('Currently running on the CPU (slower).'), h('button.btn.sm', { onclick: () => API.call('ai.install_cuda').then(refreshAll) }, icon('zap'), tr('Speed up on the graphics card (downloads ~{size} GB)', { size: dec(1.5, 1) })), progEl('cuda'));
     } else status.push(info.hw.whisper.note);
     if (!info.hw.speech_local_ok) warn = true;
   } else if (isLocal) {
@@ -123,17 +124,17 @@ function taskRow(task, ic, label, sub) {
     const names = [...new Set([cur, info.hw[task], ...info.ollama.models.map(m => m.name)].filter(Boolean))];
     modelSel = h('select.input', { onchange: e => save({ [`ai_${task}_model`]: e.target.value, [`ai_${task}_provider`]: 'ollama' }).then(refreshAll) },
       names.map(n => h('option', { value: n, selected: n === cur ? 'selected' : null },
-        n + (n === info.hw[task] ? ' ★ doporučeno' : '') + (have.has(n) ? '' : ' (nestažený)'))));
+        n + (n === info.hw[task] ? ' ★ ' + tr('recommended') : '') + (have.has(n) ? '' : ' (' + tr('not downloaded') + ')'))));
     if (!info.ollama.installed) {
       warn = true;
-      status.push('Potřebuje aplikaci Ollama (zdarma).', h('button.btn.sm.primary', { onclick: () => API.call('ai.install_ollama').then(refreshAll) }, icon('download'), 'Nainstalovat Ollamu'), progEl('ollama'));
+      status.push(tr('Needs the Ollama app (free).'), h('button.btn.sm.primary', { onclick: () => API.call('ai.install_ollama').then(refreshAll) }, icon('download'), tr('Install Ollama')), progEl('ollama'));
     } else if (!info.ollama.running) {
       warn = true;
-      status.push('Ollama neběží.', h('button.btn.sm', { onclick: () => API.call('ai.install_ollama').then(refreshAll) }, icon('play'), 'Spustit Ollamu'), progEl('ollama'));
+      status.push(tr('Ollama is not running.'), h('button.btn.sm', { onclick: () => API.call('ai.install_ollama').then(refreshAll) }, icon('play'), tr('Start Ollama')), progEl('ollama'));
     } else if (!have.has(cur) && !have.has(cur + ':latest')) {
       warn = true;
-      status.push(`Model ${cur} není stažený${cur === info.hw[task] ? ` (~${info.hw.download} GB)` : ''}.`,
-        h('button.btn.sm.primary', { onclick: () => API.call('ai.pull', { model: cur }).then(refreshAll) }, icon('download'), 'Stáhnout'), progEl('pull:' + cur));
+      status.push(cur === info.hw[task] ? tr('Model {model} is not downloaded (~{size} GB).', { model: cur, size: info.hw.download }) : tr('Model {model} is not downloaded.', { model: cur }),
+        h('button.btn.sm.primary', { onclick: () => API.call('ai.pull', { model: cur }).then(refreshAll) }, icon('download'), tr('Download')), progEl('pull:' + cur));
     } else status.push(info.hw.note);
   } else {
     const p = providerFor(task, pid);
@@ -146,47 +147,47 @@ function taskRow(task, ic, label, sub) {
       status.push(h('a', { style: { cursor: 'pointer', textDecoration: 'underline' }, onclick: () => {
         const el = document.querySelector(`.ais-acct[data-pid="${p.id}"]`);
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); const i = el.querySelector('input, .btn.primary'); i && i.focus(); }
-      } }, `Přihlas se k ${p.label}`), h('span', '(níže v části Účty)'));
+      } }, tr('Sign in to {service}', { service: p.label })), h('span', tr('(below in the Accounts section)')));
     }
-    else status.push(h('span', icon('check'), ` Přihlášeno k ${p.label}`));
+    else status.push(h('span', icon('check'), ' ' + tr('Signed in to {service}', { service: p.label })));
   }
   return [
     h('.ais-task',
       h('.nm', icon(ic), h('div', label, h('.tiny.faint', { style: { fontWeight: 400 } }, sub))),
       provSel, modelSel,
-      h('.price', isLocal ? 'zdarma' : '≈ ' + czk(price), h('small', isLocal ? 'běží na tvém PC' : 'za hodinu záznamu')),
+      h('.price', isLocal ? tr('free') : '≈ ' + czk(price), h('small', isLocal ? tr('runs on your PC') : tr('per hour of recording'))),
       h('.st' + (warn ? '.warn' : ''), ...status.map(x => typeof x === 'string' ? h('span', x) : x).filter(Boolean))),
     price,
   ];
 }
 
 function accountCard(p) {
-  const key = h('input.input', { type: 'password', placeholder: 'Vlož API klíč', autocomplete: 'off', onkeydown: e => e.stopPropagation() });
+  const key = h('input.input', { type: 'password', placeholder: tr('Paste API key'), autocomplete: 'off', onkeydown: e => e.stopPropagation() });
   const saveKey = async () => {
     const btn = key.nextSibling; btn.disabled = true;
-    try { await API.call('ai.set_key', { provider: p.id, key: key.value }); toast(`Přihlášeno k ${p.label}`); refreshAll(); }
+    try { await API.call('ai.set_key', { provider: p.id, key: key.value }); toast(tr('Signed in to {service}', { service: p.label })); refreshAll(); }
     catch (e) { toast(String(e.message || e).replace(/^\w+Error: /, ''), 'err'); btn.disabled = false; }
   };
   return h('.ais-acct', { 'data-pid': p.id },
-    h('.hd', p.label, p.has_key ? h('span.ok', icon('circle-check'), 'Přihlášeno') : h('span.no', 'Nepřihlášeno')),
+    h('.hd', p.label, p.has_key ? h('span.ok', icon('circle-check'), tr('Signed in')) : h('span.no', tr('Not signed in'))),
     h('.small.faint', p.note),
     p.has_key
-      ? h('.row', h('button.btn.sm.ghost', { onclick: async () => { if (await confirmDialog(`Odhlásit ${p.label}?`, 'Klíč se smaže z tohoto počítače.')) { await API.call('ai.set_key', { provider: p.id, key: '' }); refreshAll(); } } }, icon('log-out'), 'Odhlásit'))
+      ? h('.row', h('button.btn.sm.ghost', { onclick: async () => { if (await confirmDialog(tr('Sign out of {service}?', { service: p.label }), tr('The key will be deleted from this computer.'))) { await API.call('ai.set_key', { provider: p.id, key: '' }); refreshAll(); } } }, icon('log-out'), tr('Sign out')))
       : p.login === 'oauth'
         ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-            h('button.btn.primary', { onclick: () => API.call('ai.login', { provider: p.id }).then(refreshAll) }, icon('log-in'), 'Přihlásit se v prohlížeči'),
+            h('button.btn.primary', { onclick: () => API.call('ai.login', { provider: p.id }).then(refreshAll) }, icon('log-in'), tr('Sign in in the browser')),
             progEl('login'))
-        : h('.row', { style: { gap: '6px' } }, key, h('button.btn', { onclick: saveKey }, 'Uložit')),
+        : h('.row', { style: { gap: '6px' } }, key, h('button.btn', { onclick: saveKey }, tr('Save'))),
     h('.links',
-      !p.has_key && p.login !== 'oauth' ? h('a', { onclick: () => API.call('ai.open', { url: p.key_url }) }, icon('key-round'), ' Získat klíč') : null,
-      h('a', { onclick: () => API.call('ai.open', { url: p.price_url }) }, icon('receipt'), ' Ceník')));
+      !p.has_key && p.login !== 'oauth' ? h('a', { onclick: () => API.call('ai.open', { url: p.key_url }) }, icon('key-round'), ' ' + tr('Get a key')) : null,
+      h('a', { onclick: () => API.call('ai.open', { url: p.price_url }) }, icon('receipt'), ' ' + tr('Pricing'))));
 }
 
 function hwCard() {
   const hw = info.hw;
-  const gpu = hw.gpu ? `${hw.gpu} (${String(hw.vram).replace('.', ',')} GB)` : 'bez samostatné grafické karty';
+  const gpu = hw.gpu ? `${hw.gpu} (${Number(hw.vram).toLocaleString(I18N.locale)} GB)` : tr('no dedicated graphics card');
   return h('.card.ais-hw', icon('cpu'),
-    h('div', h('b', 'Tvoje PC: ', gpu), h('.small.faint', `${hw.ram} GB paměti · ${hw.cpu}`)),
+    h('div', h('b', tr('Your PC:') + ' ', gpu), h('.small.faint', tr('{ram} GB memory', { ram: hw.ram }) + ' · ' + hw.cpu)),
     h('span.ais-verdict.' + hw.level, LEVEL[hw.level]));
 }
 
@@ -213,11 +214,11 @@ function quickChoice() {
   const hw = info.hw, localRec = hw.llm_local_ok;
   return h('.ais-quick',
     h('button.ais-choice' + (localRec ? '.rec' : ''), { onclick: () => applyPreset('local') },
-      h('b', icon('house'), 'Vše na tomto PC', localRec ? h('span.tag', 'DOPORUČENO') : null),
-      h('.small.faint', 'Zdarma a soukromě, nic neopouští počítač. ' + (localRec ? `Stáhne se model ${hw.vision} (~${hw.download} GB).` : 'Na tomto PC ale bude pomalé.'))),
+      h('b', icon('house'), tr('Everything on this PC'), localRec ? h('span.tag', tr('RECOMMENDED')) : null),
+      h('.small.faint', tr('Free and private, nothing leaves the computer.') + ' ' + (localRec ? tr('The model {model} will be downloaded (~{size} GB).', { model: hw.vision, size: hw.download }) : tr('On this PC it will be slow, though.')))),
     h('button.ais-choice' + (!localRec ? '.rec' : ''), { onclick: () => applyPreset('cloud') },
-      h('b', icon('cloud'), 'Placená služba', !localRec ? h('span.tag', 'DOPORUČENO') : null),
-      h('.small.faint', 'Rychlé i na slabém PC. Přihlásíš se nebo vložíš API klíč a platíš jen to, co spotřebuješ – podle modelu od ~2 Kč za hodinu záznamu.')));
+      h('b', icon('cloud'), tr('Paid service'), !localRec ? h('span.tag', tr('RECOMMENDED')) : null),
+      h('.small.faint', tr('Fast even on a weak PC. You sign in or paste an API key and pay only for what you use – depending on the model from ~CZK 2 per hour of recording.'))));
 }
 
 /** The whole setup (settings tab or the first-run dialog). */
@@ -228,22 +229,22 @@ function render(box, { intro = false } = {}) {
     const rows = TASKS.map(t => taskRow(...t));
     const perHour = rows.reduce((a, r) => a + r[1], 0);
     const accts = info.providers;
-    const usage = info.usage_czk ? h('span.faint', `Za posledních 30 dní utraceno ≈ ${czk(info.usage_czk)}`) : null;
+    const usage = info.usage_czk ? h('span.faint', tr('Spent in the last 30 days ≈ {amount}', { amount: czk(info.usage_czk) })) : null;
     clear(box).append(h('.ais',
       hwCard(),
-      intro || !info.setup_done ? h('div', h('.small', { style: { margin: '0 0 8px', fontWeight: 600 } }, 'Kde má AI běžet? Vyber jednu možnost, později jde cokoli změnit.'), quickChoice()) : null,
+      intro || !info.setup_done ? h('div', h('.small', { style: { margin: '0 0 8px', fontWeight: 600 } }, tr('Where should the AI run? Pick one option – you can change anything later.')), quickChoice()) : null,
       h('.card.trp-set',
-        h('h3', icon('route'), 'Co kde běží'),
-        h('.small.faint', 'Každou část můžeš pustit jinde – třeba řeč na tomto PC a kroniku přes placenou službu. ★ = doporučeno pro tvé PC.'),
+        h('h3', icon('route'), tr('What runs where')),
+        h('.small.faint', tr('You can run each part elsewhere – e.g. speech on this PC and the chronicle via a paid service. ★ = recommended for your PC.')),
         h('div', { style: { marginTop: '8px' } }, rows.map(r => r[0])),
         h('.ais-total',
-          h('span', 'Celkem ', h('b', perHour ? '≈ ' + czk(perHour) : 'zdarma'), perHour ? ' za hodinu záznamu' : ''),
-          perHour && info.todo_hours ? h('span.faint', `nepřepsaných ${String(info.todo_hours).replace('.', ',')} h v knihovně ≈ ${czk(perHour * info.todo_hours)}`) : null,
+          h('span', tr('Total') + ' ', h('b', perHour ? '≈ ' + czk(perHour) : tr('free')), perHour ? ' ' + tr('per hour of recording') : ''),
+          perHour && info.todo_hours ? h('span.faint', tr('{hours} h not yet transcribed in the library ≈ {amount}', { hours: Number(info.todo_hours).toLocaleString(I18N.locale), amount: czk(perHour * info.todo_hours) })) : null,
           usage),
-        h('.tiny.faint', { style: { marginTop: '6px' } }, `Odhad podle aktuálních ceníků (listopad 2026, kurz ${info.usd_czk} Kč/$) a tvého nastavení: zhruba ${info.per_hour.frames} snímků a ${info.per_hour.speech_h} zvukové stopy na hodinu. Skutečná cena se může lišit.`)),
+        h('.tiny.faint', { style: { marginTop: '6px' } }, tr('Estimate based on current price lists (November 2026, rate {rate} CZK/$) and your settings: roughly {frames} screenshots and {speech} audio tracks per hour. The actual price may differ.', { rate: info.usd_czk, frames: info.per_hour.frames, speech: info.per_hour.speech_h }))),
       h('.card.trp-set',
-        h('h3', icon('key-round'), 'Účty placených služeb'),
-        h('.small.faint', 'Klíče se ukládají šifrovaně do Správce přihlašovacích údajů Windows, jen pro tvůj účet. Kronikář je posílá jen dané službě.'),
+        h('h3', icon('key-round'), tr('Paid service accounts')),
+        h('.small.faint', tr('Keys are stored encrypted in Windows Credential Manager, for your account only. Kosmas sends them only to the given service.')),
         h('.ais-accts', accts.map(accountCard)))));
   };
   mounted.add(draw);
@@ -258,10 +259,10 @@ async function ensure() {
     const box = h('div');
     let done = false;
     const m = modal({
-      title: 'Nejdřív vyber, kde poběží AI', icon: 'cpu', xwide: true, body: box,
+      title: tr('First choose where the AI will run'), icon: 'cpu', xwide: true, body: box,
       onClose: () => { mounted.clear(); resolve(done); },
-      actions: [{ label: 'Zrušit' }, { label: 'Pokračovat', primary: true, onClick: () => {
-        if (!App.settings.ai_setup_done) { toast('Vyber jednu z možností nahoře', 'err'); return false; }
+      actions: [{ label: tr('Cancel') }, { label: tr('Continue'), primary: true, onClick: () => {
+        if (!App.settings.ai_setup_done) { toast(tr('Choose one of the options above'), 'err'); return false; }
         done = true; return true;
       } }],
     });
