@@ -237,16 +237,18 @@ async function deleteEvent(e) {
 let pageToken = 0, ev = null;
 async function renderPage() {
   const token = ++pageToken;
+  flushEditors();            // unsaved text of the page being left is saved to its own record before anything reloads
   if (!current) { renderDashboard(); return; }
-  ev = await API.call('event.get', { id: current });
+  const got = await API.call('event.get', { id: current });
   if (token !== pageToken) return;
+  ev = got;
   if (!ev) { current = null; renderDashboard(); return; }
+  const rec = ev;            // this page's event – saves below never follow the page-wide `ev` to another event
   clear(main);
   Shell.header({ icon: 'calendar-range', title: ev.title, topic: [fmt.range(ev.start_time, ev.end_time), ev.ingame_date, ev.location].filter(Boolean).join(' · '),
     actions: [shareButton('event', ev.id, { cls: 'button.tb-btn', compact: true })] });
   Shell.setContext({ label: tr('In this event'), chars: [...new Set(ev.char_links.map(l => l.character_id))] });
-  const save = debounce(async fields => { await API.call('event.update', { id: ev.id, ...fields }); App.loadEvents(); }, 250);
-  const saveNow = async fields => { await API.call('event.update', { id: ev.id, ...fields }); Object.assign(ev, fields); await App.loadEvents(); };
+  const saveNow = async fields => { await API.call('event.update', { id: rec.id, ...fields }); Object.assign(rec, fields); await App.loadEvents(); };
 
   // cover
   const cover = ev.cover_id ? ev.attachments.find(a => a.id === ev.cover_id) : null;
@@ -307,7 +309,7 @@ async function renderPage() {
     h('.box', h('.lbl', icon('palette'), tr('Color and tags')),
       h('.ev-swatches', PALETTE.map(c => h('span' + (c === ev.color ? '.on' : ''), { style: { background: c },
         onclick: async () => { await saveNow({ color: c }); renderPage(); renderTree(); } }))),
-      tagEditor(ev.tags || [], tags => API.call('event.update', { id: ev.id, tags }).then(() => App.loadEvents())))));
+      tagEditor(ev.tags || [], tags => API.call('event.update', { id: rec.id, tags }).then(() => App.loadEvents())))));
 
   // characters
   const roleOf = new Map(); const mentioned = new Set();
@@ -365,10 +367,11 @@ function coverMenu(e) {
 
 /* ---- write-up ---- */
 function paneWrite(pane) {
+  const rec = ev;            // the editor saves into the event it was created for, whatever is open by then
   const ed = RichEditor({
-    html: ev.body_html || '', ownerType: 'event', ownerId: ev.id, minHeight: 320,
+    html: rec.body_html || '', ownerType: 'event', ownerId: rec.id, minHeight: 320,
     placeholder: tr('Describe what happened… Type @ to tag a character, paste screenshots with Ctrl+V.'),
-    onChange: async html => { await API.call('event.update', { id: ev.id, body_html: html }); ev.body_html = html; App.refresh('events', 'chars'); },
+    onChange: async html => { rec.body_html = html; await API.call('event.update', { id: rec.id, body_html: html }); App.refresh('events', 'chars'); },
   });
   pane.appendChild(ed.el);
   pane.appendChild(h('.faint.tiny', { style: { marginTop: '8px' } }, icon('save'), ' ' + tr('Saved automatically.')));
@@ -669,6 +672,6 @@ Views.register('events', {
       App.on('chars', () => renderTree()),
     ];
   },
-  unmount() { unsubs.forEach(u => u()); unsubs = []; root = null; pageToken++; },
+  unmount() { flushEditors(); unsubs.forEach(u => u()); unsubs = []; root = null; pageToken++; },
 });
 })();

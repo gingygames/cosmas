@@ -127,6 +127,7 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
 
   function unmount() {
     if (state && state.editor) state.editor.flush();
+    flushSave();
     unsubs.forEach(u => u()); unsubs = []; root = null;
   }
 
@@ -352,6 +353,9 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
   async function loadDetail(id, keepScroll = false) {
     const d = $('.ch-detail', root); if (!d) return;
     const scroll = keepScroll ? d.scrollTop : 0;
+    // unsaved biography and fields go to their own character before anything is loaded again
+    if (state.editor) state.editor.flush();
+    flushSave();
     const c = await API.call('char.get', { id });
     if (!root || state.id !== id) return;
     if (!c) { state.id = null; renderEmptyDetail(); return; }
@@ -564,7 +568,7 @@ const DISCORD_WORLDS = [['cechy-1403', tr('Bohemia 1403')], ['moderni-mesto', tr
     const editor = RichEditor({
       html: c.body_html || '', placeholder: tr('Biography, personality, what you know about the character, key moments… (@ to mention another character, Ctrl+V pastes a screenshot)'),
       ownerType: 'character', ownerId: c.id, minHeight: 220,
-      onChange: html => { state.detail.body_html = html; API.call('char.update', { id: c.id, body_html: html }).then(() => App.loadChars()); },
+      onChange: html => { c.body_html = html; API.call('char.update', { id: c.id, body_html: html }).then(() => App.loadChars()); },
     });
     state.editor = editor;
 

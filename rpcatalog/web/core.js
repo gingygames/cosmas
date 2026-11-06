@@ -102,9 +102,13 @@ const icon = (name, cls = '') => h('i', { class: `icon-${name} ${cls}`.trim() })
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
+/* d.flush() runs a pending call right away (with its arguments) and does nothing when no call is pending */
 function debounce(fn, ms = 300) {
-  let t; const d = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
-  d.flush = (...a) => { clearTimeout(t); fn(...a); }; return d;
+  let t = null, last = [];
+  const d = (...a) => { last = a; clearTimeout(t); t = setTimeout(() => { t = null; fn(...last); }, ms); };
+  d.flush = () => { if (t === null) return; clearTimeout(t); t = null; return fn(...last); };
+  d.cancel = () => { clearTimeout(t); t = null; };
+  return d;
 }
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
