@@ -517,6 +517,56 @@ class SyncTest(unittest.TestCase):
         a.m_media_update(self.yt, youtube="")
         self.assertIsNone(self.store.media(self.yt).youtube)
 
+    def test_local_videos_both_ways(self):
+        """Lokální videa bez YouTube jdou na web jen jako metadata (local.rel_path) a párují se zpátky."""
+        roots = self.tmp / "videa"
+        (roots / "KCD2").mkdir(parents=True)
+        f1, f2 = roots / "KCD2" / "klip.mp4", roots / "KCD2" / "druhy.mp4"
+        f1.write_bytes(b"x" * 100)
+        f2.write_bytes(b"y" * 200)
+        m1 = self.store.upsert_media({"path": str(f1), "game": "KCD2", "kind": "clip", "start_time": 1700000000,
+                                      "duration": 20, "size": 100, "thumb": "C:/tajne/thumb.jpg"})
+        m2 = self.store.upsert_media({"path": str(f2), "game": "KCD2", "kind": "session", "size": 200})
+        self.store.commit()
+        bm = self.store.create_bookmark(m1, 5, title="Moment")
+        self.settings["roots"] = [str(roots)]
+        self.run_sync()
+        rec = self.by_src()[f"media:{m1}"]
+        self.assertEqual(rec["data"]["local"]["rel_path"], "KCD2/klip.mp4")
+        self.assertEqual(rec["data"]["local"]["size"], 100)
+        self.assertEqual(rec["data"]["kind"], "clip")
+        for k in ("path", "thumb", "sidecars"):
+            self.assertNotIn(k, rec["data"])
+        self.assertNotIn(str(self.tmp), json.dumps(rec["data"]))
+        self.assertIn(f"bookmarks:{bm}", self.by_src())
+        # z webu: video ze složky v prohlížeči se spáruje s lokálním souborem, neexistující se nezaloží
+        rid2 = self.by_src()[f"media:{m2}"]["id"]
+        self.web("POST", "/ops", {"ops": [{"op": "delete", "id": rid2}]})
+        self.run_sync()
+        self.assertNotIn(f"media:{m2}", self.by_src())            # smazáno na webu → už se neposílá
+        self.assertIsNotNone(self.store.media(m2))                # soubor tu zůstává
+        f3 = roots / "KCD2" / "treti.mp4"
+        f3.write_bytes(b"z" * 300)
+        m3 = self.store.upsert_media({"path": str(f3), "game": "KCD2", "kind": "clip", "size": 300})
+        self.store.commit()
+        self.store.db.execute("UPDATE media SET missing=1 WHERE id=?", (m3,))   # zatím mimo sync
+        self.store.commit()
+        n_media = self.store.db.execute("SELECT COUNT(*) FROM media").fetchone()[0]
+        self.web("POST", "/ops", {"ops": [
+            {"op": "create", "type": "video", "data": {"title": "Ze složky", "kind": "clip",
+                                                        "local": {"name": "treti.mp4", "rel_path": "KCD2/treti.mp4", "size": 300}}},
+            {"op": "create", "type": "video", "data": {"title": "Neexistuje", "kind": "clip",
+                                                        "local": {"name": "nic.mp4", "rel_path": "KCD2/nic.mp4", "size": 5}}}]})
+        self.store.db.execute("UPDATE media SET missing=0 WHERE id=?", (m3,))
+        self.store.commit()
+        self.run_sync()
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM media").fetchone()[0], n_media)
+        self.assertEqual(self.store.media(m3).title, "Ze složky")
+        web3 = [r for r in self.data()["records"] if r["type"] == "video" and r["title"] == "Ze složky"]
+        self.assertEqual([r["src"] for r in web3], [f"media:{m3}"])
+        res = self.run_sync()
+        self.assertEqual((res["sent"], res["received"]), (0, 0), res)
+
     def test_bad_token(self):
         s = sync.Syncer(self.db_path, {"sync_url": URL, "sync_token": "krt_spatny"}, self.att_dir)
         try:

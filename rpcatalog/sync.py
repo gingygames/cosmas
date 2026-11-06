@@ -17,6 +17,7 @@ transakce jen kolem čistě lokálních dávek, nikdy přes síťové volání �
 import hashlib
 import json
 import mimetypes
+import os
 import re
 import secrets
 import socket
@@ -323,6 +324,7 @@ class Syncer:
         self.off = int(self.state("id_offset", 0) or 0)
         self.att_paths = {}
         self.files = {}
+        self._mtimes = {}
         self.stats = {"sent": 0, "created_remote": 0, "uploaded": 0, "deleted_remote": 0,
                       "received": 0, "created_local": 0, "deleted_local": 0, "conflicts": 0}
         self.warnings = []
@@ -508,13 +510,20 @@ class Syncer:
         for r in q("SELECT media_id, tag FROM media_tags ORDER BY tag"):
             mtags.setdefault(r["media_id"], []).append(r["tag"])
         rows["media"] = {}
-        for r in q("SELECT * FROM media WHERE youtube IS NOT NULL AND youtube <> ''"):
+        excluded = set(self.state("media_excluded", []) or [])
+        for r in q("SELECT * FROM media WHERE missing=0 OR (youtube IS NOT NULL AND youtube <> '')"):
+            if r["id"] in excluded:
+                continue
             m = Media(r)
+            local = None if str(r["path"]).startswith("http") else self.local_ref(r["path"], r["size"])
+            if not r["youtube"] and not local:
+                continue                      # video mimo složky se záznamy a bez YouTube se neposílá
+            kind = m.effective_kind if m.effective_kind in ("clip", "session") else "clip"
             rows["media"][r["id"]] = {
-                "id": r["id"], "youtube": r["youtube"], "title": m.display_title, "description": r["description"] or "",
-                "game": r["game"] or "", "start_time": r["start_time"], "duration": r["duration"],
-                "favorite": 1 if r["favorite"] else 0, "server_id": r["server_id"], "kind": m.effective_kind,
-                "tags": mtags.get(r["id"], []), "created_at": r["added_at"]}
+                "id": r["id"], "youtube": r["youtube"] or None, "local": local, "title": m.display_title,
+                "description": r["description"] or "", "game": r["game"] or "", "start_time": r["start_time"],
+                "duration": r["duration"], "favorite": 1 if r["favorite"] else 0, "server_id": r["server_id"],
+                "kind": kind, "tags": mtags.get(r["id"], []), "created_at": r["added_at"]}
         rows["bookmarks"] = {r["id"]: pick("bookmarks", r) for r in q("SELECT * FROM bookmarks WHERE hidden=0")
                              if r["media_id"] in rows["media"]}
         rows["attachments"] = {}
@@ -548,6 +557,41 @@ class Syncer:
             if r["media_id"] in rows["media"]:
                 links[self.link_src("event_links", r["id"])] = ("event_links", r["id"] + self.off, lp("event_links", r))
         return rows, links
+
+    def _roots(self):
+        return [Path(r) for r in (self.settings.get("roots") or []) if r]
+
+    def local_ref(self, path, size=None):
+        """Lokální video pro web: cesta relativně ke složce se záznamy (/), bez absolutních cest."""
+        p = Path(path)
+        for root in self._roots():
+            try:
+                rel = Path(os.path.normcase(str(p))).relative_to(Path(os.path.normcase(str(root))))
+            except ValueError:
+                continue
+            rel_orig = p.parts[-len(rel.parts):]
+            if path not in self._mtimes:
+                try:
+                    st = p.stat()
+                    self._mtimes[path] = (int(st.st_mtime), st.st_size)
+                except OSError:
+                    self._mtimes[path] = (None, size)
+            mtime, fsize = self._mtimes[path]
+            return {"name": p.name, "rel_path": "/".join(rel_orig), "size": size if size is not None else fsize,
+                    "mtime": mtime}
+        return None
+
+    def find_local_media(self, loc):
+        """Lokální médium k webovému záznamu videa podle rel_path + velikosti."""
+        rel = str((loc or {}).get("rel_path") or "").replace("\\", "/").strip("/")
+        if not rel or ".." in rel.split("/"):
+            return None
+        for root in self._roots():
+            cand = os.path.normcase(str(root.joinpath(*rel.split("/"))))
+            for r in self.db.execute("SELECT id, path, size FROM media WHERE missing=0 AND size IS ?", (loc.get("size"),)):
+                if os.path.normcase(str(Path(r["path"]))) == cand:
+                    return r["id"]
+        return None
 
     def _shift(self, table, row):
         """Řádek pro /import s id posunutými o offset kopie (server páruje podle "<tabulka>:<id>")."""
@@ -779,7 +823,7 @@ class Syncer:
     def _same(self, table, lrow, r):
         d = r.get("data") or {}
         for k, v in d.items():
-            if k not in lrow or k in ("id", "created_at", "updated_at", "tags", "owner_id", "recipient_ids", "kind") \
+            if k not in lrow or k in ("id", "created_at", "updated_at", "tags", "owner_id", "recipient_ids", "kind", "local") \
                     or k in FK.get(table, {}):
                 continue
             if k == "body_html":
@@ -819,6 +863,16 @@ class Syncer:
             f = {"event_id": ev}
         elif table == "media":
             yt = youtube_id(d.get("youtube"))
+            if d.get("local"):
+                # video ze složky v prohlížeči: jen spárovat s tím, co tu je; nové médium nezakládat
+                mid = self.find_local_media(d["local"])
+                if mid is None:
+                    return None
+                if self.pub("media", mid):
+                    self.warn(f"Video „{r.get('title') or d['local'].get('name')}“ je na webu dvakrát – "
+                              "nadbytečný záznam na webu smaž, tady jsem ho nepřevzal.")
+                    return None
+                return mid
             if not yt:
                 return None
             path = f"https://www.youtube.com/watch?v={yt}"
@@ -1037,7 +1091,10 @@ class Syncer:
                 x("DELETE FROM media WHERE id=?", (lid,))      # video jen z webu
                 x("DELETE FROM character_links WHERE target_type='bookmark' AND target_id NOT IN (SELECT id FROM bookmarks)")
             else:
-                x("UPDATE media SET youtube=NULL WHERE id=?", (lid,))   # soubor zůstává, jen už není na webu
+                # soubor zůstává, jen už se na web neposílá
+                ex = set(self.state("media_excluded", []) or [])
+                ex.add(lid)
+                self.set_state("media_excluded", sorted(ex))
         elif table == "bookmarks":
             row = self.row("bookmarks", lid)
             x("DELETE FROM character_links WHERE target_type='bookmark' AND target_id=?", (lid,))
