@@ -10,7 +10,7 @@ const hist = { gpu: [], cpu: [] };
 function mount(r, params) {
   root = r;
   if (params && params.tab) tab = params.tab;
-  Shell.header({ icon: 'captions', title: tr('Transcripts'), topic: tr('speech, picture and Kosmas AI – on your PC or through a paid service') });
+  Shell.header({ icon: 'captions', title: tr('transcripts'), topic: tr('speech, picture and Kosmas AI – on your PC or through a paid service') });
   render();
   offs.push(TR.on(ev => { if (tab === 'queue' && ev.phase !== undefined) renderQueueLive(); }));
   timer = setInterval(pollStats, 2000);
@@ -270,7 +270,7 @@ async function renderSettings(body) {
     card('sparkles', tr('Kosmas AI'), tr('After transcription it goes through the recording in blocks (split at pauses between conversations) with a running memory of the story, a summary of the previous evening and knowledge of characters, places and factions from the database. It suggests chapters, events and new entries.'),
       toggle('ai_chapters', tr('Run Kosmas AI after transcription')),
       slider('ai_chapter_minutes', tr('Block length'), 5, 40, 5, ' min', tr('Shorter = more detailed chapters, longer processing.')),
-      toggle('ai_chapter_bookmarks', tr('Chapters as bookmarks'), tr('Shown on the player timeline and in Moments.')),
+      toggle('ai_chapter_bookmarks', tr('Chapters as moments'), tr('Shown on the player timeline and in Moments.')),
       h('.trp-opt.col.wide', h('span', tr('About the game and server (for all models)')), ctx)),
     card('link', tr('Linking'), null,
       toggle('ai_autolink', tr('Add recognised characters to the video'), tr('If you remove a character, it will not be added to that video again.')),
