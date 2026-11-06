@@ -31,7 +31,7 @@ function discordCard(s) {
 }
 
 const SYNC_TYPES = { servers: tr('Server'), players: tr('Player'), factions: tr('Faction'), characters: tr('Character'), places: tr('Place'), events: tr('Event'),
-  entries: tr('Entry'), letters: tr('Letter'), media: tr('Video'), bookmarks: tr('Bookmark'), attachments: tr('Image') };
+  entries: tr('Entry'), letters: tr('Letter'), media: tr('Video'), bookmarks: tr('Moment'), attachments: tr('Image') };
 const SYNC_KINDS = { both: tr('changed here and on the web'), deleted_remote: tr('deleted on the web, changed here'), deleted_local: tr('deleted here, changed on the web') };
 
 /* Sign in with Discord: the browser opens the web, the user allows Kosmas and the browser comes back to a one-shot
@@ -228,7 +228,7 @@ Views.register('settings', {
           h('.row', h('button.btn', { onclick: () => API.call('open_data_dir') }, icon('folder-open'), tr('Open data folder')),
             h('button.btn', { onclick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } }, icon('refresh-cw'), tr('Reload library')))),
         card(tr('Keyboard shortcuts'), null, h('.small.muted', { html: [
-          tr('<b>Player:</b> <span class="kbd">Space</span> pause · <span class="kbd">←</span>/<span class="kbd">→</span> 5 s · <span class="kbd">Shift</span>+arrows 30 s · <span class="kbd">F</span> full screen · <span class="kbd">M</span> mute · <span class="kbd">Ctrl+1…9</span> audio tracks · <span class="kbd">B</span> bookmark · <span class="kbd">Shift+B</span> segment start/end · <span class="kbd">P</span> bookmark straight into an event · <span class="kbd">S</span> screenshot (to event / crop / character portrait)'),
+          tr('<b>Player:</b> <span class="kbd">Space</span> pause · <span class="kbd">←</span>/<span class="kbd">→</span> 5 s · <span class="kbd">Shift</span>+arrows 30 s · <span class="kbd">F</span> full screen · <span class="kbd">M</span> mute · <span class="kbd">Ctrl+1…9</span> audio tracks · <span class="kbd">B</span> moment · <span class="kbd">Shift+B</span> segment start/end · <span class="kbd">P</span> moment straight into an event · <span class="kbd">S</span> screenshot (to event / crop / character portrait)'),
           tr('<b>Library:</b> <span class="kbd">Enter</span> play · <span class="kbd">Delete</span> move to Trash · <span class="kbd">Ctrl+A</span> select all · <span class="kbd">Ctrl+F</span> search · dragging videos onto an event/album attaches them'),
           tr('<b>Editor:</b> <span class="kbd">@</span> tag a character · <span class="kbd">Ctrl+V</span> paste a screenshot · <span class="kbd">Ctrl+B/I/U</span>'),
         ].join('<br><br>') })))));

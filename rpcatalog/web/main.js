@@ -108,21 +108,21 @@ async function bootDetailPane() {
     // player asked to attach the current moment to an event
     const m = App.mediaById.get(d.media_id);
     const moment = m && m.start ? m.start + d.offset : null;
-    const r = await pickEvent({ title: tr('Bookmark to event'), moment });
+    const r = await pickEvent({ title: tr('Moment to an event'), moment });
     if (!r) return;
     await API.call('bm.create', { media_id: d.media_id, t: d.offset, event_id: r.id, title: r.note });
-    toast(tr('Bookmark {time} added to the event', { time: fmt.clock(d.offset) }), 'ok', { label: tr('Open'), fn: () => App.go('events', { id: r.id, tab: 'media' }) });
+    toast(tr('Moment {time} added to the event', { time: fmt.clock(d.offset) }), 'ok', { label: tr('Open'), fn: () => App.go('events', { id: r.id, tab: 'media' }) });
     bmChanged();
   });
   API.on('bookmark', d => {
     // B / Shift+B in the player created a bookmark
-    toast(d.t_end != null ? tr('Range {from}–{to} saved', { from: fmt.clock(d.t), to: fmt.clock(d.t_end) }) : tr('Bookmark {time} saved', { time: fmt.clock(d.t) }), 'ok',
+    toast(d.t_end != null ? tr('Range {from}–{to} saved', { from: fmt.clock(d.t), to: fmt.clock(d.t_end) }) : tr('Moment {time} saved', { time: fmt.clock(d.t) }), 'ok',
       { label: tr('Describe'), fn: () => bmEditor(d.id) });
     bmChanged();
   });
   API.on('snapshot', () => snapshotFlow());   // S / Snímek in the player
   API.on('tagchar', async d => {
-    // O / "Postava" in the player: who is here at this moment (stored as a bookmark with characters)
+    // C / "Character" in the player: who is here at this moment (stored as a bookmark with characters)
     const ids = await pickCharacters([], { title: tr('Who is in the video at {time}?', { time: fmt.clock(d.t) }) });
     if (!ids || !ids.length) return;
     const names = ids.map(id => App.charsById.get(id)?.name).filter(Boolean);

@@ -33,8 +33,8 @@ const Shell = {
     app.append(this.guilds, this.channels, h('section#center', this.top, view), this.members);
     try { (App.ui.catsClosed || []).forEach(c => this.catsClosed.add(c)); } catch (e) { /* ignore */ }
     this.renderGuilds(); this.renderChannels(); this.renderUser(); this.renderMembers(); this.renderNowPlaying();
-    App.on('media', () => { this.renderGuilds(); });
-    App.on('events', () => { this.renderMembers(); });
+    App.on('media', () => { this.renderGuilds(); this.renderUser(); });
+    App.on('events', () => { this.renderMembers(); this.renderUser(); });
     App.on('chars', () => { this.renderMembers(); });
     App.on('player', () => this.renderNowPlaying());
   },
@@ -186,8 +186,8 @@ const Shell = {
         h('button.npb', { title: tr('−10 s'), onclick: () => act('-5') }, icon('rotate-ccw')),
         h('button.npb.np-play', { title: tr('Pause (space)'), onclick: () => act('pause') }, icon(p.playing ? 'pause' : 'play')),
         h('button.npb', { title: tr('+10 s'), onclick: () => act('+5') }, icon('rotate-cw')),
-        h('button.npb', { title: tr('Bookmark (B)'), onclick: () => act('bm') }, icon('bookmark-plus')),
-        h('button.npb', { title: tr('Tag a character at this moment (O)'), onclick: () => act('tagchar') }, icon('user-round-plus')),
+        h('button.npb', { title: tr('Moment (B)'), onclick: () => act('bm') }, icon('bookmark-plus')),
+        h('button.npb', { title: tr('Tag the characters present at this moment (C)'), onclick: () => act('tagchar') }, icon('user-round-plus')),
         h('button.npb', { title: tr('Screenshot (S)'), onclick: () => act('snap') }, icon('camera')),
         h('button.npb.np-pop' + (p.popout ? '.on' : ''), { title: tr('Pop-out window'), onclick: () => act('popout') }, icon('picture-in-picture-2'))));
   },

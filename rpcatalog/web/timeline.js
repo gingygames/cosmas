@@ -788,7 +788,7 @@ function tlEventCard(e, visible) {
         (e.tags || []).length ? h('span.tag', e.tags.slice(0, 4).map(t => '#' + t).join(' ')) : null,
         h('.counts',
           e.link_count ? h('span', { title: tr('Links to recordings') }, icon('film'), e.link_count) : null,
-          e.bm_count ? h('span', { title: tr('Moments (bookmarks)') }, icon('bookmark'), e.bm_count) : null,
+          e.bm_count ? h('span', { title: tr('Moments') }, icon('bookmark'), e.bm_count) : null,
           e.entry_count ? h('span', { title: tr('Entries') }, icon('notebook-pen'), e.entry_count) : null,
           e.att_count ? h('span', { title: tr('Attachments') }, icon('paperclip'), e.att_count) : null)),
       kids.length ? tlSubList(kids, visible) : null));
@@ -915,7 +915,7 @@ function tlRenderGantt(events, media) {
             hover: () => h('div', h('.t', bmTitle(b)),
               h('.l', icon('clock'), `${fmt.dt(t)} · ${tr('{time} in video', { time: fmt.dur(b.t) + (b.t_end ? '–' + fmt.dur(b.t_end) : '') })}`),
               ev ? h('.l', icon('calendar-range'), ev.title) : null,
-              h('.hint', b.t_end ? tr('Click = play the range') : tr('Click = play from the bookmark'))) });
+              h('.hint', b.t_end ? tr('Click = play the range') : tr('Click = play from the moment'))) });
         }
       });
       row.push(...extra);

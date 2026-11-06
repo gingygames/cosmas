@@ -578,16 +578,16 @@ class PlayerWidget(QWidget):
         tbox.addWidget(self.sub)
         self.snap_btn = QPushButton(" " + tr("Screenshot"))
         self.pin_btn = QPushButton(" " + tr("Pin"))
-        self.bm_btn = QPushButton(" " + tr("Bookmark"))
+        self.bm_btn = QPushButton(" " + tr("Moment"))
         self.tag_btn = QPushButton(" " + tr("Character"))
         self.clip_btn = QPushButton(" " + tr("Clip"))
         for b, ic, tip in ((self.snap_btn, "camera", tr("Save the current frame to the event (S)")),
                            (self.bm_btn, "bookmark-plus",
-                            tr("Bookmark at this point (B)\nShift+B = start / end of a segment (virtual clip)\n"
+                            tr("Moment at this point (B)\nShift+B = start / end of a segment (virtual clip)\n"
                                "Right-click = segment")),
                            (self.tag_btn, "user-round-plus", tr("Tag the characters present at this moment (C)")),
                            (self.clip_btn, "scissors", tr("Clip: I = start, O = end\nRight-click = more options")),
-                           (self.pin_btn, "map-pin", tr("Bookmark assigned straight to an event (P)"))):
+                           (self.pin_btn, "map-pin", tr("Moment assigned straight to an event (P)"))):
             b.setObjectName("actbtn")
             b.setIcon(glyph_icon(ic))
             b.setToolTip(tip)
@@ -884,7 +884,7 @@ class PlayerWidget(QWidget):
 
     def _clear_range(self):
         self.seekbar.range_a = None
-        self.bm_btn.setText(" " + tr("Bookmark"))
+        self.bm_btn.setText(" " + tr("Moment"))
         self.bm_btn.setProperty("armed", False)
         self.bm_btn.style().unpolish(self.bm_btn)
         self.bm_btn.style().polish(self.bm_btn)

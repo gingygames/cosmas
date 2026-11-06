@@ -388,7 +388,7 @@ class MainWindow(QMainWindow):
         from .ui.common import fmt_dur
         marks = []
         for b in self.store.bookmarks(media_id=media.id):
-            label = b["title"] or (tr("segment") if b["t_end"] else tr("bookmark"))
+            label = b["title"] or (tr("segment") if b["t_end"] else tr("moment"))
             if b["event_title"]:
                 label += f" → {b['event_title']}"
             marks.append({"t": b["t"], "t_end": b["t_end"], "label": label,

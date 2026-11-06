@@ -471,7 +471,7 @@ function transcriptSection(m) {
             f.names.filter(n => !(f.persons || []).some(p => p.name === n)).map(n => h('span.trs-tag', icon('tag'), n)),
             f.faces.map(x => h('img.trs-face', { src: x.url, title: tr('Face – click: use as character portrait'), onclick: e => { e.stopPropagation(); facePortrait(r.t, x); } }))) : null),
         h('.trs-act',
-          h('button.npb', { title: tr('Bookmark here'), onclick: async e => { e.stopPropagation(); await API.call('bm.create', { media_id: m.id, t: r.t, title: r.text.slice(0, 70) }); toast(tr('Bookmark added')); } }, icon('bookmark-plus')))));
+          h('button.npb', { title: tr('Moment here'), onclick: async e => { e.stopPropagation(); await API.call('bm.create', { media_id: m.id, t: r.t, title: r.text.slice(0, 70) }); toast(tr('Moment added')); } }, icon('bookmark-plus')))));
     }
     if (shown.length > st.limit) frag.appendChild(h('button.btn.sm.ghost', { onclick: () => { st.limit += 600; renderList(); } }, tr('Show more ({n})', { n: shown.length - st.limit })));
     if (!shown.length && d.rows.length) frag.appendChild(h('.faint.small', { style: { padding: '12px' } }, tr('Nothing matches the filter.')));

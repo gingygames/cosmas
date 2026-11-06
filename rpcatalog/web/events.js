@@ -432,7 +432,7 @@ async function paneMedia(pane) {
     h('.section-title', icon('bookmark'), tr('Moments') + (bms.length ? ' · ' + bms.length : ''), h('.line')));
   if (bms.length) momBox.append(...bms.map(b => bmRow(b, { showMedia: true, onChange: refresh, hideEvent: true })));
   else momBox.appendChild(h('.faint.small', { style: { padding: '2px 8px' } },
-    tr('Bookmarks and video ranges assigned to this event. During playback press P (bookmark straight into the event) or B and assign it later.')));
+    tr('Moments and video segments assigned to this event. During playback press P (moment straight into the event) or B and assign it later.')));
   pane.appendChild(momBox);
   // unassigned bookmarks inside this event's recordings -> quick assign
   if (links.length) {
@@ -441,7 +441,7 @@ async function paneMedia(pane) {
       const t0 = ev.start_time, t1 = ev.end_time;
       const cand = all.filter(b => !b.event_id && linkedIds.has(b.media_id) && (!t0 || !t1 || !b.abs || (b.abs >= t0 - 600 && b.abs <= t1 + 600)));
       if (!cand.length) return;
-      momBox.appendChild(h('.small.muted', { style: { margin: '10px 8px 4px' } }, icon('sparkles'), ' ' + tr('Unassigned bookmarks in these recordings ({n})', { n: cand.length }),
+      momBox.appendChild(h('.small.muted', { style: { margin: '10px 8px 4px' } }, icon('sparkles'), ' ' + tr('Unassigned moments in these recordings ({n})', { n: cand.length }),
         h('button.btn.sm.ghost', { style: { marginLeft: '8px' }, onclick: async () => {
           for (const b of cand) await API.call('bm.update', { id: b.id, event_id: ev.id });
           toast(tr('Assigned {n}', { n: cand.length })); await bmChanged(); refresh();

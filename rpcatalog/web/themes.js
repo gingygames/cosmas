@@ -146,7 +146,7 @@ function appearanceSection() {
         h('div', lab(tr('Animations')), seg('motion', [[true, tr('On')], [false, tr('Off')]]))),
       h('div', lab(tr('Player on the right – video information (you can also switch it with the button in the player header)')),
         h('.look-layout', layoutOpt('stack', tr('Below the video')), layoutOpt('row', tr('Next to the video')))),
-      h('div', lab(tr('Bookmarks')), h('label.row', { style: { gap: '8px' } }, tr('Play bookmarks'), pre, tr('seconds early (ranges play exactly)'))),
+      h('div', lab(tr('Moments')), h('label.row', { style: { gap: '8px' } }, tr('Play moments'), pre, tr('seconds early (ranges play exactly)'))),
       h('div', h('button.btn.sm.ghost', { onclick: () => { App.ui.look = {}; applyAppearance(); App.saveUi(); render(); } }, icon('rotate-ccw'), tr('Restore default appearance'))));
   };
   render();

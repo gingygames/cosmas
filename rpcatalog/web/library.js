@@ -551,8 +551,8 @@ async function mediaPanel(box, id, { hero = true, isCurrent = () => true, rerend
       h('.row.wrap', App.albums.map(a => h('span.chip' + (m.albums.includes(a.id) ? '.on' : ''), {
         onclick: async () => { await API.call('media.bulk', { ids: [m.id], op: m.albums.includes(a.id) ? 'album_remove' : 'album_add', value: a.id }); App.refresh('meta'); rerender(); },
       }, a.name)), h('span.chip', { onclick: () => newAlbum([m.id]) }, icon('plus'), tr('New'))),
-      h('.section-title', icon('bookmark'), tr('Bookmarks') + (m.bm_full.length ? ' · ' + m.bm_full.length : ''), h('.line'),
-        h('button.btn.sm.ghost', { title: tr('Bookmark at the current playback position (B)'), onclick: () => addBookmarkHere(m.id).then(rerender) }, icon('bookmark-plus'), tr('Add'))),
+      h('.section-title', icon('bookmark'), tr('Moments') + (m.bm_full.length ? ' · ' + m.bm_full.length : ''), h('.line'),
+        h('button.btn.sm.ghost', { title: tr('Moment at the current playback position (B)'), onclick: () => addBookmarkHere(m.id).then(rerender) }, icon('bookmark-plus'), tr('Add'))),
       m.bm_full.length ? h('div', bmStrip(m, m.bm_full, { onChange: rerender }),
         h('div', m.bm_full.filter(b => b.source !== 'auto' || b.event_id || b.note).map(b => bmRow(b, { onChange: rerender }))),
         m.bm_full.some(b => b.source === 'auto' && !b.event_id && !b.note) ? h('.tiny.faint', { style: { padding: '2px 10px' } },
