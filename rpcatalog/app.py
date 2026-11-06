@@ -28,6 +28,17 @@ ICON_PATH = config.APP_DIR / "rpcatalog" / "assets" / "kronikar.ico"
 APP_ID = "Gingygames.Kronikar"
 
 
+
+def window_title():
+    """'Kosmas', plus the data folder when KRONIKAR_DATA points elsewhere and KOSMAS_TITLE_SUFFIX for test runs,
+    so a test or second copy can't be mistaken for the real catalogue."""
+    t = "Kosmas"
+    if os.environ.get("KOSMAS_TITLE_SUFFIX"):
+        t += " – " + os.environ["KOSMAS_TITLE_SUFFIX"]
+    if os.environ.get("KRONIKAR_DATA"):
+        t += " – " + str(config.DATA_DIR)
+    return t
+
 class ScanThread(QThread):
     done = Signal(dict)
     failed = Signal(str)
@@ -75,7 +86,7 @@ class TitleBar(QWidget):
         self.logo = QLabel()
         self.logo.setFixedSize(18, 18)
         self.logo.setPixmap(QIcon(str(ICON_PATH)).pixmap(18, 18))
-        self.title = QLabel("Kosmas")
+        self.title = QLabel(window_title())
         lay.addWidget(self.logo)
         lay.addWidget(self.title)
         lay.addStretch(1)
@@ -122,7 +133,7 @@ class MainWindow(QMainWindow):
         # controls) native too, and those stayed on screen after the player was closed.
         QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
         from .ui.player import PlayerWidget  # imports mpv (needs locale set)
-        self.setWindowTitle("Kosmas")
+        self.setWindowTitle(window_title())
         self.setWindowFlag(Qt.FramelessWindowHint, True)
         self.resize(1700, 1000)
         self.setStyleSheet("QMainWindow { background: #0d0f13; } QSplitter::handle { background: #1a1e25; }")
@@ -223,6 +234,7 @@ class MainWindow(QMainWindow):
         geo = self.settings.get("geometry")
         if geo:
             self.restoreGeometry(QByteArray.fromBase64(geo.encode()))
+        self.fit_to_screen()
         QTimer.singleShot(400, self.rescan)
         if self.settings.get("sync_auto") and self.settings.get("sync_token"):
             # automatická synchronizace s webovou Kronikou po startu
@@ -607,6 +619,25 @@ class MainWindow(QMainWindow):
         # SWP_FRAMECHANGED | NOMOVE | NOSIZE | NOZORDER | NOACTIVATE
         u.SetWindowPos(wintypes.HWND(hwnd), None, 0, 0, 0, 0, 0x0020 | 0x0002 | 0x0001 | 0x0004 | 0x0010)
 
+    def fit_to_screen(self):
+        """Keeps the window on a screen and no bigger than it (default 1700×1000 on a 1366×768 laptop, or a saved
+        geometry from a bigger / disconnected monitor)."""
+        if self.isMaximized() or self.isFullScreen():
+            return
+        g = self.frameGeometry()
+        scr = QApplication.screenAt(g.center()) or self.screen() or QApplication.primaryScreen()
+        if scr is None:
+            return
+        av = scr.availableGeometry()
+        w, h = min(self.width(), av.width()), min(self.height(), av.height())
+        if (w, h) != (self.width(), self.height()):
+            self.resize(w, h)
+        g = self.frameGeometry()
+        x = min(max(g.x(), av.left()), av.right() - g.width() + 1)
+        y = min(max(g.y(), av.top()), av.bottom() - g.height() + 1)
+        if (x, y) != (g.x(), g.y()):
+            self.move(x, y)
+
     def showEvent(self, e):
         super().showEvent(e)
         self._native_frame()
@@ -746,7 +777,7 @@ def main():
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-driver-bug-workarounds")
     app = QApplication(sys.argv)
     app.setApplicationName("Kronikář")          # internal id (Qt storage paths) – product name is Kosmas
-    app.setApplicationDisplayName("Kosmas")
+    app.setApplicationDisplayName(window_title())
     app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyle("Fusion")
     offer_import()
