@@ -380,6 +380,8 @@ class Store:
         if "resume_pos" not in mcols:
             self.db.execute("ALTER TABLE media ADD COLUMN resume_pos REAL")
             self.db.execute("ALTER TABLE media ADD COLUMN watched_at REAL")
+        if "youtube" not in mcols:   # ID videa na YouTube (jen taková videa jdou na web)
+            self.db.execute("ALTER TABLE media ADD COLUMN youtube TEXT")
         if fresh_bm:
             for mid, raw in self.db.execute("SELECT id, bookmarks FROM media").fetchall():
                 self.sync_medal_bookmarks(mid, json.loads(raw or "[]"), commit=False)
@@ -445,7 +447,7 @@ class Store:
             "ORDER BY start_time", (t1, t0))
 
     def update_media(self, media_id, **fields):
-        allowed = {"title", "description", "favorite", "kind_override", "game", "custom_thumb", "server_id"}
+        allowed = {"title", "description", "favorite", "kind_override", "game", "custom_thumb", "server_id", "youtube"}
         fields = {k: v for k, v in fields.items() if k in allowed}
         if not fields:
             return
