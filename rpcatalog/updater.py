@@ -2,7 +2,7 @@
 
 Where the newest version comes from:
   1. https://gingygames.com/kosmas/api/app/latest[?channel=beta]
-     {version, tag, published_at, url, size, sha256, notes_md, notes_url}
+     {version, tag, published_at, url, size, sha256, notes_md, notes_url, support_url}
   2. if that fails: the GitHub API (repos/gingygames/cosmas/releases/latest, or the newest release incl. pre-releases
      for the beta channel); the SHA-256 comes from the asset's digest or from the <installer>.sha256 asset.
 KOSMAS_UPDATE_URL overrides (1) – used by tests and a local fake server.
@@ -112,7 +112,14 @@ def _normalize(d, source):
             "sha256": _sha(d.get("sha256")), "notes_md": str(d.get("notes_md") or "")[:20000],
             "notes_url": d.get("notes_url") or RELEASES_PAGE, "source": source,
             "file": d.get("file") if INSTALLER_RE.match(str(d.get("file") or "")) else None,
-            "min_supported": d.get("min_supported") if parse_version(d.get("min_supported")) else None}
+            "min_supported": d.get("min_supported") if parse_version(d.get("min_supported")) else None,
+            "support_url": _support_url(d.get("support_url")) if source == "web" else None}
+
+
+def _support_url(v):
+    """Where to support the project (only from our own update endpoint): an https link or None."""
+    v = str(v or "").strip()
+    return v if v.startswith("https://") and len(v) <= 500 and not any(c in v for c in ' "<>') else None
 
 
 def from_endpoint(channel="stable", url=None, get=_get):
@@ -162,10 +169,11 @@ def fetch_latest(channel="stable", get=_get):
 
 
 # ------------------------------------------------------------------ what to do
-def decide(info, settings, current=__version__, is_dev=config.IS_DEV, manual=False):
+def decide(info, settings, current=__version__, is_dev=config.IS_DEV, manual=False, installed=None):
     """What an update check means for this copy. Pure function (tested).
     available     – a newer version for the chosen channel (a skipped version only when checking manually)
-    can_install   – it can be downloaded and installed from the app (never in a source checkout)
+    can_install   – it can be downloaded and installed from the app (only a copy the installer made: never a source
+                    checkout or an unpacked copy, whose folder the installer would overwrite)
     auto_download – start downloading right away (setting update_auto_download)"""
     out = {"available": False, "version": None, "skipped": False, "can_install": False, "auto_download": False,
            "reason": ""}
@@ -185,10 +193,11 @@ def decide(info, settings, current=__version__, is_dev=config.IS_DEV, manual=Fal
     if out["skipped"] and not manual:
         out["reason"] = "skipped"
         return out
+    installed = config.IS_INSTALLED if installed is None else installed
     out["available"] = True
-    out["can_install"] = not is_dev and os.name == "nt" and bool(info.get("url"))
+    out["can_install"] = not is_dev and installed and os.name == "nt" and bool(info.get("url"))
     out["auto_download"] = out["can_install"] and bool(settings.get("update_auto_download")) and not out["skipped"]
-    out["reason"] = "dev" if is_dev else "available"
+    out["reason"] = "dev" if is_dev else "not-installed" if not installed else "available"
     return out
 
 
@@ -298,8 +307,9 @@ def cleanup(dest_dir=None, keep=None):
 
 # ------------------------------------------------------------------ install
 def install_dir():
-    """The folder of this installed copy (…\\Programs\\Kronikar), None for a source checkout."""
-    return None if config.IS_DEV else config.APP_DIR.parent
+    """The folder of this installed copy (…\\Programs\\Kronikar), None for a source checkout or any other copy the installer
+    didn't make (running it with /DIR= there would replace that folder's python\\ and app\\ folders)."""
+    return config.APP_DIR.parent if config.IS_INSTALLED else None
 
 
 def installer_args(path, lang="en", target=None):

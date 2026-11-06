@@ -19,6 +19,11 @@ from . import config
 NAME_RE = re.compile(r"^catalog-(\d{8}-\d{6})-([\w-]+)\.db$")
 
 
+def ro_uri(path):
+    """Read-only SQLite URI of a file; '#', '%' or '?' in the folder name would otherwise cut or change the path."""
+    return Path(path).resolve().as_uri() + "?mode=ro"
+
+
 def backup_dir():
     return config.DATA_DIR / "backups"
 
@@ -42,7 +47,7 @@ def make(reason="manual", db_path=None, dest=None):
         n += 1
         out = dest / f"catalog-{stamp}-{reason}-{n}.db"
     tmp = out.with_suffix(".tmp")
-    a = sqlite3.connect(f"file:{src.as_posix()}?mode=ro", uri=True)
+    a = sqlite3.connect(ro_uri(src), uri=True)
     b = sqlite3.connect(tmp)
     try:
         a.backup(b)
@@ -110,7 +115,7 @@ def auto(settings, db_path=None, dest=None):
 def check(path):
     """Is it a readable Cosmas catalogue? Returns the number of videos, raises ValueError otherwise."""
     try:
-        db = sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True)
+        db = sqlite3.connect(ro_uri(path), uri=True)
         try:
             if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise ValueError("the backup is damaged")
@@ -163,6 +168,7 @@ def apply_pending_restore():
                 pass
         tmp = config.DB_PATH.with_suffix(".restore.tmp")
         shutil.copy2(src, tmp)
+        forget_sync_hashes(tmp)
         os.replace(tmp, config.DB_PATH)
         return {"restored": src.name, "saved": saved.name if saved else None}
     finally:
@@ -170,6 +176,24 @@ def apply_pending_restore():
             pf.unlink()
         except OSError:
             pass
+
+
+def forget_sync_hashes(path):
+    """A restored catalogue is older than the web: since its last sync the web may have deleted or changed records
+    (often exactly the ones the restore brings back). With the content hashes of the sync map cleared no row counts
+    as "unchanged since the last sync", so such records become conflicts to resolve instead of being deleted or
+    overwritten here (sync.Syncer._clean, apply_links)."""
+    db = sqlite3.connect(str(path))
+    try:
+        tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        with db:
+            if "published" in tables:
+                cols = {r[1] for r in db.execute("PRAGMA table_info(published)")}
+                db.execute("UPDATE published SET hash=NULL" + (", pending_hash=NULL" if "pending_hash" in cols else ""))
+            if "published_links" in tables:
+                db.execute("UPDATE published_links SET hash=NULL")
+    finally:
+        db.close()
 
 
 def dir_size(path):

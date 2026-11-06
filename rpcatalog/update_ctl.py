@@ -2,7 +2,7 @@
 
 State pushed to the web UI as the "update" notification (and returned by update.status):
   {state: idle|checking|uptodate|available|downloading|ready|error, current, info, decision, progress: [done, total],
-   error, verified, last_check, can_install, dev}
+   error, verified, last_check, can_install, dev, installed, note, support_url}
 """
 import threading
 import time
@@ -49,9 +49,17 @@ class UpdateController(QObject):
             self.check(manual=False)
 
     def status(self):
+        latest = self.settings.get("update_latest")
         return {"state": self.state, "current": __version__, "info": self.info, "decision": self.decision,
                 "progress": self.progress, "error": self.error, "verified": self.verified,
                 "last_check": self.settings.get("update_last_check") or 0, "dev": config.IS_DEV,
+                "installed": config.IS_INSTALLED,
+                # why "Update now" is missing in a copy that isn't a source checkout (e.g. unpacked from a ZIP)
+                "note": None if config.IS_INSTALLED or config.IS_DEV else i18n.tr(
+                    "This copy wasn't installed with the installer, so it can't update itself. "
+                    "Download the new version from the download page."),
+                # from the last successful check of our own update endpoint (None from GitHub or when unknown)
+                "support_url": (latest or {}).get("support_url") if isinstance(latest, dict) else None,
                 "can_install": bool(self.decision and self.decision.get("can_install")),
                 "auto_check": self.settings.get("update_auto_check", True),
                 "auto_download": bool(self.settings.get("update_auto_download")),
@@ -132,6 +140,9 @@ class UpdateController(QObject):
             raise RuntimeError("the update has not been downloaded yet")
         if config.IS_DEV:
             raise RuntimeError("a source checkout is not updated by the installer")
+        if not config.IS_INSTALLED or not updater.install_dir():
+            raise ValueError(i18n.tr("This copy wasn't installed with the installer, so it can't update itself. "
+                                     "Download the new version from the download page."))
         ok = updater.verify(self.path, (self.info or {}).get("sha256"))
         if ok is False:
             self.path.unlink(missing_ok=True)

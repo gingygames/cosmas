@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QSplitter, QMessageBox
                                QVBoxLayout, QLabel, QToolButton, QMenu, QSystemTrayIcon)
 
 from . import config, scanner
-from . import applog, backup, feedback, updater
+from . import applog, backup, feedback, single_instance, updater
 from .update_ctl import UpdateController
 from . import appearance, chronicle, mentions
 from .analysis import analysis_dir, load_frames, load_results, _read_json
@@ -67,11 +67,26 @@ class Page(QWebEnginePage):
 
     def acceptNavigationRequest(self, url, nav_type, is_main):
         # open external links in the system browser, keep the app on its own page
-        if url.scheme() in ("http", "https"):
+        scheme = url.scheme()
+        if scheme in ("http", "https", "mailto"):
             import webbrowser
             webbrowser.open(url.toString())
             return False
-        return super().acceptNavigationRequest(url, nav_type, is_main)
+        # the page can read local files: it must never be replaced by another file:, data:, blob: … page
+        # (e.g. from a link in synced text); only the app's own index.html (other ?lang=, #…) loads
+        if scheme == "file" and is_main and _same_file(url.toLocalFile(), WEB_DIR / "index.html"):
+            return super().acceptNavigationRequest(url, nav_type, is_main)
+        if scheme == "about" and not is_main:
+            return super().acceptNavigationRequest(url, nav_type, is_main)
+        print(f"[web] blocked navigation to {url.toString()[:200]}", file=sys.stderr)
+        return False
+
+
+def _same_file(a, b):
+    try:
+        return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+    except (TypeError, ValueError):
+        return False
 
 
 class TitleBar(QWidget):
@@ -340,7 +355,6 @@ class MainWindow(QMainWindow):
 
     def _export_clip(self, media, a, b):
         """Cut [a, b] into a real MP4 with all audio tracks (stream copy - fast, cuts on keyframes)."""
-        import re
         import threading
         import subprocess
         from .scanner import make_thumb
@@ -348,10 +362,11 @@ class MainWindow(QMainWindow):
         if not ff:
             self.api.emit("toast", {"msg": tr("ffmpeg is missing"), "type": "err"})
             return
-        safe = re.sub(r'[\\/:*?"<>|]+', "", media.display_title)[:60].strip() or "klip"
-        out_dir = config.DATA_DIR / "clips" / (media.game or "Ostatní")
+        from .ui.common import fmt_dur, safe_name
+        safe = safe_name(media.display_title)[:60].strip() or tr("clip")
+        # the game becomes a folder name: "Game: Subtitle" is not allowed on Windows and "../" must not leave clips/
+        out_dir = config.DATA_DIR / "clips" / (safe_name(media.game or "")[:80].strip(" .") or tr("Other games"))
         out_dir.mkdir(parents=True, exist_ok=True)
-        from .ui.common import fmt_dur
         dst = out_dir / f"{safe} {fmt_dur(a).replace(':', '-')}–{fmt_dur(b).replace(':', '-')}.mp4"
         self.api.emit("toast", {"msg": tr("Exporting clip ({duration})…", duration=fmt_dur(b - a))})
 
@@ -535,11 +550,18 @@ class MainWindow(QMainWindow):
     def save_settings(self):
         config.save_settings(self.settings)
 
-    def rescan(self):
+    def rescan(self, notify=False):
+        """notify: tell the UI to reload even when the scan changed nothing (e.g. after a settings change)."""
         if self.scan_thread and self.scan_thread.isRunning():
             return
         self.scan_thread = ScanThread(dict(self.settings))
-        self.scan_thread.done.connect(lambda res: (self.store.auto_assign_servers(), self.api.emit("media-changed", res)))
+
+        def done(res):
+            # a rescan that found nothing new doesn't reload the UI (lists, open panels and unsaved typing stay)
+            assigned = self.store.auto_assign_servers()
+            if notify or res.get("changed", 1) or assigned:
+                self.api.emit("media-changed", res)
+        self.scan_thread.done.connect(done)
         self.scan_thread.failed.connect(lambda err: print(err, file=sys.stderr))
         self.scan_thread.start()
 
@@ -972,6 +994,16 @@ def main():
             pass
     config.prepare_data_dir()
     config.ensure_dirs()
+    # one app per data folder: a second start (e.g. from the Start menu while the app sits in the tray) shows the
+    # running one; checked before anything touches the log, a pending restore or the catalogue
+    instance = single_instance.Guard()
+    if not instance.acquire():
+        app = QApplication(sys.argv[:1])
+        if not single_instance.notify_running():
+            QMessageBox.information(None, i18n.app_name(), tr(
+                "{app} is already running. If you can't see its window, look for its icon in the notification area.",
+                app=i18n.app_name()))
+        sys.exit(0)
     applog.setup(config.load_settings().get("log_level", "info"))
     started = {}
     try:          # a backup chosen in Settings → Data & backups replaces the catalogue before anything opens it
@@ -1001,6 +1033,7 @@ def main():
     import locale
     locale.setlocale(locale.LC_NUMERIC, "C")  # mpv requires C numeric locale
     w = MainWindow(started)
+    instance.listen(w.show_from_tray)
     if w.settings.get("start_minimized"):
         if w.tray:
             w.hide()                       # straight to the tray
@@ -1009,6 +1042,7 @@ def main():
     else:
         w.show()
     code = app.exec()
+    instance.release()                     # the restarted app (or the installer's relaunch) must get the lock
     if w._after_quit:                      # update installer / restart after restoring a backup
         try:
             w._after_quit()
