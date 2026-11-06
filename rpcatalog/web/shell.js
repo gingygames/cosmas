@@ -66,7 +66,7 @@ const Shell = {
         h('.pill'), h('.gi', { style: extra.style || {} }, content));
       return g;
     };
-    el.appendChild(item('home', h('span.logo', 'K'), 'Celý katalog – všechny hry', () => { this.setGuild('home'); App.go('home'); }));
+    el.appendChild(item('home', h('img.logo', { src: 'icon.svg', alt: 'Kronikář', draggable: false }), 'Celý katalog – všechny hry', () => { this.setGuild('home'); App.go('home'); }));
     el.appendChild(h('.gsep'));
     for (const g of this.games()) {
       const initials = g.game.split(/\s+/).map(w => w[0]).join('').slice(0, 3);

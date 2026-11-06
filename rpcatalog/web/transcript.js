@@ -70,7 +70,7 @@ function proposalCard(p, { onDone } = {}) {
   const text = h('textarea.input.prop-text', { rows: 2, onkeydown: e => e.stopPropagation() }, d.text || '');
   const who = (d.chars || []).map(id => App.charsById.get(id)).filter(Boolean);
   const unknown = (d.who || []).filter(n => !who.some(c => TR.fold(c.name).startsWith(TR.fold(n).split(' ')[0])));
-  const card = h('.prop.' + p.kind,
+  const card = h('.tprop.' + p.kind,
     h('.prop-head', h('span.prop-kind', icon(ic), label), name,
       h('button.btn.sm.ghost', { title: 'Přehrát od tohoto místa', onclick: () => TR.play(p.media_id, d.t) }, icon('play'),
         fmt.clock(d.t) + (d.t_end && p.kind === 'event' ? '–' + fmt.clock(d.t_end) : ''))),
@@ -98,7 +98,7 @@ async function reviewProposals(mediaId) {
   const props = await API.call('analysis.proposals', { media_id: mediaId });
   const body = h('.prop-list');
   const left = h('span.faint');
-  const count = () => { left.textContent = `${body.querySelectorAll('.prop:not(.gone)').length} zbývá`; };
+  const count = () => { left.textContent = `${body.querySelectorAll('.tprop:not(.gone)').length} zbývá`; };
   const order = { event: 0, character: 1, place: 2, faction: 3 };
   props.sort((a, b) => (order[a.kind] - order[b.kind]) || (a.data.t - b.data.t)).forEach(p => body.appendChild(proposalCard(p, { onDone: count })));
   count();
@@ -149,7 +149,7 @@ function transcriptSection(m) {
     renderPills(); renderEmpty(); renderCoverage(); renderMeta(); renderChips(); renderList();
   }
 
-  const start = (opts) => API.call('analysis.start', { ids: [m.id], ...opts }).then(q => { TR.queue = q; TR._subs.forEach(fn => fn({ phase: 'queue' })); AIQ.update(); }).catch(() => {});
+  const start = async (opts) => (await AISetup.ensure()) && API.call('analysis.start', { ids: [m.id], ...opts }).then(q => { TR.queue = q; TR._subs.forEach(fn => fn({ phase: 'queue' })); AIQ.update(); }).catch(() => {});
 
   function moreMenu(e) {
     const d = st.data || {};
@@ -196,8 +196,8 @@ function transcriptSection(m) {
     empty.classList.toggle('hidden', !nothing);
     if (!nothing) return;
     clear(empty).append(
-      h('.small.muted', d.available ? 'Přepis řeči (mikrofon, hra, Discord), popis obrazu v rozhovorech a Kronikář AI, který z toho poskládá kapitoly, události a návrhy do databáze. Všechno lokálně na grafické kartě.'
-        : 'Chybí knihovny pro přepis: v kořeni Kronikáře spusť .venv\\Scripts\\pip install -r requirements-ai.txt'),
+      h('.small.muted', d.available ? 'Přepis řeči (mikrofon, hra, Discord), popis obrazu v rozhovorech a Kronikář AI, který z toho poskládá kapitoly, události a návrhy do databáze. Běží na tvém PC, nebo přes placenou službu (Přepisy → Kde běží AI).'
+        : 'Přepis řeči na tomto PC tu není k dispozici – v Přepisy → Kde běží AI vyber pro řeč placenou službu.'),
       d.available ? h('.row.wrap',
         h('button.btn.sm.primary', { onclick: () => start({ speech: true }) }, icon('audio-lines'), 'Přepsat řeč'),
         h('button.btn.sm', { onclick: () => start({ speech: true, vision: true }) }, icon('scan-eye'), 'Řeč + obraz'),

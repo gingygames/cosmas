@@ -55,7 +55,7 @@ class Api(QObject):
                  "analysis.get", "analysis.queue", "analysis.stats", "analysis.models", "analysis.overview",
                  "analysis.char_mentions", "analysis.search", "analysis.open_timeline", "analysis.skip",
                  "analysis.pause", "analysis.move", "analysis.remove", "analysis.proposals", "analysis.entity_mentions",
-                 "analysis.char_looks"}
+                 "analysis.char_looks", "ai.info", "ai.open"}
 
     @Slot(str, str, result=str)
     def call(self, method, args_json):
@@ -373,6 +373,37 @@ class Api(QObject):
             ollama = None
         return {"whisper": self.WHISPER_MODELS, "ollama": ollama, "available": self.host.analysis.available(),
                 "games": self.host.analysis.detected_games}
+
+    # ------------------------------------------------------------ AI setup (ai_setup.py)
+    def m_ai_info(self):
+        from . import ai_setup
+        return ai_setup.info(self)
+
+    def m_ai_set_key(self, provider, key):
+        from . import ai_setup
+        return ai_setup.set_key(provider, key)
+
+    def m_ai_login(self, provider="openrouter"):
+        from . import ai_setup
+        return ai_setup.login_openrouter(self)
+
+    def m_ai_install_ollama(self):
+        from . import ai_setup
+        return ai_setup.install_ollama(self)
+
+    def m_ai_pull(self, model):
+        from . import ai_setup
+        return ai_setup.pull_model(self, model)
+
+    def m_ai_install_cuda(self):
+        from . import ai_setup
+        return ai_setup.install_cuda(self)
+
+    def m_ai_open(self, url):
+        if url.startswith("https://"):
+            import webbrowser
+            webbrowser.open(url)
+        return True
 
     def m_analysis_overview(self):
         """Per-video status for the library and the Přepisy page: what is transcribed / seen / missing."""

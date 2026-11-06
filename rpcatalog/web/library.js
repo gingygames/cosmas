@@ -158,6 +158,7 @@ function filtered() {
 }
 
 async function transcribe(ms, opts) {
+  if (!await AISetup.ensure()) return;
   await API.call('analysis.start', { ids: ms.map(m => m.id), speech: true, ...opts });
   TR.refreshQueue();
   toast(ms.length > 1 ? `${ms.length} ${fmt.plural(ms.length, 'video', 'videa', 'videí')} ve frontě na přepis` : 'Přepis spuštěn – průběh je v panelu videa');

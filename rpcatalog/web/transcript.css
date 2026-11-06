@@ -125,13 +125,13 @@
 
 /* ---------- proposals ---------- */
 .prop-list { display: flex; flex-direction: column; gap: 8px; }
-.prop { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 8px 10px;
+.tprop { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 8px 10px;
   background: var(--surface); display: flex; flex-direction: column; gap: 6px; max-height: 400px;
   transition: opacity .25s, transform .25s, max-height .3s .2s, padding .3s .2s, margin .3s .2s; }
-.prop.character { border-left-color: var(--blue); }
-.prop.place { border-left-color: var(--ok); }
-.prop.faction { border-left-color: var(--violet); }
-.prop.gone { opacity: 0; transform: translateX(16px); pointer-events: none; max-height: 0; padding-top: 0; padding-bottom: 0;
+.tprop.character { border-left-color: var(--blue); }
+.tprop.place { border-left-color: var(--ok); }
+.tprop.faction { border-left-color: var(--violet); }
+.tprop.gone { opacity: 0; transform: translateX(16px); pointer-events: none; max-height: 0; padding-top: 0; padding-bottom: 0;
   margin: -4px 0; overflow: hidden; border-width: 0; }
 .prop-head { display: flex; gap: 8px; align-items: center; }
 .prop-kind { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; font-weight: 650; color: var(--text-3); white-space: nowrap; }

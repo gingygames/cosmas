@@ -52,19 +52,24 @@ def is_game_exe(exe):
 
 
 def worker_config(s, queue_file, world=None):
+    from . import ai_providers
     g = lambda k, d: s.get(k, config.DEFAULTS.get(k, d))   # noqa: E731
+    eff = ai_providers.effective(s)
     return {
+        "speech_provider": eff["speech"]["provider"], "speech_model": eff["speech"]["model"],
+        "vision_provider": eff["vision"]["provider"], "text_provider": eff["text"]["provider"],
+        "whisper_device": eff["whisper"]["device"], "whisper_compute": eff["whisper"]["compute"],
         "queue_file": str(queue_file), "ffmpeg": config.find_tool("ffmpeg"),
-        "whisper": g("ai_whisper_model", "large-v3"), "language": g("ai_language", "cs"),
-        "batch_size": g("ai_batch_size", 16), "beam_size": g("ai_beam_size", 5),
+        "whisper": eff["speech"]["model"] if eff["speech"]["provider"] == "local" else "", "language": g("ai_language", "cs"),
+        "batch_size": eff["whisper"]["batch"], "beam_size": g("ai_beam_size", 5),
         "vad_threshold": g("ai_vad_threshold", 0.5), "junk_filter": g("ai_junk_filter", True),
-        "vision_model": g("ai_vision_model", "qwen3.8:27b"), "vision_width": g("ai_vision_width", 768),
+        "vision_model": eff["vision"]["model"], "vision_width": g("ai_vision_width", 768),
         "every": g("ai_base_every", 120), "vision_dialog": g("ai_vision_dialog", True),
         "dialog_every": g("ai_dialog_every", 8), "static_every": g("ai_static_every", 45),
         "motion_threshold": g("ai_motion_threshold", 0.06), "conv_gap": g("ai_conv_gap", 20),
         "detect_names": g("ai_detect_names", True), "detect_faces": g("ai_detect_faces", True),
         "appearance": g("ai_appearance", True),
-        "context": g("ai_context", ""), "text_model": g("ai_text_model", "qwen3.8:27b"),
+        "context": g("ai_context", ""), "text_model": eff["text"]["model"],
         "chapter_minutes": g("ai_chapter_minutes", 15), "known_names": (world or {}).get("names", []),
         "world": world or {},
     }
@@ -95,7 +100,8 @@ class AnalysisJobs(QObject):
     # ------------------------------------------------------------ queries
     def available(self):
         import importlib.util
-        return bool(self.ffmpeg and importlib.util.find_spec("faster_whisper"))
+        cloud = (self.settings.get("ai_speech_provider") or "local") != "local"
+        return bool(self.ffmpeg and (cloud or importlib.util.find_spec("faster_whisper")))
 
     def snapshot(self):
         def j(job):

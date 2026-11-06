@@ -5,7 +5,7 @@ import time
 import traceback
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QByteArray
-from PySide6.QtGui import QColor, QCursor
+from PySide6.QtGui import QColor, QCursor, QIcon
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -21,6 +21,8 @@ from .previews import PreviewWorker
 from .store import Store
 
 WEB_DIR = config.APP_DIR / "rpcatalog" / "web"
+ICON_PATH = config.APP_DIR / "rpcatalog" / "assets" / "kronikar.ico"
+APP_ID = "Gingygames.Kronikar"
 
 
 class ScanThread(QThread):
@@ -67,9 +69,9 @@ class TitleBar(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 0, 0, 0)
         lay.setSpacing(8)
-        self.logo = QLabel("K")
+        self.logo = QLabel()
         self.logo.setFixedSize(18, 18)
-        self.logo.setAlignment(Qt.AlignCenter)
+        self.logo.setPixmap(QIcon(str(ICON_PATH)).pixmap(18, 18))
         self.title = QLabel("Kronikář")
         lay.addWidget(self.logo)
         lay.addWidget(self.title)
@@ -95,7 +97,7 @@ class TitleBar(QWidget):
             QToolButton {{ border: 0; background: transparent; color: {fg}; }}
             QToolButton#tb_btn:hover {{ background: rgba(128,128,128,.22); }}
             QToolButton#tb_close:hover {{ background: #e81123; color: white; }}""")
-        self.logo.setStyleSheet(f"background: {accent}; color: #111; border-radius: 4px; font: 800 11px 'Segoe UI';")
+        self.logo.setStyleSheet("background: transparent;")
 
     def toggle_max(self):
         self.win.showNormal() if self.win.isMaximized() else self.win.showMaximized()
@@ -668,10 +670,18 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    if os.name == "nt":
+        try:   # own taskbar button with our icon, grouped with the Start-menu shortcut (same AppUserModelID)
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        except (OSError, AttributeError):
+            pass
+    config.prepare_data_dir()
     config.ensure_dirs()
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-driver-bug-workarounds")
     app = QApplication(sys.argv)
     app.setApplicationName("Kronikář")
+    app.setWindowIcon(QIcon(str(ICON_PATH)))
     app.setStyle("Fusion")
     import locale
     locale.setlocale(locale.LC_NUMERIC, "C")  # mpv requires C numeric locale

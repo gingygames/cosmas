@@ -10,7 +10,7 @@ const hist = { gpu: [], cpu: [] };
 function mount(r, params) {
   root = r;
   if (params && params.tab) tab = params.tab;
-  Shell.header({ icon: 'captions', title: 'Přepisy', topic: 'řeč, obraz a Kronikář AI – vše lokálně na tvém PC' });
+  Shell.header({ icon: 'captions', title: 'Přepisy', topic: 'řeč, obraz a Kronikář AI – na tvém PC nebo přes placenou službu' });
   render();
   offs.push(TR.on(ev => { if (tab === 'queue' && ev.phase !== undefined) renderQueueLive(); }));
   timer = setInterval(pollStats, 2000);
@@ -20,13 +20,14 @@ function unmount() { clearInterval(timer); timer = null; offs.forEach(f => f());
 
 function render() {
   clear(root);
-  const tabs = h('.seg.trp-tabs', [['queue', 'list-ordered', 'Fronta a výkon'], ['proposals', 'sparkles', 'Návrhy'], ['settings', 'sliders-horizontal', 'Nastavení']].map(([k, ic, label]) =>
+  const tabs = h('.seg.trp-tabs', [['queue', 'list-ordered', 'Fronta a výkon'], ['proposals', 'sparkles', 'Návrhy'], ['ai', 'cpu', 'Kde běží AI'], ['settings', 'sliders-horizontal', 'Nastavení']].map(([k, ic, label]) =>
     h('button' + (tab === k ? '.on' : ''), { onclick: () => { tab = k; render(); } }, icon(ic), label, k === 'proposals' ? h('span.trp-badge#trp-pbadge') : null)));
   const body = h('.trp-body');
   root.append(h('.trp', h('.row.trp-top', tabs), body));
   updateBadge();
   if (tab === 'queue') renderQueue(body);
   else if (tab === 'proposals') renderProposals(body);
+  else if (tab === 'ai') AISetup.render(body);
   else renderSettings(body);
 }
 async function updateBadge() {
@@ -143,6 +144,7 @@ async function renderOverview() {
       h('label.row.small', vision, 'i obraz v rozhovorech'), h('label.row.small', chron, 'Kronikář AI'),
       h('.grow'),
       h('button.btn.primary', { onclick: async () => {
+        if (!await AISetup.ensure()) return;
         await API.call('analysis.start', { ids: ov.missing_ids, speech: true, vision: vision.checked, chapters: chron.checked });
         TR.refreshQueue(); renderOverview(); toast(`${ov.missing_ids.length} videí ve frontě`);
       } }, icon('list-plus'), `Přepsat chybějící (${ov.missing_ids.length}) · ~${fmt.durHuman(ov.missing_s / 45)}+`))
@@ -228,11 +230,6 @@ async function renderSettings(body) {
   const select = (k, label, opts, hint) => h('.trp-opt.col', h('span', label),
     h('select.input', { onchange: e => save(k, e.target.value) }, opts.map(([v, l]) => h('option', { value: v, selected: String(val(k)) === String(v) ? 'selected' : null }, l))),
     hint ? h('.tiny.faint', hint) : null);
-  const ollamaOpts = cur => {
-    const list = (models.ollama || []).map(m => [m.name, `${m.name}${m.size ? ' · ' + (m.size / 2 ** 30).toFixed(0) + ' GB' : ''}`]);
-    if (cur && !list.some(([n]) => n === cur)) list.unshift([cur, `${cur} (není stažený)`]);
-    return list;
-  };
   const card = (ic, title, desc, ...items) => h('.card.trp-set', h('h3', icon(ic), title), desc ? h('.small.faint', desc) : null, h('.trp-grid', items));
   const tracks = new Set(val('ai_tracks', []));
   const procs = h('textarea.input', { rows: 2, placeholder: (models.games || []).join(', ') || 'např. KingdomCome.exe',
@@ -242,20 +239,18 @@ async function renderSettings(body) {
     onchange: e => save('ai_context', e.target.value), onkeydown: e => e.stopPropagation() }, val('ai_context', ''));
 
   body.append(
-    models.ollama === null ? h('.trp-warn', icon('triangle-alert'), 'Ollama neběží – popis obrazu a Kronikář AI potřebují spuštěnou aplikaci Ollama.') : null,
-    card('audio-lines', 'Řeč', 'Whisper na grafické kartě. Každá zvuková stopa se přepisuje zvlášť, aby bylo jasné, kdo mluví.',
-      select('ai_whisper_model', 'Model', models.whisper.length ? models.whisper : [['large-v3', 'Large v3']], 'Nový model se při prvním použití stáhne (~1,5–3 GB).'),
+    h('.trp-warn', icon('cpu'), h('span', 'Kde AI běží (tento počítač nebo placená služba) a které modely používá, se nastavuje v záložce ', h('a', { style: { cursor: 'pointer', fontWeight: 600 }, onclick: () => { tab = 'ai'; render(); } }, 'Kde běží AI'), '.')),
+    card('audio-lines', 'Řeč', 'Každá zvuková stopa se přepisuje zvlášť, aby bylo jasné, kdo mluví.',
       select('ai_language', 'Jazyk', [['cs', 'čeština'], ['sk', 'slovenština'], ['en', 'angličtina'], ['', 'poznat automaticky']]),
       h('.trp-opt.col', h('span', 'Stopy k přepisu'), h('.row.wrap', ['Já', 'Hra', 'Discord', 'Zvuk'].map(t => h('span.chip' + (tracks.has(t) ? '.on' : ''), {
         onclick: e => { tracks.has(t) ? tracks.delete(t) : tracks.add(t); e.currentTarget.classList.toggle('on'); save('ai_tracks', [...tracks]); } },
         h('span.dot', { style: { background: TR.color(t) } }), { 'Já': 'Já (mikrofon)', Hra: 'Hra (hlas ve hře, NPC)', Discord: 'Discord', Zvuk: 'Zvuk (bez oddělených stop)' }[t]))),
         h('.tiny.faint', 'Ve hře s hlasovým chatem jsou ostatní hráči ve stopě Hra.')),
-      slider('ai_batch_size', 'Dávka', 4, 32, 4, '', 'Víc = rychlejší, víc paměti GPU.'),
+      slider('ai_batch_size', 'Dávka (jen na tomto PC)', 4, 32, 4, '', 'Víc = rychlejší, víc paměti GPU.'),
       slider('ai_beam_size', 'Přesnost hledání (beam)', 1, 8, 1, '', '5 je dobrý kompromis, 1 je nejrychlejší.'),
       slider('ai_vad_threshold', 'Citlivost na řeč', 0.2, 0.8, 0.05, '', 'Nižší = zachytí i tiché mumlání, ale víc šumu.', v => (+v).toFixed(2)),
       toggle('ai_junk_filter', 'Filtrovat nesmysly', 'Typické „halucinace“ Whisperu v tichu („Titulky vytvořil…“).')),
     card('scan-eye', 'Obraz', 'Snímky se popisují hlavně při rozhovorech: když se scéna mění (chůze po světě), často; když postavy sedí a scéna je stejná, jen občas.',
-      select('ai_vision_model', 'Model pro obraz (Ollama)', ollamaOpts(val('ai_vision_model')), 'Musí umět obrázky (qwen3.8, gemma4…).'),
       select('ai_vision_width', 'Velikost snímku', [[512, '512 px – rychlé'], [768, '768 px – doporučeno'], [1024, '1024 px – čte i drobný text']]),
       toggle('ai_vision_dialog', 'Popisovat obraz během rozhovorů'),
       slider('ai_dialog_every', 'Při rozhovoru, scéna se mění', 2, 30, 1, ' s', 'Jak často se podívat, když se postavy pohybují.'),
@@ -274,7 +269,6 @@ async function renderSettings(body) {
         h('button.btn.sm', { onclick: async e => { e.target.disabled = true; const n = await API.call('analysis.rematch_all'); e.target.disabled = false; toast(`Znovu porovnáno ${n} videí`); } }, icon('refresh-cw'), 'Znovu porovnat všechna videa'))),
     card('sparkles', 'Kronikář AI', 'Po přepisu projde záznam po blocích (dělených v pauzách mezi rozhovory) s průběžnou pamětí děje, se shrnutím předchozího večera a se znalostí postav, míst a frakcí z databáze. Navrhne kapitoly, události a nové záznamy.',
       toggle('ai_chapters', 'Spouštět Kronikáře AI po přepisu'),
-      select('ai_text_model', 'Model (Ollama)', ollamaOpts(val('ai_text_model')), 'Čím silnější model, tím lepší kronika. Lokálně např. qwen3.8:27b; přes Ollamu jdou i větší cloudové modely.'),
       slider('ai_chapter_minutes', 'Délka bloku', 5, 40, 5, ' min', 'Kratší = podrobnější kapitoly, delší zpracování.'),
       toggle('ai_chapter_bookmarks', 'Kapitoly jako záložky', 'Ukážou se na ose přehrávače a v Momentech.'),
       h('.trp-opt.col.wide', h('span', 'O hře a serveru (pro všechny modely)'), ctx)),

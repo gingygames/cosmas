@@ -1,5 +1,5 @@
-"""Speech transcript (faster-whisper, local GPU), picture descriptions (local Ollama vision model),
-faces (OpenCV YuNet) and chapters with a summary (Ollama text model).
+"""Speech transcript (faster-whisper on the GPU or processor, or a paid service), picture descriptions and
+chapters with a summary (local Ollama models or a paid service, see ai_providers.py), faces (OpenCV YuNet).
 
 Runs as its own process so the GPU work and its large libraries stay out of the app:
     python -m rpcatalog.analysis CONFIG.json
@@ -16,7 +16,6 @@ Results live in data/analysis/<media id>/ and every step resumes where it stoppe
   chapters.json summary.json      chapters and the summary of the whole video
   timeline.md transcript.srt      the whole video as text / subtitles for the player
 """
-import base64
 import json
 import os
 import re
@@ -27,6 +26,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+from . import ai_providers as ai
 from . import config
 
 CHUNK_S = 900                 # audio is transcribed in 15 min pieces: low memory, resumable
@@ -164,30 +164,57 @@ class Worker:
             audio = self._audio(sp["input"], sp["stream"], k * CHUNK_S, CHUNK_S)
             rows = []
             if audio.size > 16000 and float(abs(audio).max()) > 0.003:      # silent track: nothing to do
-                if self.whisper is None:
-                    self.say("speech", i / len(todo), "Načítám model řeči…")
-                    from faster_whisper import BatchedInferencePipeline, WhisperModel
-                    self.whisper = BatchedInferencePipeline(
-                        WhisperModel(cfg["whisper"], device="cuda", compute_type="float16"))
-                # batched: speech parts found by VAD are decoded several at a time; it never conditions
-                # on previous text, so no repeating loops on long recordings
-                segs, _ = self.whisper.transcribe(
-                    audio, language=cfg["language"] or None, batch_size=int(cfg["batch_size"]),
-                    beam_size=int(cfg["beam_size"]), vad_filter=True,
-                    vad_parameters={"threshold": float(cfg["vad_threshold"])})
+                if cfg.get("speech_provider", "local") != "local":
+                    segs = self._speech_cloud(audio)
+                else:
+                    segs = self._speech_local(audio, i / len(todo))
                 for s in segs:
-                    text = s.text.strip()
+                    text = s["text"].strip()
                     if not text:
                         continue
-                    if cfg["junk_filter"] and (JUNK_RE.search(text) or (s.no_speech_prob > 0.6 and s.avg_logprob < -1)):
+                    if cfg["junk_filter"] and (JUNK_RE.search(text) or (s["no_speech"] > 0.6 and s["logprob"] < -1)):
                         continue
-                    rows.append({"speaker": sp["speaker"], "t": round(k * CHUNK_S + s.start, 2),
-                                 "t_end": round(k * CHUNK_S + s.end, 2), "text": text})
+                    rows.append({"speaker": sp["speaker"], "t": round(k * CHUNK_S + s["start"], 2),
+                                 "t_end": round(k * CHUNK_S + s["end"], 2), "text": text})
             tmp = dst.with_suffix(".part")
             tmp.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
             tmp.replace(dst)
             self.say("speech", (i + 1) / len(todo), f"Řeč · {sp['speaker']} · {clock((k + 1) * CHUNK_S)}",
                      partial=bool(rows), audio_s=min(CHUNK_S, job["duration"] - k * CHUNK_S))
+
+    def _speech_local(self, audio, p):
+        cfg = self.cfg
+        if self.whisper is None:
+            self.say("speech", p, "Načítám model řeči…")
+            from faster_whisper import BatchedInferencePipeline, WhisperModel
+            device, compute = whisper_device(cfg)
+            self.whisper = BatchedInferencePipeline(WhisperModel(
+                cfg["whisper"], device=device, compute_type=compute,
+                cpu_threads=max(2, (os.cpu_count() or 4) - 2) if device == "cpu" else 0))
+        # batched: speech parts found by VAD are decoded several at a time; it never conditions
+        # on previous text, so no repeating loops on long recordings
+        segs, _ = self.whisper.transcribe(
+            audio, language=cfg["language"] or None, batch_size=int(cfg["batch_size"]),
+            beam_size=int(cfg["beam_size"]), vad_filter=True,
+            vad_parameters={"threshold": float(cfg["vad_threshold"])})
+        return [{"start": s.start, "end": s.end, "text": s.text, "no_speech": s.no_speech_prob, "logprob": s.avg_logprob}
+                for s in segs]
+
+    def _speech_cloud(self, audio):
+        """Paid transcription: the 15 min piece as small Opus audio (well under the upload limits)."""
+        import numpy as np
+        cfg = self.cfg
+        tmp = self.flags / f"upload_{self.job['key']}.ogg"
+        pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()
+        subprocess.run([cfg["ffmpeg"], "-hide_banner", "-loglevel", "error", "-y", "-f", "s16le", "-ar", "16000", "-ac", "1",
+                        "-i", "-", "-c:a", "libopus", "-b:a", "32k", "-application", "voip", str(tmp)],
+                       input=pcm, check=True, creationflags=NO_WINDOW)
+        try:
+            prompt = ", ".join(cfg.get("known_names", [])[:40])
+            return ai.transcribe(cfg["speech_provider"], cfg["speech_model"], str(tmp), cfg["language"],
+                                 prompt=prompt, duration=audio.size / 16000)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     # ---- picture
     def plan_frames(self):
@@ -262,12 +289,8 @@ class Worker:
         job, cfg = self.job, self.cfg
         out = analysis_dir(job["id"])
         (out / "frames").mkdir(parents=True, exist_ok=True)
-        try:
-            models = [m["name"] for m in _ollama("/api/tags", timeout=5).get("models", [])]
-        except OSError:
-            raise RuntimeError("Ollama neběží – spusť aplikaci Ollama, nebo vypni popis obrazu")
-        if cfg["vision_model"] not in models:
-            raise RuntimeError(f"V Ollamě chybí model {cfg['vision_model']} (ollama pull {cfg['vision_model']})")
+        if cfg["vision_provider"] == "ollama":
+            _need_ollama_model(cfg["vision_model"])
         speech = load_speech(job["id"])
         done = {round(f["t"], 1) for f in load_frames(job["id"])}
         plan = [(t, k) for t, k in self.plan_frames() if t not in done]
@@ -295,7 +318,9 @@ class Worker:
                                  if (r.get("t_end") or r["t"]) > t - 12 and r["t"] < t + 12)
                 try:
                     rec.update(self._ask_vision(path, heard, img.shape[1], img.shape[0]))
-                except (OSError, ValueError, KeyError) as e:      # one bad frame must not stop the video
+                except (OSError, ValueError, KeyError, ai.AIError) as e:      # one bad frame must not stop the video
+                    if getattr(e, "fatal", False):
+                        raise
                     self.say("vision", i / max(1, len(plan)), f"Obraz · {clock(t)} · přeskočeno ({type(e).__name__})")
                     f.write(json.dumps({"t": t, "kind": kind, "skip": True, "error": str(e)[:200]}) + "\n")
                     path.unlink(missing_ok=True)
@@ -374,11 +399,9 @@ class Worker:
             "postav": {"type": "integer"}, "misto": {"type": "string"},
             **({"lide": {"type": "array", "items": person}} if cfg.get("appearance") else {})}}
         # num_predict caps the answer: a model that starts looping must not hold the GPU for minutes
-        resp = _ollama("/api/generate", {"model": cfg["vision_model"], "prompt": prompt, "stream": False, "format": schema,
-                                         "images": [base64.b64encode(img.read_bytes()).decode()],
-                                         "options": {"temperature": 0.2, "num_predict": 700}}, timeout=240)
         try:
-            d = json.loads(resp["response"])
+            d, _ = ai.ask_json(cfg["vision_provider"], cfg["vision_model"], prompt, schema, image=img.read_bytes(),
+                               max_tokens=1200 if cfg["vision_provider"] == "ollama" else 2000, task="vision", temperature=0.2)
             persons = []
             for p in d.get("lide") or []:
                 b = p.get("box") or []
@@ -392,8 +415,8 @@ class Worker:
             names += [p["name"] for p in persons if p["name"] and p["name"] not in names]
             return {"caption": d.get("popis", "").strip(), "names": names, "people": d.get("postav"),
                     "place": d.get("misto", ""), "persons": persons}
-        except ValueError:
-            return {"caption": resp["response"].strip(), "names": [], "people": None}
+        except (AttributeError, TypeError):
+            raise ValueError("odpověď modelu nemá očekávaný tvar") from None
 
     # ---- chronicle: chapters, events, mentions and proposals with a running memory
     def blocks(self, rows):
@@ -478,7 +501,7 @@ class Worker:
             ent = {"type": "object", "required": ["jmeno", "typ"], "properties": {
                 "jmeno": {"type": "string"}, "typ": {"type": "string", "enum": ["postava", "misto", "frakce"]},
                 "cas": {"type": "string"}, "kontext": {"type": "string"}, "popis": {"type": "string"}}}
-            d = _ask_text(cfg["text_model"], prompt, {
+            d = _ask_text(cfg, prompt, {
                 "nazev": {"type": "string"}, "shrnuti": {"type": "string"},
                 "udalosti": {"type": "array", "items": {"type": "object", "required": ["nazev", "od", "do"], "properties": {
                     "nazev": {"type": "string"}, "od": {"type": "string"}, "do": {"type": "string"},
@@ -510,7 +533,7 @@ class Worker:
         _write_json(out / "chapters.json", [{k: b[k] for k in ("t", "t_end", "title", "summary")} for b in result])
         if result:
             self.checkpoint("chapters", 1, "Shrnutí celého záznamu")
-            d = _ask_text(cfg["text_model"],
+            d = _ask_text(cfg,
                           "Toto jsou kapitoly jednoho večera hraní RP (jen herní děj). Napiš česky shrnutí celého večera "
                           "(4–8 vět, jako zápis do kroniky) a seznam nejdůležitějších momentů.\n"
                           + (f"Paměť z průběhu: {memory}\n\n" if memory else "\n")
@@ -574,7 +597,7 @@ class Worker:
         except Skipped:
             self.say("skipped", None, "Přeskočeno – příště naváže, kde skončilo")
         except Exception as e:   # one bad video must not stop the queue
-            self.say("error", None, f"{type(e).__name__}: {e}")
+            self.say("error", None, str(e) if isinstance(e, (ai.AIError, RuntimeError)) else f"{type(e).__name__}: {e}")
 
 
 def _write_json(p, data):
@@ -609,29 +632,58 @@ def _ollama(path, body=None, timeout=600):
         return json.loads(r.read())
 
 
-def _ask_text(model, prompt, props, ctx=16384, max_tokens=12000, fallback=None):
-    """Structured answer from a text model. Thinking models (qwen3.x) think first and that counts against
+def _need_ollama_model(model):
+    try:
+        models = [m["name"] for m in _ollama("/api/tags", timeout=5).get("models", [])]
+    except OSError:
+        raise RuntimeError("Ollama neběží – spusť aplikaci Ollama, nebo v nastavení AI vyber placenou službu") from None
+    if model not in models and model + ":latest" not in models:
+        raise RuntimeError(f"V Ollamě chybí model {model} – stáhni ho v Přepisy → Nastavení → AI")
+
+
+def _ask_text(cfg, prompt, props, ctx=16384, max_tokens=12000, fallback=None):
+    """Structured answer from the text model. Thinking models (qwen3.x) think first and that counts against
     max_tokens, so the limit is generous; a cut or broken answer is logged and, if `fallback` (simpler
     properties) is given, asked again in the simple form so at least the chapter and memory exist."""
-    resp = _ollama("/api/generate", {"model": model, "prompt": prompt, "stream": False,
-                                     "options": {"temperature": 0.3, "num_ctx": ctx, "num_predict": max_tokens},
-                                     "format": {"type": "object", "properties": props, "required": list(props)}},
-                   timeout=1200)
+    pid, model = cfg["text_provider"], cfg["text_model"]
+    schema = {"type": "object", "properties": props, "required": list(props)}
     try:
-        return json.loads(resp["response"])
-    except ValueError:
+        d, _ = ai.ask_json(pid, model, prompt, schema, max_tokens=max_tokens, ctx=ctx, task="text")
+        if isinstance(d, dict):
+            return d
+        raise ValueError("not an object")
+    except ValueError as e:
         with (config.DATA_DIR / "analysis" / "llm_errors.log").open("a", encoding="utf-8") as log:
-            log.write(json.dumps({"time": time.time(), "model": model, "done_reason": resp.get("done_reason"),
-                                  "eval": resp.get("eval_count"), "thinking": len(resp.get("thinking") or ""),
-                                  "response": (resp.get("response") or "")[-2000:]}, ensure_ascii=False) + "\n")
+            log.write(json.dumps({"time": time.time(), "provider": pid, "model": model, "error": str(e)[:500]},
+                                 ensure_ascii=False) + "\n")
         if fallback:
-            return _ask_text(model, prompt + "\n\n(Odpověz stručně.)", fallback, ctx, max_tokens)
+            return _ask_text(cfg, prompt + "\n\n(Odpověz stručně.)", fallback, ctx, max_tokens)
         return {}
+
+
+def whisper_device(cfg):
+    """("cuda", "float16") on an NVIDIA card with the CUDA libraries, else the processor."""
+    want = cfg.get("whisper_device") or "auto"
+    if want != "cpu":
+        try:
+            import ctranslate2
+            if ctranslate2.get_cuda_device_count() > 0 and _have_cuda_libs():
+                return "cuda", cfg.get("whisper_compute") or "float16"
+        except (ImportError, RuntimeError, OSError):
+            pass
+    return "cpu", "int8"
+
+
+def _have_cuda_libs():
+    for sp in sys.path:      # the app's own packages and PYLIBS_DIR, never a Python installed elsewhere
+        if sp and list(Path(sp, "nvidia").glob("cublas/bin/cublas64_*.dll")):
+            return True
+    return False
 
 
 def _cuda_paths():
     """CUDA DLLs come from the pip nvidia-* packages; Windows does not look there by itself."""
-    for sp in [site.getusersitepackages(), *site.getsitepackages()]:
+    for sp in dict.fromkeys(p for p in [*site.getsitepackages(), *sys.path] if p):
         for bin_dir in Path(sp, "nvidia").glob("*/bin"):
             os.add_dll_directory(str(bin_dir))
             os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
@@ -639,6 +691,7 @@ def _cuda_paths():
 
 def main(cfg_file):
     sys.stdout.reconfigure(encoding="utf-8")    # the app reads progress as UTF-8, not the Windows code page
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")    # model cache without Developer Mode
     _cuda_paths()
     cfg = _read_json(cfg_file)
     worker = Worker(cfg)
