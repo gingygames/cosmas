@@ -47,9 +47,9 @@ const CSS = `
 .ev-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .ev-swatches span { width: 20px; height: 20px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
 .ev-swatches span.on { border-color: #fff; }
-.ev-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 18px 0 16px; position: sticky; top: 0; background: var(--bg); z-index: 5; padding-top: 6px; }
+.ev-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 18px 0 16px; position: sticky; top: 0; background: var(--bg); z-index: 5; padding-top: 6px; overflow-x: auto; scrollbar-width: none; }
 .ev-tabs button { height: 38px; padding: 0 14px; border: 0; background: none; color: var(--text-2); cursor: pointer; font-size: 13.5px;
-  display: inline-flex; align-items: center; gap: 7px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  display: inline-flex; align-items: center; gap: 7px; border-bottom: 2px solid transparent; margin-bottom: -1px; flex: none; white-space: nowrap; }
 .ev-tabs button:hover { color: var(--text); }
 .ev-tabs button.on { color: var(--accent-2); border-bottom-color: var(--accent); }
 .ev-tabs .n { font-size: 11px; padding: 0 6px; border-radius: 99px; background: var(--surface-2); color: var(--text-3); }
