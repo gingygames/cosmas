@@ -211,11 +211,12 @@ function renderSide(side) {
     ]),
   })));
 
-  if (App.chars.length) {
+  const counts = new Map();
+  all.forEach(m => (m.chars || []).forEach(id => counts.set(id, (counts.get(id) || 0) + 1)));
+  const inVideos = App.chars.filter(c => counts.get(c.id));
+  if (inVideos.length) {          // no empty heading when no character is tagged in a video yet
     side.appendChild(h('.grp', tr('Characters')));
-    const counts = new Map();
-    all.forEach(m => (m.chars || []).forEach(id => counts.set(id, (counts.get(id) || 0) + 1)));
-    App.chars.filter(c => counts.get(c.id)).forEach(c => {
+    inVideos.forEach(c => {
       const row = it(c.name, null, { type: 'char', id: c.id }, counts.get(c.id));
       row.insertBefore(avatar(c, 18), row.firstChild);
       side.appendChild(row);

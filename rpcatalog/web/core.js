@@ -476,7 +476,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(
 
 /* ---------------- shared widgets ---------------- */
 function initials(name) {
-  return (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  // first letter of the first two words, skipping quotes and nicknames ('Ada "Crow" Malone' -> AM)
+  const words = (name || '').split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w));
+  return (words.length ? words.slice(0, 2).map(w => w[0]).join('') : (name || '?').trim()[0] || '?').toUpperCase();
 }
 function avatar(c, size = 28) {
   const el = h('.avatar', { title: c ? c.name : '', style: { width: size + 'px', height: size + 'px', fontSize: Math.round(size * .38) + 'px' } });

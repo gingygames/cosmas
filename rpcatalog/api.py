@@ -1628,7 +1628,7 @@ class Api(QObject):
         }
 
     def m_settings_get(self):
-        return {k: v for k, v in self.settings.items() if k not in ("geometry", "sync_token")}
+        return dict({k: v for k, v in self.settings.items() if k not in ("geometry", "sync_token")}, data_dir=str(config.DATA_DIR))
 
     def m_settings_set(self, values):
         for k in ("roots", "clip_max_seconds", "short_session_seconds", "hide_short_sessions",
