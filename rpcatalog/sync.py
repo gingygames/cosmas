@@ -33,6 +33,7 @@ from pathlib import Path
 
 from . import i18n
 from .i18n import tr, trn
+from . import __version__
 
 DEFAULT_URL = "https://gingygames.com"
 TOKEN_URL = "https://gingygames.com/kosmas/app/#settings"
@@ -234,7 +235,7 @@ class Client:
         url = self.base + path
         if query:
             url += "?" + urllib.parse.urlencode({k: v for k, v in query.items() if v is not None})
-        headers = {"Authorization": f"Bearer {self.token}", "User-Agent": "Kronikar-desktop/1.0",
+        headers = {"Authorization": f"Bearer {self.token}", "User-Agent": f"Kosmas-desktop/{__version__}",
                    "Accept": "application/json", "Accept-Language": i18n.lang()}   # server errors in the UI language
         if body is not None:
             data = json.dumps(body, ensure_ascii=False, default=str).encode("utf-8")
@@ -269,7 +270,7 @@ class Client:
 
     def get_bytes(self, path):
         url = self.base.rsplit("/api", 1)[0] + path
-        req = urllib.request.Request(url, headers={"User-Agent": "Kronikar-desktop/1.0", "Accept-Language": i18n.lang()})
+        req = urllib.request.Request(url, headers={"User-Agent": f"Kosmas-desktop/{__version__}", "Accept-Language": i18n.lang()})
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 return r.read(), (r.headers.get("Content-Type") or "").split(";")[0]

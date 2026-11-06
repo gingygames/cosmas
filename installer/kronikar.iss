@@ -2,7 +2,7 @@
 ; Per-user install: no administrator rights, nothing outside the user's profile.
 
 #ifndef AppVer
-  #define AppVer "1.0.0"
+  #define AppVer "1.1.0"
 #endif
 
 [Setup]
@@ -11,7 +11,11 @@ AppName=Kosmas
 AppVersion={#AppVer}
 AppVerName=Kosmas {#AppVer}
 AppPublisher=gingygames
-AppPublisherURL=https://github.com/gingygames/kronikar
+AppPublisherURL=https://gingygames.com/kosmas/
+AppSupportURL=https://github.com/gingygames/kosmas/issues
+AppUpdatesURL=https://github.com/gingygames/kosmas/releases/latest
+VersionInfoVersion={#AppVer}
+VersionInfoProductName=Kosmas
 ; folder, file and data names stay "Kronikar" so updates over older installs keep working
 DefaultDirName={localappdata}\Programs\Kronikar
 DefaultGroupName=Kosmas
@@ -22,7 +26,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 OutputDir=..\build
-OutputBaseFilename=Kronikar-Setup-{#AppVer}
+OutputBaseFilename=Kosmas-Setup-{#AppVer}
 SetupIconFile=..\rpcatalog\assets\kronikar.ico
 UninstallDisplayIcon={app}\Kronikar.exe
 UninstallDisplayName=Kosmas
@@ -56,15 +60,18 @@ en.DeleteDataNote=The videos themselves are not deleted. If you choose No, every
 cs.DeleteDataNote=Videa samotná se nesmažou. Když zvolíš Ne, při další instalaci bude vše zpět.
 
 [Tasks]
+; checked by default (no "unchecked" flag); an update keeps the choice made at the first install
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:Shortcuts}"
 
 [InstallDelete]
 ; an update replaces the program completely (user data live elsewhere: %LOCALAPPDATA%\Kronikar)
 Type: filesandordirs; Name: "{app}\python"
 Type: filesandordirs; Name: "{app}\app"
-; shortcuts from before the rename to Kosmas
+; shortcuts from before the rename to Kosmas (1.0.0 called the app Kronikář)
 Type: files; Name: "{autoprograms}\Kronikář.lnk"
 Type: files; Name: "{autodesktop}\Kronikář.lnk"
+Type: files; Name: "{autoprograms}\Kronikar.lnk"
+Type: files; Name: "{autodesktop}\Kronikar.lnk"
 
 [Files]
 Source: "..\build\dist\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion

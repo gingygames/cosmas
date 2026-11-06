@@ -1,4 +1,4 @@
-"""Build the Windows installer: build/Kronikar-Setup-<version>.exe
+"""Build the Windows installer: build/Kosmas-Setup-<version>.exe
 
 One command (from the repository root):
 
@@ -222,7 +222,7 @@ def main():
         return
     iscc = ensure_iscc()
     subprocess.check_call([str(iscc), "/Q", f"/DAppVer={ver}", str(HERE / "kronikar.iss")])
-    out = BUILD / f"Kronikar-Setup-{ver}.exe"
+    out = BUILD / f"Kosmas-Setup-{ver}.exe"
     log(f"installer: {out} ({out.stat().st_size / 2**20:.0f} MB)")
 
 
