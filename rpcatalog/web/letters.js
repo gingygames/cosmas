@@ -24,6 +24,7 @@ document.head.appendChild(h('style', `
 `));
 
 let root, list = [], cur = null, q = '', charFilter = null, unsub = [];
+let pendSave = null;      // the open letter's unsaved fields (debounced); flushed before switching or reloading
 
 const charName = id => (App.charsById.get(id) || {}).name;
 function who(l) {
@@ -32,7 +33,7 @@ function who(l) {
   return `${from} → ${to}`;
 }
 
-async function load() { list = await API.call('letters.list'); }
+async function load() { if (pendSave) await pendSave.flush(); list = await API.call('letters.list'); }
 
 function renderSide() {
   const side = $('.lt-side', root);
@@ -66,14 +67,23 @@ function renderRows() {
     h('.ex', (l.body || '').slice(0, 220)))));
 }
 
-function open(id) { cur = list.find(l => l.id === id) || null; App.ui.letterId = id; App.saveUi(); renderRows(); renderDetail(); }
+function open(id) { if (pendSave) pendSave.flush(); cur = list.find(l => l.id === id) || null; App.ui.letterId = id; App.saveUi(); renderRows(); renderDetail(); }
 
 function renderDetail() {
   const d = $('.lt-detail', root); clear(d);
   if (!cur) { d.appendChild(emptyState('mail', tr('Pigeon post'), tr('Letters between characters – manual, or from Discord (messages containing the word “{word}”).', { word: letterWord() }))); Shell.header({ icon: 'mail', title: tr('pigeon post') }); return; }
   const l = cur;
   Shell.header({ icon: 'mail', title: l.title || who(l), topic: [l.ingame_date, l.sent_at ? fmt.dt(l.sent_at) : '', l.source !== 'manual' ? tr('from Discord') : ''].filter(Boolean).join(' · ') });
-  const save = debounce(f => API.call('letter.update', { id: l.id, ...f }).then(load).then(renderRows), 350);
+  // several quick changes (title, date, text) are merged into one update of this letter
+  if (pendSave) pendSave.flush();
+  let pend = {};
+  const push = debounce(() => {
+    const f = pend; pend = {};
+    if (!Object.keys(f).length) return;
+    return API.call('letter.update', { id: l.id, ...f }).then(load).then(renderRows);
+  }, 350);
+  const save = f => { Object.assign(pend, f); push(); };
+  pendSave = push;
   const charChips = ids => h('.row.wrap', { style: { gap: '6px' } }, ids.map(id => App.charsById.get(id)).filter(Boolean).map(c => charChip(c)));
   const ev = l.event_id && App.eventsById.get(l.event_id);
   const pl = l.place_id && (App.places || []).find(p => p.id === l.place_id);
@@ -221,6 +231,6 @@ Views.register('letters', {
     if (id && list.some(l => l.id === id)) open(id); else renderDetail();
     unsub = [App.on('chars', () => renderRows())];
   },
-  unmount() { unsub.forEach(f => f()); unsub = []; root = null; },
+  unmount() { if (pendSave) pendSave.flush(); pendSave = null; unsub.forEach(f => f()); unsub = []; root = null; },
 });
 })();
