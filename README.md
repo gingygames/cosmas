@@ -3,7 +3,7 @@
 <p align="center"><img src="docs/img/banner.png" alt="Kosmas" width="100%"></p>
 
 <p align="center">
-  <a href="https://github.com/gingygames/kronikar/releases/latest"><b>⬇ Download the Windows installer</b></a> ·
+  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Download the Windows installer</b></a> ·
   <a href="#installation">Installation</a> · <a href="#ai-on-your-pc-or-a-paid-service">AI</a> · <a href="#for-developers">For developers</a>
 </p>
 
@@ -28,7 +28,7 @@ The interface is in English, or in Czech if your system language is Czech or Slo
 | ![Moments](docs/img/momenty.jpg) **Moments**: bookmarks and ranges from all your videos | ![Event](docs/img/udalost.jpg) **Event**: write-up, journal, attachments, characters and videos |
 
 ## Installation
-1. Download **[Kronikar-Setup.exe](https://github.com/gingygames/kronikar/releases/latest)**. It runs on 64-bit Windows 10 and 11.
+1. Download **[Kronikar-Setup.exe](https://github.com/gingygames/kosmas/releases/latest)**. It runs on 64-bit Windows 10 and 11.
 2. Run it and click **Next → Install**.
    - No admin rights, no Python, nothing else to install. The video player and ffmpeg are bundled.
    - A shortcut is added to the Start menu, and to the desktop if you want one.

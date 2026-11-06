@@ -1,12 +1,12 @@
 """Sign in to the web chronicle with Discord – no copying of tokens.
 
 1. Loopback + PKCE (RFC 8252): a one-shot HTTP server on 127.0.0.1:<random port> waits for /callback,
-   the browser opens {server}/kronika/connect?redirect_uri=…&state=…&code_challenge=…; the user signs in with Discord
+   the browser opens {server}/kosmas/connect?redirect_uri=…&state=…&code_challenge=…; the user signs in with Discord
    and clicks Allow, the browser comes back to the loopback with ?code=&state=; the code is exchanged for a token
-   (POST /kronika/api/auth/token {code, code_verifier, redirect_uri}).
-2. Device code (RFC 8628) when nothing can listen on loopback: POST /kronika/api/auth/device, the user enters the code
-   on the web, the app polls /kronika/api/auth/device/poll.
-3. POST /kronika/api/auth/revoke with the token = "Disconnect this device".
+   (POST /kosmas/api/auth/token {code, code_verifier, redirect_uri}).
+2. Device code (RFC 8628) when nothing can listen on loopback: POST /kosmas/api/auth/device, the user enters the code
+   on the web, the app polls /kosmas/api/auth/device/poll.
+3. POST /kosmas/api/auth/revoke with the token = "Disconnect this device".
 
 Everything here blocks (network, waiting) – call it from a worker thread, never from the Qt main thread.
 Tokens and codes are never logged.
@@ -63,7 +63,7 @@ def device_name():
 def connect_url(server, redirect_uri, state, challenge, device=None):
     q = {"redirect_uri": redirect_uri, "state": state, "code_challenge": challenge, "code_challenge_method": "S256",
          "device": device or device_name(), "client": "desktop", "lang": i18n.lang()}
-    return check_url(server or DEFAULT_URL) + "/kronika/connect?" + urllib.parse.urlencode(q)
+    return check_url(server or DEFAULT_URL) + "/kosmas/connect?" + urllib.parse.urlencode(q)
 
 
 # ------------------------------------------------------------------ loopback server
@@ -155,7 +155,7 @@ class CallbackServer:
 
 # ------------------------------------------------------------------ HTTP to the server (no token needed)
 def _post(server, path, body, token=None, timeout=30):
-    url = check_url(server or DEFAULT_URL) + "/kronika/api" + path
+    url = check_url(server or DEFAULT_URL) + "/kosmas/api" + path
     headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "Kosmas-desktop/1.0",
                "Accept-Language": i18n.lang()}
     if token:

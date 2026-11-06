@@ -213,7 +213,7 @@ Views.register('settings', {
         card(tr('Appearance'), tr('Changes immediately, no saving needed.'), appearanceSection()),
         card('Discord', tr('Player names and avatars are fetched via your bot on the server. The token stays on this computer only (data/settings.json).'),
           discordCard(s)),
-        card(tr('Web chronicle'), tr('Sync with gingygames.com/kronika: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.'),
+        card(tr('Web chronicle'), tr('Sync with gingygames.com/kosmas: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.'),
           webSyncCard()),
         card(tr('Recording folders'), tr('Medal folders (they contain Clips/, Databases/, Thumbnails/…). I only read the Medal database, I never write to it.'), rootsBox),
         card(tr('Splitting recordings'), null,

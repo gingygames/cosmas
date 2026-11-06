@@ -1,4 +1,4 @@
-"""Synchronizace desktop ↔ webová Kronika (gingygames.com/kronika).
+"""Synchronizace desktop ↔ webová Kronika (gingygames.com/kosmas).
 
 Průběh jedné synchronizace (Syncer.run):
   0. účet a databáze – GET /me; tato catalog.db má vlastní db_uuid zapsané na webu v nastavení účtu
@@ -35,7 +35,7 @@ from . import i18n
 from .i18n import tr, trn
 
 DEFAULT_URL = "https://gingygames.com"
-TOKEN_URL = "https://gingygames.com/kronika/app/#settings"
+TOKEN_URL = "https://gingygames.com/kosmas/app/#settings"
 
 TABLE_TYPE = {"servers": "server", "players": "player", "factions": "faction", "characters": "character",
               "places": "place", "events": "event", "entries": "entry", "letters": "letter", "media": "video",
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS published (
     hash TEXT,                         -- otisk obsahu při poslední synchronizaci
     pending_hash TEXT,                 -- otisk odeslaný na web, na jehož potvrzení se čeká
     file_sig TEXT,                     -- přílohy: mtime:velikost nahraného souboru
-    remote_key TEXT,                   -- přílohy: klíč obrázku na webu (/kronika/img/<key>)
+    remote_key TEXT,                   -- přílohy: klíč obrázku na webu (/kosmas/img/<key>)
     img_w INTEGER,                     -- přílohy: rozměry nahraného obrázku
     img_h INTEGER,
     PRIMARY KEY (local_type, local_id)
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT);
 IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.I)
 ATT_ATTR_RE = re.compile(r'\sdata-att="(\d+)"')
 SRC_ATTR_RE = re.compile(r'\ssrc="[^"]*"')
-WEB_IMG_RE = re.compile(r'\ssrc="(?:https?://[^"/]+)?/kronika/img/([A-Za-z0-9._-]+)"')
+WEB_IMG_RE = re.compile(r'\ssrc="(?:https?://[^"/]+)?/(?:kosmas|kronika)/img/([A-Za-z0-9._-]+)"')
 CHAR_ID_RE = re.compile(r'data-char-id="(\d+)"')
 YT_RE = re.compile(r"(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:watch\?(?:.*&)?v=|embed/|shorts/|live/|v/))([A-Za-z0-9_-]{11})")
 TAG_RE = re.compile(r"<[^>]+>")
@@ -226,7 +226,7 @@ def _same_value(a, b):
 # ---------------------------------------------------------------- HTTP klient
 class Client:
     def __init__(self, url, token, timeout=60):
-        self.base = check_url(url) + "/kronika/api"
+        self.base = check_url(url) + "/kosmas/api"
         self.token = (token or "").strip()
         self.timeout = timeout
 
@@ -483,7 +483,7 @@ class Syncer:
 
     # ---------- lokální data → řádky pro web
     def _body_out(self, html, keys):
-        """Obrázky vložené do textu (data-att) odkazují na web (/kronika/img/<key>)."""
+        """Obrázky vložené do textu (data-att) odkazují na web (/kosmas/img/<key>)."""
         if not html or "<img" not in html:
             return html
 
@@ -492,7 +492,7 @@ class Syncer:
             a = ATT_ATTR_RE.search(tag)
             if not a or not keys.get(int(a.group(1))):
                 return tag
-            url = f' src="/kronika/img/{keys[int(a.group(1))]}"'
+            url = f' src="/kosmas/img/{keys[int(a.group(1))]}"'
             return SRC_ATTR_RE.sub(url, tag, count=1) if SRC_ATTR_RE.search(tag) else tag[:4] + url + tag[4:]
         return IMG_TAG_RE.sub(fix, html)
 
@@ -1483,11 +1483,11 @@ class Syncer:
         return out
 
     def _share_url(self, rec):
-        site = self.client.base.rsplit("/kronika/api", 1)[0]
+        site = self.client.base.rsplit("/kosmas/api", 1)[0]
         if rec.get("visibility") == "link" and rec.get("share_token"):
-            return f"{site}/kronika/k/{rec['share_token']}"
+            return f"{site}/kosmas/k/{rec['share_token']}"
         if rec.get("visibility") == "public":
-            return f"{site}/kronika/z/{rec['id']}"
+            return f"{site}/kosmas/z/{rec['id']}"
         return None
 
     def share_set(self, kind, lid, visibility=None, rotate=False):

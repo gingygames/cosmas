@@ -1,10 +1,10 @@
 /* ============================================================
    Share – one button on a character, faction, place, event or moment.
-   The same file runs in the desktop app and in the web workspace (kronikar-web/public/kronika/app/share.js – keep identical).
+   The same file runs in the desktop app and in the web workspace (kronikar-web/public/kosmas/app/share.js – keep identical).
    Backend (API.call):
      share.get    {kind, id}              → info
      share.set    {kind, id, visibility}  → info   (desktop: publishes the record first when it isn't on the web yet)
-     share.rotate {kind, id}              → info   (new link, the old /kronika/k/… stops working)
+     share.rotate {kind, id}              → info   (new link, the old /kosmas/k/… stops working)
    info: {kind, id, title, via, desktop, signed_in, published, visibility: private|link|public, share_url}
    kind: character | faction | place | event | bookmark (a moment is shared together with its video, via = {type, title})
    ============================================================ */

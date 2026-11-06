@@ -1,5 +1,5 @@
 /* Czech translations, keyed by the English source text (see ../i18n.js). One dictionary for the desktop app
-   (rpcatalog/web/i18n/cs.js, also read by rpcatalog/i18n.py) and the web workspace (public/kronika/app/i18n/cs.js) –
+   (rpcatalog/web/i18n/cs.js, also read by rpcatalog/i18n.py) and the web workspace (public/kosmas/app/i18n/cs.js) –
    keep both copies identical and the object valid JSON. Plural entries: [one, few (2–4), many]. */
 window.I18N_CS = {
  "#kidnapping #police": "#únos #policie",
@@ -1591,7 +1591,7 @@ window.I18N_CS = {
  "Sync failed: {error}": "Synchronizace selhala: {error}",
  "Sync is waiting for your choice (Settings → Web chronicle)": "Synchronizace čeká na tvou volbu (Nastavení → Webová kronika)",
  "Sync now": "Synchronizovat teď",
- "Sync with gingygames.com/kronika: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.": "Synchronizace s gingygames.com/kronika: postavy, události, zápisy, frakce, místa, obrázky a videa nahraná na YouTube. Vše je na webu soukromé, dokud to tam sám nezveřejníš. Kontakty hráčů se nikdy neposílají.",
+ "Sync with gingygames.com/kosmas: characters, events, entries, factions, places, images and videos uploaded to YouTube. Everything on the web is private until you publish it there yourself. Player contacts are never sent.": "Synchronizace s gingygames.com/kosmas: postavy, události, zápisy, frakce, místa, obrázky a videa nahraná na YouTube. Vše je na webu soukromé, dokud to tam sám nezveřejníš. Kontakty hráčů se nikdy neposílají.",
  "Sync with the desktop app": "Synchronizace s desktopem",
  "Synced with the web": "Synchronizováno s webem",
  "Synced with the web – {n} conflict to resolve (Settings)": [

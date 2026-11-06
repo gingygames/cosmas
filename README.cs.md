@@ -3,7 +3,7 @@
 <p align="center"><img src="docs/img/banner.png" alt="Kosmas" width="100%"></p>
 
 <p align="center">
-  <a href="https://github.com/gingygames/kronikar/releases/latest"><b>⬇ Stáhnout instalátor pro Windows</b></a> ·
+  <a href="https://github.com/gingygames/kosmas/releases/latest"><b>⬇ Stáhnout instalátor pro Windows</b></a> ·
   <a href="#instalace">Instalace</a> · <a href="#ai-na-tvém-pc-nebo-placená-služba">AI</a> · <a href="#pro-vývojáře">Pro vývojáře</a>
 </p>
 
@@ -26,7 +26,7 @@ AI přepíše, co zaznělo, a popíše obraz. Přečte jmenovky nad hlavami a se
 | ![Momenty](docs/img/momenty.jpg) **Momenty**: záložky a úseky ze všech videí | ![Událost](docs/img/udalost.jpg) **Událost**: zápis, deník, přílohy, postavy a videa |
 
 ## Instalace
-1. Stáhni **[Kronikar-Setup.exe](https://github.com/gingygames/kronikar/releases/latest)**. Funguje na 64bitových Windows 10 a 11.
+1. Stáhni **[Kronikar-Setup.exe](https://github.com/gingygames/kosmas/releases/latest)**. Funguje na 64bitových Windows 10 a 11.
 2. Spusť ho a klikni na **Další → Instalovat**.
    - Nepotřebuje práva správce ani Python a nic dalšího se instalovat nemusí. Přehrávač i ffmpeg jsou uvnitř.
    - Zástupce se objeví v nabídce Start, pokud chceš, i na ploše.

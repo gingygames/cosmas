@@ -28,7 +28,7 @@ URL = os.environ.get("KRONIKA_URL", "http://127.0.0.1:8790")
 
 def _backend_up():
     try:
-        with urllib.request.urlopen(URL + "/kronika/api/me", timeout=3) as r:
+        with urllib.request.urlopen(URL + "/kosmas/api/me", timeout=3) as r:
             return r.status == 200
     except Exception:
         return False
@@ -55,7 +55,7 @@ class PkceTest(unittest.TestCase):
         u = webauth.connect_url("http://127.0.0.1:8790", "http://127.0.0.1:5000/callback", "st", "c" * 43, device="PC")
         p = urllib.parse.urlsplit(u)
         q = dict(urllib.parse.parse_qsl(p.query))
-        self.assertEqual(p.path, "/kronika/connect")
+        self.assertEqual(p.path, "/kosmas/connect")
         self.assertEqual(q["redirect_uri"], "http://127.0.0.1:5000/callback")
         self.assertEqual((q["state"], q["code_challenge_method"], q["device"], q["client"]), ("st", "S256", "PC", "desktop"))
         with self.assertRaises(sync.SyncError):
@@ -112,7 +112,7 @@ class BackendTest(unittest.TestCase):
             return r.status, r.read().decode("utf-8", "replace")
 
     def me(self, token):
-        req = urllib.request.Request(URL + "/kronika/api/me", headers={"Authorization": f"Bearer {token}"})
+        req = urllib.request.Request(URL + "/kosmas/api/me", headers={"Authorization": f"Bearer {token}"})
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 return json.loads(r.read()).get("user")
@@ -125,7 +125,7 @@ class BackendTest(unittest.TestCase):
         q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
         q.pop("lang", None)
         q["action"] = action
-        self.browser("/kronika/connect", q)              # 302 → the loopback /callback (urllib follows it)
+        self.browser("/kosmas/connect", q)              # 302 → the loopback /callback (urllib follows it)
 
     def test_loopback_login_and_revoke(self):
         res = webauth.loopback_login(URL, lambda url: threading.Thread(target=self.allow, args=(url,)).start(), timeout=30)
@@ -158,12 +158,12 @@ class BackendTest(unittest.TestCase):
     def test_device_code(self):
         d = webauth.device_start(URL, device="Test PC")
         self.assertRegex(d["user_code"], r"^[A-Z]{4}-[A-Z]{4}$")
-        self.assertIn("/kronika/connect/device", d["verification_uri"])
+        self.assertIn("/kosmas/connect/device", d["verification_uri"])
         cancel = threading.Event()
         cancel.set()
         with self.assertRaises(webauth.Cancelled):
             webauth.device_poll(URL, d["device_code"], cancel, interval=1)
-        self.browser("/kronika/connect/device", {"code": d["user_code"], "action": "allow"})
+        self.browser("/kosmas/connect/device", {"code": d["user_code"], "action": "allow"})
         res = webauth.device_poll(URL, d["device_code"], interval=2, expires_in=60)
         self.assertEqual(res["user"]["id"], self.user["id"])
         self.assertEqual((self.me(res["token"]) or {}).get("id"), self.user["id"])
@@ -171,7 +171,7 @@ class BackendTest(unittest.TestCase):
 
     def test_device_denied(self):
         d = webauth.device_start(URL)
-        self.browser("/kronika/connect/device", {"code": d["user_code"], "action": "deny"})
+        self.browser("/kosmas/connect/device", {"code": d["user_code"], "action": "deny"})
         with self.assertRaises(webauth.Denied):
             webauth.device_poll(URL, d["device_code"], interval=2, expires_in=60)
 
@@ -216,20 +216,20 @@ class BackendTest(unittest.TestCase):
         info = res["share"]
         self.assertTrue(info["published"])
         self.assertEqual(info["visibility"], "link")
-        self.assertRegex(info["share_url"], r"/kronika/k/[A-Za-z0-9_-]+$")
+        self.assertRegex(info["share_url"], r"/kosmas/k/[A-Za-z0-9_-]+$")
         self.assertTrue(sync.is_published(db_path, "character", c))
         tok_old = info["share_url"].rsplit("/", 1)[1]
-        self.assertEqual(_get(f"{URL}/kronika/k/{tok_old}")[0], 200)
+        self.assertEqual(_get(f"{URL}/kosmas/k/{tok_old}")[0], 200)
         s = syncer()
         try:
             self.assertEqual(s.share_info("character", c)["share_url"], info["share_url"])
             rot = s.share_set("character", c, rotate=True)
             self.assertNotEqual(rot["share_url"], info["share_url"])
-            self.assertEqual(_get(f"{URL}/kronika/k/{tok_old}")[0], 404)          # revoked link stops working
-            self.assertEqual(_get(f"{URL}/kronika/k/{rot['share_url'].rsplit('/', 1)[1]}")[0], 200)
+            self.assertEqual(_get(f"{URL}/kosmas/k/{tok_old}")[0], 404)          # revoked link stops working
+            self.assertEqual(_get(f"{URL}/kosmas/k/{rot['share_url'].rsplit('/', 1)[1]}")[0], 200)
             pub = s.share_set("event", ev, "public")
             self.assertEqual(pub["visibility"], "public")
-            self.assertIn("/kronika/z/", pub["share_url"])
+            self.assertIn("/kosmas/z/", pub["share_url"])
             # a moment is shared through its video
             mom = s.share_set("bookmark", bm, "link")
             self.assertEqual(mom["via"]["type"], "video")
@@ -295,9 +295,9 @@ class BackendTest(unittest.TestCase):
             self.assertEqual((r["ok"]["published"], r["ok"]["signed_in"]), (False, True))
             r = bg(a.m_share_set("character", c, "link"))         # not on the web yet → sync, then link
             self.assertEqual(r["ok"]["visibility"], "link")
-            self.assertIn("/kronika/k/", r["ok"]["share_url"])
+            self.assertIn("/kosmas/k/", r["ok"]["share_url"])
             r = bg(a.m_share_rotate("character", c))
-            self.assertIn("/kronika/k/", r["ok"]["share_url"])
+            self.assertIn("/kosmas/k/", r["ok"]["share_url"])
             tok = settings["sync_token"]
             a.m_auth_sign_out()
             self.assertNotIn("sync_token", settings)
