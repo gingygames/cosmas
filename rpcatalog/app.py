@@ -622,6 +622,7 @@ class MainWindow(QMainWindow):
         self.player.shutdown()
         if self.scan_thread and self.scan_thread.isRunning():
             self.scan_thread.wait(5000)
+        self.api.sync_shutdown()
         super().closeEvent(e)
 
 

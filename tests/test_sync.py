@@ -4,9 +4,11 @@ Spuštění:  python -m unittest tests.test_sync -v
 Adresa backendu: proměnná KRONIKA_URL (výchozí http://127.0.0.1:8790). Když backend neběží, testy se přeskočí.
 Každý test má vlastního testovacího uživatele (X-Dev-User) a vlastní dočasnou databázi.
 """
+import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import struct
 import tempfile
 import time
@@ -70,10 +72,13 @@ class SyncTest(unittest.TestCase):
     def by_src(self):
         return {r["src"]: r for r in self.data()["records"] if r["src"]}
 
-    def run_sync(self, **settings):
+    def run_sync(self, pairing=None, client_hook=None, **settings):
         s = sync.Syncer(self.db_path, dict(self.settings, **settings), self.att_dir)
+        if client_hook:
+            orig = s.client.request
+            s.client.request = lambda m, path, *a, **k: client_hook(orig, m, path, *a, **k)
         try:
-            return s.run()
+            return s.run(pairing=pairing)
         finally:
             s.close()
 
@@ -313,13 +318,193 @@ class SyncTest(unittest.TestCase):
         rows = lambda t: [dict(r) for r in self.store.db.execute(f"SELECT * FROM {t}")]
         self.web("POST", "/import", {"tables": {t: rows(t) for t in ("servers", "players", "factions", "characters", "events", "faction_members")}})
         n = len(self.data()["records"])
-        res = self.run_sync()
+        with self.assertRaises(sync.PairingNeeded):
+            self.run_sync()                              # neznámá databáze proti webu se záznamy z desktopu
+        res = self.run_sync(pairing="match")
         self.assertEqual(res["conflicts"], 0, res)
         self.assertEqual(res["created_local"], 0, res)
         recs = self.by_src()
-        self.assertIn(f"/kronika/img/", recs[f"events:{self.ev}"]["data"]["body_html"])
+        self.assertIn("/kronika/img/", recs[f"events:{self.ev}"]["data"]["body_html"])
         self.assertEqual(len([r for r in self.data()["records"] if r["type"] == "character"]), 2)
         self.assertGreater(len(self.data()["records"]), n)
+
+    # ---- regresní testy z review PR #2
+    def test_r1_remote_delete_keeps_unsynced_children_and_files(self):
+        self.seed()
+        doc = self.att_dir / "zapis.pdf"
+        doc.write_bytes(b"%PDF-1.4 dulezite")
+        self.store.add_attachment("character", self.c2, str(doc), "zapis.pdf", "application/pdf", "file", doc.stat().st_size)
+        self.run_sync()
+        recs = self.by_src()
+        new_en = self.store.create_entry(self.ev, title="NOVÝ lokální zápis", body_html="<p>důležité</p>")
+        self.web("POST", "/ops", {"ops": [{"op": "delete", "id": recs[f"events:{self.ev}"]["id"]},
+                                          {"op": "delete", "id": recs[f"characters:{self.c2}"]["id"]}]})
+        res = self.run_sync()
+        self.assertIsNotNone(self.store.entry(new_en))           # nepublikovaný zápis nezmizel
+        self.assertIsNotNone(self.store.event(self.ev))
+        self.assertIsNotNone(self.store.character(self.c2))      # má nepublikovanou přílohu (soubor)
+        self.assertTrue(doc.exists())
+        kinds = {(c["local_type"], c["local_id"]): c["kind"] for c in sync.status(self.db_path, self.settings)["conflicts"]}
+        self.assertEqual(kinds.get(("events", self.ev)), "deleted_remote", res)
+        self.assertEqual(kinds.get(("characters", self.c2)), "deleted_remote", res)
+        self.assertNotIn(f"entries:{new_en}", self.by_src())      # potomek konfliktního záznamu se neposílá
+        # „Vzít z webu“ smaže záznam, ale soubor, který nebyl na webu, z disku nikdy
+        self.resolve([{"local_type": "characters", "local_id": self.c2, "choice": "web"}])
+        self.assertIsNone(self.store.character(self.c2))
+        self.assertTrue(doc.exists())
+
+    def test_r2_other_database_needs_pairing(self):
+        self.seed()
+        self.run_sync()
+        before = self.by_src()[f"characters:{self.c1}"]["title"]
+        p2 = self.tmp / "fresh.db"
+        st2 = Store(p2)
+        cid = st2.create_character("Úplně jiná postava")
+        st2.db.close()
+        self.db_path = p2
+        with self.assertRaises(sync.PairingNeeded):
+            self.run_sync()
+        self.assertEqual(self.by_src()[f"characters:{cid}"]["title"], before)   # web nedotčený
+        # spárovat podle id: jiný obsah → konflikt, nic se nepřepíše
+        res = self.run_sync(pairing="match")
+        self.assertGreaterEqual(res["conflicts"], 1, res)
+        self.assertEqual(self.by_src()[f"characters:{cid}"]["title"], before)
+        self.run_sync()                                  # podruhé se už neptá
+
+    def test_r2_copy_database(self):
+        self.seed()
+        self.run_sync()
+        before = self.by_src()[f"characters:{self.c1}"]["title"]
+        n = len(self.data()["records"])
+        p2 = self.tmp / "copy.db"
+        st2 = Store(p2)
+        st2.create_character("Postava z kopie")
+        st2.db.close()
+        self.db_path = p2
+        res = self.run_sync(pairing="copy")
+        self.assertEqual(res["conflicts"], 0, res)
+        self.assertEqual(self.by_src()[f"characters:{self.c1}"]["title"], before)
+        titles = [r["title"] for r in self.data()["records"] if r["type"] == "character"]
+        self.assertIn("Postava z kopie", titles)
+        self.assertEqual(len(self.data()["records"]), n + 1)
+        res2 = self.run_sync()
+        self.assertEqual((res2["sent"], res2["received"], res2["created_local"]), (0, 0, 0), res2)
+        # původní databáze dál funguje a nic jí nepřibylo
+        self.db_path = self.tmp / "catalog.db"
+        res3 = self.run_sync()
+        self.assertEqual((res3["created_local"], res3["conflicts"]), (0, 0), res3)
+
+    def test_r3_lost_import_response(self):
+        self.seed()
+        self.run_sync()
+        self.store.update_character(self.c1, summary="lokální změna")
+
+        def hook(orig, m, path, *a, **k):
+            r = orig(m, path, *a, **k)
+            if path == "/import":
+                raise sync.NetworkError("timeout (simulace)")
+            return r
+        with self.assertRaises(sync.SyncError):
+            self.run_sync(client_hook=hook)
+        res = self.run_sync()
+        self.assertEqual(res["conflicts"], 0, res)
+        self.assertEqual(self.by_src()[f"characters:{self.c1}"]["data"]["summary"], "lokální změna")
+        self.assertEqual(self.store.character(self.c1)["summary"], "lokální změna")
+
+    def test_r4_web_video_with_same_youtube(self):
+        self.seed()
+        self.run_sync()
+        old_rid = self.by_src()[f"media:{self.yt}"]["id"]
+        self.web("POST", "/ops", {"ops": [{"op": "create", "type": "video", "data": {"youtube": "dQw4w9WgXcQ", "title": "WEB titulek"}}]})
+        res = self.run_sync()
+        self.assertEqual(self.store.media(self.yt).title, "Bitva – video")
+        pub = self.store.db.execute("SELECT remote_id FROM published WHERE local_type='media' AND local_id=?", (self.yt,)).fetchone()[0]
+        self.assertEqual(pub, old_rid)
+        self.assertTrue(any("YouTube" in w for w in res["warnings"]), res)
+        self.assertEqual(len([r for r in self.data()["records"] if r["src"] == f"media:{self.yt}"]), 1)
+
+    def test_no_db_lock_during_network(self):
+        self.seed()
+        locked = []
+
+        def hook(orig, m, path, *a, **k):
+            try:
+                c = sqlite3.connect(str(self.db_path), timeout=0.2)
+                c.execute("UPDATE players SET summary=summary WHERE id=?", (self.pl,))
+                c.commit()
+                c.close()
+            except sqlite3.OperationalError as e:
+                locked.append((path, str(e)))
+            return orig(m, path, *a, **k)
+        self.run_sync(client_hook=hook)
+        rid = self.by_src()[f"characters:{self.c1}"]["id"]
+        png = self.tmp / "w.png"
+        _png(png)
+        self.upload_web(rid, png)
+        self.run_sync(client_hook=hook)
+        self.assertEqual(locked, [])
+
+    def test_bad_image_does_not_stop_sync(self):
+        self.seed()
+        bad = self.att_dir / "rozbity.png"
+        bad.write_bytes(b"tohle neni obrazek")
+        bad_att = self.store.add_attachment("character", self.c2, str(bad), "rozbity.png", "image/x-rozbity", "image", 18)
+        self.store.update_character(self.c2, portrait_id=bad_att,
+                                    body_html=f'<p>Hans</p><img src="{bad.as_uri()}" data-att="{bad_att}">')
+        res = self.run_sync()
+        self.assertEqual(res["uploaded"], 1, res)                 # dobrý obrázek prošel
+        self.assertTrue(any("rozbity" in w for w in res["warnings"]), res)
+        rec = self.by_src()[f"characters:{self.c2}"]
+        self.assertIsNone(rec["data"].get("portrait_id"))
+        # obrázek z webu, který nejde stáhnout (404)
+        self.web("POST", "/ops", {"ops": [{"op": "create", "type": "image", "data": {
+            "owner_type": "character", "owner_id": rec["id"], "key": "neexistujeXXXXXX.png", "kind": "image"}}]})
+        # web upraví postavu s nenahranou přílohou: lokální portrét a obrázek v textu zůstanou
+        self.web("POST", "/ops", {"ops": [{"op": "update", "id": rec["id"], "data": {"name": "Hans z webu", "body_html": "<p>Hans z webu</p>"}}]})
+        res = self.run_sync()
+        c = self.store.character(self.c2)
+        self.assertEqual(c["name"], "Hans z webu")
+        self.assertEqual(c["portrait_id"], bad_att)
+        self.assertIn(f'data-att="{bad_att}"', c["body_html"])
+        self.assertIn("Hans z webu", c["body_html"])
+        self.assertTrue(any("stáhnout" in w for w in res["warnings"]), res)
+
+    def test_whitelist_and_account_key(self):
+        self.seed()
+        self.store.db.execute("UPDATE bookmarks SET medal_key='tajne' WHERE id=?", (self.bm,))
+        self.store.commit()
+        self.run_sync()
+        recs = self.by_src()
+        self.assertNotIn("path", recs[f"attachments:{self.att}"]["data"])
+        self.assertNotIn("medal_key", recs[f"bookmarks:{self.bm}"]["data"])
+        # stará podoba klíče účtu (adresa|id) ani jiná adresa mapu nesmaže
+        s = sync.Syncer(self.db_path, self.settings, self.att_dir)
+        uid = s.state("account")
+        s.set_state("account", f"https://www.example.com/kronika/api|{uid}")
+        s.close()
+        res = self.run_sync()
+        self.assertEqual((res["sent"], res["created_remote"]), (0, 0), res)
+        with self.assertRaises(sync.SyncError):
+            sync.check_url("http://example.com")
+        self.assertEqual(sync.check_url("http://127.0.0.1:8790/"), "http://127.0.0.1:8790")
+
+    @unittest.skipUnless(importlib.util.find_spec("PySide6"), "bez PySide6")
+    def test_media_update_rejects_bad_youtube(self):
+        from rpcatalog import api as apimod
+        apimod.ATT_DIR = self.att_dir
+
+        class Host:
+            def save_settings(self):
+                pass
+        self.seed()
+        a = apimod.Api(self.store, {}, Host())
+        with self.assertRaises(ValueError):
+            a.m_media_update(self.yt, youtube="tohle neni odkaz")
+        self.assertEqual(self.store.media(self.yt).youtube, "dQw4w9WgXcQ")
+        a.m_media_update(self.yt, youtube="https://youtu.be/abcdefghijk")
+        self.assertEqual(self.store.media(self.yt).youtube, "abcdefghijk")
+        a.m_media_update(self.yt, youtube="")
+        self.assertIsNone(self.store.media(self.yt).youtube)
 
     def test_bad_token(self):
         s = sync.Syncer(self.db_path, {"sync_url": URL, "sync_token": "krt_spatny"}, self.att_dir)
