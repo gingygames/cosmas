@@ -2500,5 +2500,12 @@ window.I18N_CS = {
  "Other games": "Ostatní",
  "clip": "klip",
  "Saved – paste a new token to replace it": "Uložený – nový token sem vlož, pokud ho chceš nahradit",
- "Changing the server signs you out on this PC.": "Změna serveru tě na tomhle počítači odhlásí."
+ "Changing the server signs you out on this PC.": "Změna serveru tě na tomhle počítači odhlásí.",
+ "Kosmas – access": "Kosmas – přístup",
+ "Your account on this chronicle is blocked.": "Tvůj účet v této kronice je zablokovaný.",
+ "Thanks – your request is with the admin. You get a notification (and a Discord message) once it is decided.": "Díky – žádost má správce. Jakmile rozhodne, dostaneš upozornění (a zprávu na Discordu).",
+ "This chronicle doesn’t take new members right now.": "Tahle kronika teď nové členy nepřijímá.",
+ "Optional: who you are, which server or community you play on": "Nepovinné: kdo jsi, na jakém serveru nebo v jaké komunitě hraješ",
+ "Ask for access": "Požádat o přístup",
+ "This chronicle is by invitation. Ask the admin for access; you can sync and publish once you are approved. Reading the public chronicle is open to everyone.": "Tahle kronika je jen na pozvání. Požádej správce o přístup; synchronizovat a zveřejňovat můžeš po schválení. Veřejnou kroniku si může přečíst každý."
 };
