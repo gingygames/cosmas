@@ -12,7 +12,9 @@ from .i18n import tr
 from .medal_db import read_medal
 from .store import MEDIA_COLS
 
-VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm"}
+VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".m4v", ".ts", ".flv", ".avi"}
+# Extensions other files share (e.g. .ts is also TypeScript): such a file counts only when ffprobe reads it as a video
+STRICT_EXT = {".ts", ".flv", ".avi", ".m4v"}
 SKIP_DIRS = {"temp", "editor", "video-editor", "thumbnails", ".thumbnails", "databases", "screenshots"}
 SIDECAR_RE = re.compile(r"^(?P<stem>.+)_(?P<role>game|mic|microphone|discord|system|desktop)$", re.I)
 NAME_RE = re.compile(r"^MedalTV(?P<game>.*?)(?P<ts>\d{14,17})")
@@ -196,6 +198,8 @@ def scan(store, settings, progress=None, cache_path=None):
     for i, (key, (path, root)) in enumerate(sorted(files.items())):
         info = medal.get(key, {})
         probe = probes.get(key, {})
+        if not info and not probe.get("duration") and os.path.splitext(path)[1].lower() in STRICT_EXT:
+            continue
         base = os.path.basename(path)
         f_time, f_game = filename_time(base)
 

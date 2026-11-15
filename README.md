@@ -57,7 +57,10 @@ Get **Cosmas-Setup-&lt;version&gt;.exe** from [Releases → latest](https://gith
    Your recordings in the recording folders are never touched.
 
 ## First run
-- Cosmas looks for your Medal folders by itself (`Videos\Medal`, `X:\Medal`). Add other folders in **Settings → Library**.
+- Cosmas adds your Medal folders by itself (`Videos\Medal` – wherever Windows keeps your Videos folder – and `X:\Medal`).
+  Recording folders of **OBS, NVIDIA (ShadowPlay / NVIDIA App), Xbox Game Bar, AMD ReLive and Outplayed** it finds are offered
+  on the overview and in **Settings → Library**; nothing else is added without you. Any other folder: *Add folder*.
+  Formats: mp4, mkv, mov, webm, m4v, ts, flv, avi.
   Medal's own database is only ever read, never written.
 - Your catalogue lives in `%LOCALAPPDATA%\Kronikar` (catalog.db, settings, thumbnails, attachments, transcripts). Settings → Data & backups shows the exact path
   and opens it. The catalogue (catalog.db) is backed up automatically every day into `backups\` (the newest 7 are kept).

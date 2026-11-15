@@ -2500,5 +2500,21 @@ window.I18N_CS = {
  "Other games": "Ostatní",
  "clip": "klip",
  "Saved – paste a new token to replace it": "Uložený – nový token sem vlož, pokud ho chceš nahradit",
- "Changing the server signs you out on this PC.": "Změna serveru tě na tomhle počítači odhlásí."
+ "Changing the server signs you out on this PC.": "Změna serveru tě na tomhle počítači odhlásí.",
+ "Kosmas – access": "Kosmas – přístup",
+ "Your account on this chronicle is blocked.": "Tvůj účet v této kronice je zablokovaný.",
+ "Thanks – your request is with the admin. You get a notification (and a Discord message) once it is decided.": "Díky – žádost má správce. Jakmile rozhodne, dostaneš upozornění (a zprávu na Discordu).",
+ "This chronicle doesn’t take new members right now.": "Tahle kronika teď nové členy nepřijímá.",
+ "Optional: who you are, which server or community you play on": "Nepovinné: kdo jsi, na jakém serveru nebo v jaké komunitě hraješ",
+ "Ask for access": "Požádat o přístup",
+ "This chronicle is by invitation. Ask the admin for access; you can sync and publish once you are approved. Reading the public chronicle is open to everyone.": "Tahle kronika je jen na pozvání. Požádej správce o přístup; synchronizovat a zveřejňovat můžeš po schválení. Veřejnou kroniku si může přečíst každý.",
+ "Recordings found on this PC": "Na tomhle PC jsou nahrávky",
+ "Pick the folders to add to your library. You can change them any time in Settings → Library.": "Vyber složky, které chceš přidat do knihovny. Kdykoli je změníš v Nastavení → Knihovna.",
+ "200+ recordings": "200+ záznamů",
+ "Folders added – looking for recordings…": "Složky přidány – hledám nahrávky…",
+ "Add selected": "Přidat vybrané",
+ "Not now": "Teď ne",
+ "Found on this PC": "Nalezeno na tomhle PC",
+ "Medal folders (they contain Clips/, Databases/, Thumbnails/…), or any folder with recordings from OBS, NVIDIA, Xbox Game Bar, AMD or Outplayed. I only read the Medal database, I never write to it.": "Složky Medalu (obsahují Clips/, Databases/, Thumbnails/…) nebo jakákoli složka s nahrávkami z OBS, NVIDIA, Xbox Game Bar, AMD či Outplayed. Databázi Medalu jen čtu, nikdy do ní nezapisuju.",
+ "The whole Videos folder – films and other videos in it would be catalogued too.": "Celá složka Videa – do katalogu by se dostaly i filmy a další videa v ní."
 };

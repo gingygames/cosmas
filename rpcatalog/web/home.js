@@ -39,7 +39,37 @@ document.head.appendChild(h('style', `
 .evc .x { font-size: 12.5px; color: var(--text-2); margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .home .twocol { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
 .home .mom { background: var(--surface); border-radius: 6px; padding: 6px; }
+.src-offer { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin-bottom: 18px; display: grid; gap: 8px; }
+.src-offer .t { font-weight: 650; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.src-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
+.src-row input { margin-top: 3px; }
+.src-row .warn { color: var(--warn, var(--accent)); }
 `));
+
+/* Recording folders of other programs (OBS, NVIDIA, Xbox Game Bar…) are offered here, never added without asking.
+   The detection walks folders, so it runs once per session (again after adding or dismissing). */
+let srcCache = null;
+const loadSources = () => (srcCache ||= API.call('library.sources').catch(() => []));
+async function sourcesOffer() {
+  const list = (await loadSources()).filter(s => !s.added && !s.dismissed && s.count > 0);
+  if (!list.length) return null;
+  const picks = new Set(list.filter(s => !s.whole_videos).map(s => s.path));
+  const count = s => (s.count >= 200 ? tr('200+ recordings') : trn(s.count, '{n} recording', '{n} recordings'));
+  const add = h('button.btn.primary', { onclick: async () => {
+    if (!picks.size) return;
+    add.disabled = true;
+    try { await API.call('library.add_roots', { paths: [...picks] }); toast(tr('Folders added – looking for recordings…')); }
+    finally { srcCache = null; render(); }
+  } }, icon('folder-plus'), tr('Add selected'));
+  return h('.src-offer',
+    h('.t', icon('folder-search'), tr('Recordings found on this PC')),
+    h('.small.faint', tr('Pick the folders to add to your library. You can change them any time in Settings → Library.')),
+    ...list.map(s => h('label.src-row',
+      h('input', { type: 'checkbox', checked: picks.has(s.path), onchange: e => (e.target.checked ? picks.add(s.path) : picks.delete(s.path)) }),
+      h('div', h('b', s.label), ' ', h('span.small.faint', count(s)), h('.small.faint', s.path), s.note ? h('.small.warn', s.note) : null))),
+    h('.row', { style: { gap: '8px' } }, add,
+      h('button.btn.ghost', { onclick: async () => { await API.call('library.dismiss_sources', { paths: list.map(s => s.path) }).catch(() => null); srcCache = null; render(); } }, tr('Not now'))));
+}
 
 let root, unsub = [];
 
@@ -49,6 +79,8 @@ async function render() {
   const sessions = media.filter(m => m.type !== 'clip' && (m.duration || 0) >= (App.settings.short_session_seconds || 60));
   const latest = sessions[0] || media[0];
   const box = h('.home-in');
+  const offer = await sourcesOffer();
+  if (offer) box.appendChild(offer);
   Shell.header({ icon: 'house', title: tr('overview'), topic: [trn(App.media.length, '{n} video', '{n} videos'), trn(App.events.length, '{n} event', '{n} events'), trn(App.chars.length, '{n} character', '{n} characters')].join(' · ') });
 
   if (latest) {

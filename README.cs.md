@@ -56,7 +56,10 @@ Stáhni **Cosmas-Setup-&lt;verze&gt;.exe** z [Releases → latest](https://githu
    se odinstalace nikdy nedotkne.
 
 ## První spuštění
-- Kosmas sám najde složky Medalu (`Videa\Medal`, `X:\Medal`). Další přidáš v **Nastavení → Knihovna**.
+- Kosmas sám přidá složky Medalu (`Videa\Medal` – ať máš složku Videa kdekoli – a `X:\Medal`). Nalezené složky s nahrávkami
+  z **OBS, NVIDIA (ShadowPlay / NVIDIA App), Xbox Game Bar, AMD ReLive a Outplayed** nabídne na přehledu a v **Nastavení → Knihovna**;
+  bez tebe nic dalšího nepřidá. Jakoukoli jinou složku přidáš tlačítkem *Přidat složku*.
+  Formáty: mp4, mkv, mov, webm, m4v, ts, flv, avi.
   Databázi Medalu jen čte, nikdy do ní nezapisuje.
 - Katalog je v `%LOCALAPPDATA%\Kronikar` (catalog.db, nastavení, náhledy, přílohy, přepisy). Nastavení → Data a zálohy ukáže přesnou cestu
   a otevře ji. Katalog (catalog.db) se každý den sám zálohuje do `backups\` (ponechá se 7 nejnovějších).
