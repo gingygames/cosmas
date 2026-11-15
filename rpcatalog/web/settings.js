@@ -291,11 +291,29 @@ Views.register('settings', {
         h('button.btn.sm.ghost', { onclick: () => { API.call('rescan'); toast(tr('Looking for new recordings…')); } }, icon('refresh-cw'), tr('Reload library'))));
     };
     renderRoots();
+    // recording folders of other programs found on this PC (sources.py); added only on click
+    const foundBox = h('.col', { style: { gap: '6px', marginTop: '12px' } });
+    const renderFound = async () => {
+      const list = (await API.call('library.sources').catch(() => [])).filter(s => !s.added);
+      clear(foundBox);
+      if (!list.length) return;
+      foundBox.appendChild(h('.small.faint', tr('Found on this PC')));
+      list.forEach(s => foundBox.appendChild(h('.list-row', { style: { background: 'var(--surface)', border: '1px dashed var(--border)' } },
+        icon('folder-search'), h('.grow', { style: { minWidth: 0 } }, h('div', h('b', s.label), ' ',
+          h('span.small.faint', s.count >= 200 ? tr('200+ recordings') : trn(s.count, '{n} recording', '{n} recordings'))),
+          h('.small.faint.ellipsis', s.path), s.note ? h('.small.faint', s.note) : null),
+        h('button.btn.sm', { onclick: async e => {
+          e.currentTarget.disabled = true;
+          const r = await API.call('library.add_roots', { paths: [s.path] });
+          roots.splice(0, roots.length, ...r.roots); renderRoots(); renderFound();
+        } }, icon('folder-plus'), tr('Add')))));
+    };
+    renderFound();
     const aliases = h('textarea.input', { rows: 4, onkeydown: stop, placeholder: 'KCDMP = Kingdoms Connected\nKcdMplauncher = Kingdoms Connected',
       onchange: e => { const al = {}; e.target.value.split('\n').forEach(l => { const [a, b] = l.split('='); if (a && b && a.trim() && b.trim()) al[a.trim()] = b.trim(); }); set('game_aliases', al, { rescan: true }); } },
       Object.entries(s.game_aliases || {}).map(([a, b]) => `${a} = ${b}`).join('\n'));
     const library = sec('library',
-      card(tr('Recording folders'), tr('Medal folders (they contain Clips/, Databases/, Thumbnails/…), or any folder with OBS / ShadowPlay recordings. I only read the Medal database, I never write to it.'), rootsBox),
+      card(tr('Recording folders'), tr('Medal folders (they contain Clips/, Databases/, Thumbnails/…), or any folder with recordings from OBS, NVIDIA, Xbox Game Bar, AMD or Outplayed. I only read the Medal database, I never write to it.'), rootsBox, foundBox),
       card(tr('Looking for new recordings'), null,
         tog('scan_on_start', tr('Look for new recordings when the app starts')),
         h('.set-row', num('rescan_minutes', tr('…and then every (min, 0 = never)'), 0, 240)),

@@ -182,6 +182,8 @@ def _forget_sync(db):
 DEFAULTS = {
     # Folders that contain Medal recordings (each may have Clips/, Databases/, Thumbnails/)
     "roots": [],
+    # Offered recording folders (sources.py) the user said "not now" to on the overview
+    "sources_dismissed": [],
     # UI language: auto (Czech on a Czech/Slovak system, otherwise English) | en | cs
     "lang": "auto",
     # records marked as test data are hidden unless this is on (they are never synced)
@@ -297,15 +299,10 @@ def ensure_dirs():
 
 
 def default_roots():
-    roots = []
-    home_medal = Path.home() / "Videos" / "Medal"
-    if home_medal.exists():
-        roots.append(str(home_medal))
-    for drive in "CDEFGH":
-        p = Path(f"{drive}:/Medal")
-        if p.exists():
-            roots.append(str(p))
-    return roots
+    """Medal's folders are added by themselves (the Windows Videos folder, wherever it is, and X:\Medal on every drive);
+    other programs' folders are only offered (sources.detect)."""
+    from .sources import medal_folders
+    return [str(p) for p in medal_folders()]
 
 
 def default_ai_language(lang_pref="auto"):

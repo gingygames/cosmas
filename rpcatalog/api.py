@@ -102,7 +102,7 @@ class Api(QObject):
                  "analysis.char_looks", "ai.info", "ai.open", "lang.set",
                  "auth.status", "auth.start", "auth.cancel", "auth.open", "auth.sign_out",
                  "share.get", "share.set", "share.rotate", "test.info",
-                 "app.info", "update.status", "update.check", "update.download", "update.cancel", "update.install",
+                 "library.sources", "app.info", "update.status", "update.check", "update.download", "update.cancel", "update.install",
                  "update.skip", "update.options", "data.info", "backup.now", "backup.open", "cache.clear", "data.export_json",
                  "diag.copy", "diag.open_logs", "feedback.snap", "feedback.preview", "feedback.send", "feedback.queue"}
 
@@ -1678,6 +1678,40 @@ class Api(QObject):
         self.host.save_settings()
         if values.get("_rescan", True):
             self.host.rescan(notify=True)
+        return True
+
+    # ------------------------------------------------------------ recording folders of other programs
+    def m_library_sources(self):
+        """Recording folders found on this PC (Medal, OBS, NVIDIA, Xbox Game Bar, AMD, Outplayed). They are only offered:
+        a folder is added when the user picks it (library.add_roots)."""
+        from . import sources
+        return sources.detect(self.settings.get("roots") or [], self.settings.get("sources_dismissed") or [])
+
+    def m_library_add_roots(self, paths):
+        roots = list(self.settings.get("roots") or [])
+        have = {os.path.normcase(os.path.normpath(r)) for r in roots}
+        added = []
+        for p in paths or []:
+            p = str(p)
+            k = os.path.normcase(os.path.normpath(p))
+            if os.path.isdir(p) and k not in have:
+                roots.append(p)
+                have.add(k)
+                added.append(p)
+        if added:
+            self.settings["roots"] = roots
+            self.host.save_settings()
+            self.host.rescan(notify=True)
+        return {"added": added, "roots": roots}
+
+    def m_library_dismiss_sources(self, paths):
+        """"Not now" for offered folders: they stay listed in Settings → Library, but the overview stops asking."""
+        cur = [str(p) for p in self.settings.get("sources_dismissed") or []]
+        for p in paths or []:
+            if str(p) not in cur:
+                cur.append(str(p))
+        self.settings["sources_dismissed"] = cur[-50:]
+        self.host.save_settings()
         return True
 
     # ------------------------------------------------------------ test records
