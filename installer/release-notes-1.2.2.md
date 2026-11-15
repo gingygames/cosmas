@@ -18,4 +18,4 @@ Cosmas now finds your recordings even when you don't use Medal.
 **Download:** `Cosmas-Setup-1.2.2.exe` below (Windows 10 1809+ / 11, 64-bit). Installed copies update themselves
 (Settings → General → Updates). Windows may show *Windows protected your PC*: click **More info → Run anyway**.
 
-SHA-256: `{sha}`
+SHA-256: `da1e45bab0c5803a3b36d96cb451801d0a15cf41405f7d4713acc4caeb1ab6b7`
